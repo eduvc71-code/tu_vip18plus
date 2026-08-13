@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { isB2Configured, mediaUrl, streamB2Object, uploadToB2 } from './b2Storage.js';
 import {
   getPublicProfiles,
   getProfileById,
@@ -63,7 +64,7 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({
-  storage,
+  storage: isB2Configured ? multer.memoryStorage() : storage,
   limits: { fileSize: 50 * 1024 * 1024 }, // up to 50 MB per image/video
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
@@ -91,6 +92,9 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
 }
 
 // PUBLIC ENDPOINTS
+
+// Private Backblaze B2 media proxy. Keeps credentials and the bucket private.
+router.get('/media', streamB2Object);
 
 // SSE Live Events Stream
 router.get('/events', (req: Request, res: Response) => {
@@ -448,9 +452,14 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
     const uploadedUrls: string[] = [];
 
     if (files && files.length > 0) {
-      files.forEach(f => {
-        uploadedUrls.push(`${config.baseUrl}/uploads/${f.filename}`);
-      });
+      for (const file of files) {
+        if (isB2Configured) {
+          const objectKey = await uploadToB2(file, 'profiles');
+          uploadedUrls.push(mediaUrl(config.baseUrl, objectKey));
+        } else {
+          uploadedUrls.push(`${config.baseUrl}/uploads/${file.filename}`);
+        }
+      }
     }
 
     const updatedPhotos = [...(profile.photos || []), ...uploadedUrls];
@@ -617,7 +626,9 @@ router.post('/admin/settings/qr', requireAdminAuth, upload.single('qr_image'), a
       return;
     }
     const config = getBotConfig();
-    const qrUrl = `${config.baseUrl}/uploads/${req.file.filename}`;
+    const qrUrl = isB2Configured
+      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'qr'))
+      : `${config.baseUrl}/uploads/${req.file.filename}`;
     saveSystemSetting('qr_image_url', qrUrl);
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, 'QR de Pago VIP actualizado');
