@@ -20,10 +20,10 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
-  const [botUsername, setBotUsername] = useState('CatalogoVIPSCZBot');
+  const [botUsername, setBotUsername] = useState('vip_ruti_bot');
   const [channelId, setChannelId] = useState('-1003650435412');
   const [telegramOnlyAccess, setTelegramOnlyAccess] = useState(false);
-  const [modelDisplayName, setModelDisplayName] = useState('Modelo VIP');
+  const [modelDisplayName, setModelDisplayName] = useState('Tú');
   const [modelVipLink, setModelVipLink] = useState('');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [pinnedText, setPinnedText] = useState('');
@@ -125,7 +125,7 @@ export default function App() {
     };
   }, []);
 
-  // Only show one profile (Flavia)
+  // This template presents one creator profile.
   const filteredProfiles = profiles.slice(0, 1);
 
   const isBypassed = typeof window !== 'undefined' && (
@@ -133,7 +133,7 @@ export default function App() {
     Boolean(localStorage.getItem('ruti_vip_admin_token')) ||
     Boolean(new URLSearchParams(window.location.search).get('token'))
   );
-  const displayName = modelDisplayName?.trim() || 'Modelo VIP';
+  const displayName = modelDisplayName?.trim() || 'Tú';
 
   const isAccessAllowed = !telegramOnlyAccess || Boolean(tgUser) || isBypassed || isAdminOpen;
 
@@ -210,7 +210,7 @@ export default function App() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-4"
                   >
-                    Ver contenido VIP
+                    Abrir red social
                   </a>
                 )}
               </div>

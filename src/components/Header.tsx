@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Brand Logo & Title */}
           <div className="flex items-center gap-3.5">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 flex items-center justify-center text-zinc-950 font-black text-xl shadow-lg shadow-amber-500/20 tracking-wider font-serif">
-              F
+              Tú
             </div>
             <div>
               <div className="flex items-center gap-2">

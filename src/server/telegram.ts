@@ -189,7 +189,7 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   const statusBadge = profile.status === 'disponible' ? '🟢 DISPONIBLE' : profile.status === 'ocupada' ? '🔴 OCUPADA' : '⏸️ PAUSADA';
 
   const caption = `
-✨ *FLAVIA • RUTI VIP (+18)* ✨
+✨ *TÚ • ESPACIO VIP (+18)* ✨
 
 👤 *Nombre*: ${profile.name}
 🔞 *Edad*: ${profile.age} años (Verificada +18)
@@ -330,7 +330,7 @@ export async function processTelegramUpdate(update: any) {
     
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_${(Math.abs(Number(fromId) || 1234) % 8999) + 1000}`;
 
-    let titleHeader = '💎 *SISTEMA VIP FLAVIA — ACCESO CONFIDENCIAL* 💎';
+    let titleHeader = '💎 *TU ESPACIO VIP — ACCESO CONFIDENCIAL* 💎';
     if (text.startsWith('/start inv_')) {
       const ref = text.replace('/start inv_', '').trim();
       titleHeader = `💎 *ACCESO VIP INVITADO (#${ref})* 💎`;
@@ -367,7 +367,7 @@ export async function processTelegramUpdate(update: any) {
   // 2. Guard for Administrative Commands
   if (!isAdminUser(fromId)) {
     if (text.startsWith('/')) {
-      await sendMessage(chatId, `💎 *Flavia • Ruti VIP (+18)*\n\nPara acceder a la galería y contenido confidencial, pulsa el botón *"Ver Catálogo VIP"* abajo en el menú del bot.\n\nO escribe /invitar para generar tu Código y Enlace de Invitación al bot.`);
+      await sendMessage(chatId, `💎 *Tú • Espacio VIP (+18)*\n\nPara acceder a la galería y contenido confidencial, pulsa el botón *"Ver Catálogo VIP"* abajo en el menú del bot.\n\nO escribe /invitar para generar tu Código y Enlace de Invitación al bot.`);
     }
     return;
   }
@@ -391,7 +391,7 @@ export async function processTelegramUpdate(update: any) {
     const { baseUrl, username } = getBotConfig();
     const cleanUsername = username || 'vip_ruti_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
-    const msg = `💎 *FLAVIA VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
+    const msg = `💎 *TÚ VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Bienvenido al canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
       `📲 *ENLACE DE INVITACIÓN DIRECTA AL BOT:*\n` +
       `👉 \`${inviteLink}\`\n\n` +
@@ -430,7 +430,7 @@ export async function processTelegramUpdate(update: any) {
       await sendMessage(chatId, '⚠️ *No hay imagen QR configurada* en la pantalla de administración de la página web. Sube primero el QR en el panel de administración.');
       return;
     }
-    const replyText = `✨ *Flavia • Ruti VIP (+18)* ✨\n\n¡Hola!\n\nNuestra Administradora ha procesado tu solicitud. Para confirmar tu suscripción / acceso VIP, te adjuntamos nuestro *QR de pago oficial*.\n\n📲 *Por favor, realiza el pago y envía tu comprobante / captura directamente al chat privado de la Administradora.* ¡Máxima discreción y confidencialidad garantizada!`;
+    const replyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola!\n\nNuestra Administradora ha procesado tu solicitud. Para confirmar tu suscripción / acceso VIP, te adjuntamos nuestro *QR de pago oficial*.\n\n📲 *Por favor, realiza el pago y envía tu comprobante / captura directamente al chat privado de la Administradora.* ¡Máxima discreción y confidencialidad garantizada!`;
     const resQr = await sendPhotoToUser(targetUserId, qrUrl, replyText);
     if (resQr.ok) {
       await sendMessage(chatId, `✅ *QR de pago VIP enviado exitosamente* al cliente con ID \`${targetUserId}\`.`);
@@ -782,7 +782,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
   const msg = `
 👑 *¡Bienvenida, Administradora ${name}!*
 
-Sistema de Gestión — *Flavia • Ruti VIP (+18)*.
+Sistema de Gestión — *Tú • Espacio VIP (+18)*.
 
 📋 *Comandos Administrativos Disponibles*:
 • \`/nuevo\` — Crear un nuevo perfil paso a paso.
@@ -1009,7 +1009,7 @@ async function handleClientAvailabilityRequest(message: any, profileId: string) 
 Perfil consultado: *${profile.name}*
 Precio VIP: *Bs. ${profile.rate_bs}*
 
-📌 Tu solicitud ha sido notificada directamente a la Administradora oficial de *Flavia • Ruti VIP (+18)*. Te responderemos por este mismo medio a la brevedad.
+📌 Tu solicitud ha sido notificada directamente a la Administradora oficial de *Tú • Espacio VIP (+18)*. Te responderemos por este mismo medio a la brevedad.
 
 ⚠️ *ADVERTENCIA DE SEGURIDAD*:
 No realice ningún tipo de pago o transferencia sin antes recibir confirmación oficial y directa por parte de la Administradora.

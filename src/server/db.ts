@@ -35,8 +35,11 @@ export async function getDb(): Promise<Database> {
 function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_only_access', 'true')`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
-  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', 'Modelo VIP')`);
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', 'Tú')`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_vip_link', '')`);
+  database.run(`UPDATE system_settings SET value = 'Tú' WHERE key = 'model_display_name' AND value IN ('Modelo VIP', 'Flavia')`);
+  database.run(`UPDATE profiles SET name = 'Tú' WHERE lower(trim(name)) = 'flavia'`);
+  database.run(`UPDATE profiles SET zone = 'Contenido +18 VIP' WHERE lower(zone) LIKE '%santa cruz%'`);
   database.run(`UPDATE system_settings SET value = 'CatalogoVIPSCZBot' WHERE key = 'bot_username' AND value = 'catalogovipscz'`);
 }
 
@@ -144,7 +147,7 @@ function seedInitialData(database: Database): void {
     const sampleProfiles: Partial<Profile>[] = [
       {
         id: 'prof_ruti_vip',
-        name: 'Flavia',
+        name: 'Tú',
         age: 21,
         zone: 'Contenido +18 VIP',
         description: 'Modelo exclusiva y creadora de contenido VIP (+18). Acceso confidencial a galería privada, packs exclusivos y atención directa sin intermediarios ni reservas.',
@@ -191,7 +194,7 @@ function seedInitialData(database: Database): void {
       'SYSTEM_INIT',
       'System',
       null,
-      'Base de datos inicializada para Flavia Ruti VIP (+18)',
+      'Base de datos inicializada para Tú Espacio VIP (+18)',
       now
     ]);
   }

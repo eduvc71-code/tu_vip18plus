@@ -54,7 +54,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onAdmin
             Contenido Exclusivo +18
           </span>
           <h2 className="text-2xl font-serif font-bold text-white tracking-tight">
-            Flavia • VIP Access
+            Tú • Acceso VIP
           </h2>
           <p className="text-xs text-zinc-400 leading-relaxed max-w-xs mx-auto">
             Este contenido es privado. Debes ingresar tu código de invitación VIP para acceder a la galería exclusiva.

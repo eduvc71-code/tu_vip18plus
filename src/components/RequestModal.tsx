@@ -107,7 +107,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
             </div>
             <h4 className="text-lg font-bold text-white">¡Solicitud Notificada!</h4>
             <p className="text-xs text-zinc-300 leading-relaxed">
-              La Administradora de <strong>Flavia VIP</strong> ha sido notificada. También puedes escribirle directamente en Telegram.
+              La Administradora de <strong>Tú VIP</strong> ha sido notificada. También puedes escribirle directamente en Telegram.
             </p>
             <a
               href={webLinkUrl}

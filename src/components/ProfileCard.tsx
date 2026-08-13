@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Profile } from '../types';
 import { Send, Eye, ShieldCheck, ChevronLeft, ChevronRight, Link } from 'lucide-react';
+import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -20,20 +21,20 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 }) => {
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
-  const photos = profile.photos && profile.photos.length > 0
+  const media = profile.photos && profile.photos.length > 0
     ? profile.photos
     : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
 
-  const currentPhoto = photos[activePhotoIdx];
+  const currentMedia = media[activePhotoIdx];
 
   const handleNextPhoto = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActivePhotoIdx((prev) => (prev + 1) % photos.length);
+    setActivePhotoIdx((prev) => (prev + 1) % media.length);
   };
 
   const handlePrevPhoto = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setActivePhotoIdx((prev) => (prev - 1 + photos.length) % photos.length);
+    setActivePhotoIdx((prev) => (prev - 1 + media.length) % media.length);
   };
 
   const isAvailable = profile.status === 'disponible' || profile.status === 'activa';
@@ -45,15 +46,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     >
       {/* Image Container */}
       <div className="relative aspect-[3/4] w-full bg-zinc-950 overflow-hidden cursor-pointer" onClick={() => onSelectProfile(profile)}>
-        <img
-          src={currentPhoto}
-          alt={profile.name}
-          referrerPolicy="no-referrer"
+        <ProtectedMedia
+          src={currentMedia}
+          alt={`Contenido de ${modelName}`}
+          modelName={modelName}
+          autoPlay={isVideoUrl(currentMedia)}
+          showControls={false}
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
         />
 
         {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/20 to-transparent" />
 
         {/* Top Badges */}
         <div className="absolute top-3 left-3 right-3 z-10 flex items-center justify-between gap-2">
@@ -76,27 +79,27 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         </div>
 
         {/* Multiple Photo Navigation */}
-        {photos.length > 1 && (
+        {media.length > 1 && (
           <>
             {/* ✅ Botones SIEMPRE visibles en mobile, solo en hover en desktop */}
             <button
               onClick={handlePrevPhoto}
               className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-zinc-950/80 text-white hover:bg-zinc-900 flex items-center justify-center transition-all border border-zinc-800/80 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-              aria-label="Foto anterior"
+              aria-label="Contenido anterior"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={handleNextPhoto}
               className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-zinc-950/80 text-white hover:bg-zinc-900 flex items-center justify-center transition-all border border-zinc-800/80 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-              aria-label="Siguiente foto"
+              aria-label="Siguiente contenido"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
 
             {/* ✅ Dots indicador en lugar de contador numérico */}
             <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 py-1 px-2 rounded-full bg-zinc-950/80 border border-zinc-800/60">
-              {photos.map((_, idx) => (
+              {media.map((item, idx) => (
                 <button
                   key={idx}
                   onClick={(e) => { e.stopPropagation(); setActivePhotoIdx(idx); }}
@@ -104,7 +107,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                       ? 'bg-amber-400 w-4 h-1.5'
                       : 'bg-zinc-600 w-1.5 h-1.5'
                     }`}
-                  aria-label={`Foto ${idx + 1}`}
+                  aria-label={`${isVideoUrl(item) ? 'Video' : 'Imagen'} ${idx + 1}`}
                 />
               ))}
             </div>
@@ -115,7 +118,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="absolute bottom-3 left-3 right-3 z-10 text-white">
           <h2 className="text-xl font-bold tracking-tight text-white flex items-center justify-between font-serif">
             <span>{modelName}</span>
-            <span className="text-xs font-sans text-amber-300/80 font-normal">{profile.zone || 'Contenido +18 VIP'}</span>
+            <span className="text-xs font-sans text-amber-300/80 font-normal">Contenido +18 VIP</span>
           </h2>
         </div>
       </div>
@@ -142,7 +145,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             className="mb-3 inline-flex items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20"
           >
             <Link className="w-3.5 h-3.5" />
-            Ver contenido VIP
+            Abrir {(() => { try { return new URL(modelVipLink).hostname.replace(/^www\./, ''); } catch { return 'red social'; } })()}
           </a>
         )}
 

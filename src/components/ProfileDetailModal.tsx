@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Profile } from '../types';
 import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link } from 'lucide-react';
+import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
 
 interface ProfileDetailModalProps {
   profile: Profile | null;
@@ -24,7 +25,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   if (!profile) return null;
 
-  const photos = profile.photos && profile.photos.length > 0
+  const media = profile.photos && profile.photos.length > 0
     ? profile.photos
     : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
 
@@ -46,30 +47,30 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           
           {/* Photo Lightbox Section */}
           <div className="relative bg-zinc-950 min-h-[320px] md:min-h-[480px] flex items-center justify-center">
-            <img
-              src={photos[activePhotoIdx]}
-              alt={profile.name}
-              referrerPolicy="no-referrer"
+            <ProtectedMedia
+              src={media[activePhotoIdx]}
+              alt={`Contenido de ${modelName}`}
+              modelName={modelName}
               className="w-full h-full object-cover max-h-[500px]"
             />
 
-            {photos.length > 1 && (
+            {media.length > 1 && (
               <>
                 <button
-                  onClick={() => setActivePhotoIdx((prev) => (prev - 1 + photos.length) % photos.length)}
+                  onClick={() => setActivePhotoIdx((prev) => (prev - 1 + media.length) % media.length)}
                   className="absolute left-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/70 text-white hover:bg-zinc-950 transition-colors border border-zinc-700/50"
                 >
                   <ChevronLeft className="w-6 h-6" />
                 </button>
                 <button
-                  onClick={() => setActivePhotoIdx((prev) => (prev + 1) % photos.length)}
+                  onClick={() => setActivePhotoIdx((prev) => (prev + 1) % media.length)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/70 text-white hover:bg-zinc-950 transition-colors border border-zinc-700/50"
                 >
                   <ChevronRight className="w-6 h-6" />
                 </button>
                 {/* Dots indicator */}
                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 py-1.5 px-2.5 rounded-full bg-zinc-950/80 border border-zinc-800">
-                  {photos.map((_, idx) => (
+                  {media.map((item, idx) => (
                     <button
                       key={idx}
                       onClick={() => setActivePhotoIdx(idx)}
@@ -78,6 +79,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                           ? 'bg-amber-400 w-5 h-2'
                           : 'bg-zinc-600 hover:bg-zinc-400 w-2 h-2'
                       }`}
+                      aria-label={`${isVideoUrl(item) ? 'Video' : 'Imagen'} ${idx + 1}`}
                     />
                   ))}
                 </div>
@@ -127,7 +129,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   className="mb-5 inline-flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-300 hover:bg-amber-500/20"
                 >
                   <Link className="w-3.5 h-3.5" />
-                  Ir al contenido VIP
+                  Abrir {(() => { try { return new URL(modelVipLink).hostname.replace(/^www\./, ''); } catch { return 'red social'; } })()}
                 </a>
               )}
 

@@ -38,7 +38,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm }) => {
         </div>
 
         <h2 className="text-lg font-extrabold text-center tracking-tight text-white mb-1">
-          FLAVIA • RUTI VIP (+18)
+          TÚ • ESPACIO VIP (+18)
         </h2>
         <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold text-center mb-4">
           Galería Privada y Confidencial

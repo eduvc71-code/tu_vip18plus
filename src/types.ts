@@ -1,5 +1,5 @@
 /**
- * Shared Type Definitions for Flavia • Ruti VIP (+18)
+ * Shared type definitions for Tú • Espacio VIP (+18)
  */
 
 export type ProfileStatus = 'borrador' | 'disponible' | 'ocupada' | 'pausada' | 'retirada';
@@ -12,7 +12,7 @@ export interface Profile {
   description: string;
   rate_bs: number; // Precio suscripción / pack VIP en Bs.
   commission_bs: number; // 0 (sin comisión)
-  photos: string[]; // URLs or paths to uploaded photos
+  photos: string[]; // URLs or paths to uploaded images and videos
   status: ProfileStatus;
   created_at: string;
   updated_at: string;

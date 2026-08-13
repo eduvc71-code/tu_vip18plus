@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CommissionLog } from '../types';
+import { isVideoUrl } from './ProtectedMedia';
 import {
   X,
   Lock,
@@ -59,7 +60,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     age: 18,
-    zone: 'Equipetrol',
+    zone: 'Contenido +18 VIP',
     description: '',
     rate_bs: 450,
     commission_bs: 50,
@@ -208,9 +209,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setSelectedPhotoFiles(null);
           } catch { /* Ignore photo error */ }
         }
-        setMessage({ type: 'success', text: `Perfil ${isEdit ? 'actualizado' : 'creado'} y fotografías vinculadas con éxito.` });
+        setMessage({ type: 'success', text: `Perfil ${isEdit ? 'actualizado' : 'creado'} y contenido multimedia vinculado con éxito.` });
         setEditingProfile(null);
-        setFormData({ name: '', age: 18, zone: 'Equipetrol', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
+        setFormData({ name: '', age: 18, zone: 'Contenido +18 VIP', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
         fetchData();
         setActiveTab('profiles');
       } else {
@@ -238,7 +239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'Fotografías subidas e integradas al perfil.' });
+        setMessage({ type: 'success', text: 'Imágenes y videos integrados al perfil.' });
         setSelectedPhotoFiles(null);
         if (editingProfile && data.profile) setEditingProfile(data.profile);
         fetchData();
@@ -323,11 +324,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({ photos: updatedPhotos })
       });
       if (res.ok) {
-        setMessage({ type: 'success', text: 'Fotografía eliminada del perfil.' });
+        setMessage({ type: 'success', text: 'Archivo multimedia eliminado del perfil.' });
         fetchData();
       }
     } catch {
-      setMessage({ type: 'error', text: 'Error al eliminar foto' });
+      setMessage({ type: 'error', text: 'Error al eliminar el archivo' });
     }
   };
 
@@ -393,7 +394,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const resetNewForm = () => {
     setEditingProfile(null);
-    setFormData({ name: '', age: 18, zone: 'Equipetrol', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
+    setFormData({ name: '', age: 18, zone: 'Contenido +18 VIP', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
     setActiveTab('new');
   };
 
@@ -419,7 +420,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold text-white tracking-tight font-serif">
-                Panel Administrativo — Flavia VIP
+                Panel Administrativo — Tú VIP
               </h2>
               <p className="text-xs text-zinc-400">
                 Canal Telegram: <span className="text-amber-400 font-mono">{channelId}</span>
@@ -505,7 +506,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {activeTab === 'profiles' && (
               <div className="max-w-2xl mx-auto space-y-6">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear Perfil de Flavia'}
+                  {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear tu perfil VIP'}
                 </h3>
 
                 <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
@@ -535,12 +536,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-zinc-400 mb-1 font-semibold">Zona / Barrio</label>
+                    <label className="block text-zinc-400 mb-1 font-semibold">Etiqueta / Categoría</label>
                     <input
                       type="text"
                       value={formData.zone}
                       onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                      placeholder="Ej: Equipetrol, Radial 27, Centro..."
+                      placeholder="Ej: Contenido exclusivo, Lifestyle, VIP..."
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
                     />
                   </div>
@@ -581,7 +582,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   <div className="pt-3 border-t border-zinc-900 space-y-3">
                     <label className="block text-zinc-300 font-bold text-xs flex items-center gap-1.5">
-                      <Upload className="w-4 h-4 text-amber-400" /> Seleccionar Fotos:
+                      <Upload className="w-4 h-4 text-amber-400" /> Seleccionar imágenes o videos:
                     </label>
 
                     <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
@@ -589,13 +590,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <Upload className="w-4 h-4 shrink-0" />
                         <span>
                           {selectedPhotoFiles && selectedPhotoFiles.length > 0
-                            ? `${selectedPhotoFiles.length} foto(s) lista(s) para subir`
+                            ? `${selectedPhotoFiles.length} archivo(s) listo(s) para subir`
                             : 'Toca aquí para abrir Galería o Archivos'}
                         </span>
                         <input
                           type="file"
                           multiple
-                          accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                          accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,image/*,video/*"
                           onChange={(e) => setSelectedPhotoFiles(e.target.files)}
                           className="hidden"
                         />
@@ -609,14 +610,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           className="py-3 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-xs cursor-pointer shrink-0 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60"
                         >
                           <Upload className="w-4 h-4" />
-                          {uploadingPhotos ? 'Subiendo...' : 'Subir Fotos Ahora'}
+                          {uploadingPhotos ? 'Subiendo...' : 'Subir contenido ahora'}
                         </button>
                       )}
                     </div>
                     <p className="text-[11px] text-zinc-500">
                       {editingProfile
-                        ? 'Selecciona fotos de tu celular y presiona "Subir Fotos Ahora" o "Guardar Cambios".'
-                        : 'Selecciona fotos; se vincularán al crear el perfil.'}
+                        ? 'Selecciona imágenes o videos (máx. 50 MB por archivo) y presiona “Subir contenido ahora” o “Guardar cambios”.'
+                        : 'Selecciona imágenes o videos; se vincularán al crear el perfil.'}
                     </p>
                   </div>
 
@@ -629,23 +630,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </button>
                 </form>
 
-                {/* Photo Gallery Manager */}
+                {/* Media Gallery Manager */}
                 {editingProfile && (
                   <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 text-xs">
                     <h4 className="font-bold text-white flex items-center gap-2">
-                      <Eye className="w-4 h-4 text-amber-400" /> Galería Actual ({editingProfile.photos?.length || 0} fotos)
+                      <Eye className="w-4 h-4 text-amber-400" /> Galería actual ({editingProfile.photos?.length || 0} archivos)
                     </h4>
 
                     {editingProfile.photos && editingProfile.photos.length > 0 ? (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {editingProfile.photos.map((photoUrl, idx) => (
                           <div key={idx} className="relative group rounded-xl overflow-hidden border border-zinc-800 aspect-square bg-zinc-900">
-                            <img src={photoUrl} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                            {isVideoUrl(photoUrl) ? (
+                              <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                            ) : (
+                              <img src={photoUrl} alt={`Imagen ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
+                            )}
                             <button
                               type="button"
                               onClick={() => handleRemovePhoto(photoUrl)}
                               className="absolute top-1 right-1 p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                              title="Eliminar foto"
+                              title="Eliminar archivo"
                             >
                               <X className="w-3.5 h-3.5" />
                             </button>
@@ -753,7 +758,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     rows={2}
                     value={pinnedMessageText}
                     onChange={(e) => setPinnedMessageText(e.target.value)}
-                    placeholder="Ej: 🔥 Disponibilidad inmediata en Equipetrol - Consultas directas al bot..."
+                    placeholder="Ej: 🔥 Nuevo contenido disponible - Consultas directas al bot..."
                     className="w-full p-3 bg-zinc-900 border border-zinc-700 rounded-xl text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500 transition-colors"
                   />
                   <div className="flex justify-end">
@@ -820,7 +825,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <Send className="w-4 h-4 text-amber-400" /> Personalización de la Mini App
                   </h4>
                   <p className="text-zinc-400">
-                    Ajusta el nombre que verán tus clientes y el enlace VIP para que la mini app se vea como una marca propia.
+                    Ajusta el nombre que verán tus clientes y el enlace a tu red social o plataforma de contenido.
                   </p>
 
                   <div className="space-y-2">
@@ -835,7 +840,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="block text-zinc-400 font-semibold">Link VIP (Onlyfans / otro contenido)</label>
+                    <label className="block text-zinc-400 font-semibold">Red social / plataforma (OnlyFans, Instagram u otra)</label>
                     <input
                       type="url"
                       value={modelVipLink}

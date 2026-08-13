@@ -20,8 +20,8 @@ async function startServer() {
 
   // Middlewares
   app.use(cors());
-  app.use(express.json({ limit: '25mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+  app.use(express.json({ limit: '60mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
   // Ensure data/uploads exists (important for persistent volumes like Fly.io where public/uploads is a symlink to data/uploads)
   const dataUploadsPath = path.join(process.cwd(), 'data', 'uploads');
@@ -34,7 +34,13 @@ async function startServer() {
   if (!fs.existsSync(uploadsPath)) {
     fs.mkdirSync(uploadsPath, { recursive: true });
   }
-  app.use('/uploads', express.static(uploadsPath));
+  app.use('/uploads', express.static(uploadsPath, {
+    setHeaders: (res) => {
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'private, no-store');
+    }
+  }));
   app.use(express.static(path.join(process.cwd(), 'public')));
 
   // API routes FIRST

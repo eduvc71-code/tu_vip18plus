@@ -64,12 +64,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 50 * 1024 * 1024 }, // up to 50 MB per image/video
   fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
-      cb(new Error('Solo se permiten archivos de imagen (JPEG, PNG, WEBP, GIF)'));
+      cb(new Error('Solo se permiten imágenes o videos (MP4, WebM, MOV)'));
     }
   }
 });
@@ -122,7 +122,7 @@ router.get('/info', (req: Request, res: Response) => {
     qr_image_url: getSystemSetting('qr_image_url') || '',
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
-    model_display_name: getSystemSetting('model_display_name') || 'Modelo VIP',
+    model_display_name: getSystemSetting('model_display_name') || 'Tú',
     model_vip_link: getSystemSetting('model_vip_link') || '',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
@@ -188,7 +188,7 @@ export function scheduleAutoReply(requestId: string, tgUserId: string, clientNam
       const checkReq = await getCustomerRequestById(requestId);
       if (checkReq && checkReq.status === 'pendiente') {
         const qrUrl = getSystemSetting('qr_image_url');
-        const autoReplyText = `✨ *Flavia • Ruti VIP (+18)* ✨\n\n¡Hola ${clientName || 'Estimado/a'}!\n\nNuestra Administradora ha revisado tu mensaje para *${profileName}*.\n\n${qrUrl ? '📲 *Te adjuntamos nuestro QR oficial para pago de suscripción VIP.* Por favor, realiza el pago y envía tu comprobante o captura **directamente por mensaje privado a la Administradora** para recibir tu acceso confidencial.' : 'La Admin se comunicará contigo por mensaje privado en cuanto esté disponible.'}\n\n🔒 Trato 100% Confidencial y Discreto.`;
+        const autoReplyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${clientName || 'Estimado/a'}!\n\nNuestra Administradora ha revisado tu mensaje para *${profileName}*.\n\n${qrUrl ? '📲 *Te adjuntamos nuestro QR oficial para pago de suscripción VIP.* Por favor, realiza el pago y envía tu comprobante o captura **directamente por mensaje privado a la Administradora** para recibir tu acceso confidencial.' : 'La Admin se comunicará contigo por mensaje privado en cuanto esté disponible.'}\n\n🔒 Trato 100% Confidencial y Discreto.`;
         if (qrUrl) {
           await sendPhotoToUser(tgUserId, qrUrl, autoReplyText);
         } else {
@@ -224,13 +224,13 @@ router.post('/requests', async (req: Request, res: Response) => {
       telegram_user_id: tg_user_id ? String(tg_user_id) : undefined,
       telegram_first_name: client_name || 'Cliente Telegram/Web',
       telegram_username: client_telegram ? client_telegram.replace('@', '') : undefined,
-      notes: notes || 'Solicitud de acceso enviada desde Flavia Ruti VIP',
+      notes: notes || 'Solicitud de acceso enviada desde Tú Espacio VIP',
       status: 'pendiente'
     });
 
     // Send immediate automated chat to user's Telegram if user_id is present
     if (tg_user_id) {
-      const userConfirmText = `✨ *Flavia • Ruti VIP (+18)* ✨\n\n¡Hola ${client_name || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
+      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${client_name || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
       await sendMessage(String(tg_user_id), userConfirmText);
       scheduleAutoReply(request.id, String(tg_user_id), client_name || 'Estimado/a', profile.name);
     }
@@ -433,8 +433,8 @@ router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request
   }
 });
 
-// POST Upload Photos
-router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos', 5), async (req: Request, res: Response) => {
+// POST Upload gallery media (images and videos)
+router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos', 8), async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
     const profile = await getProfileById(profileId);
@@ -457,15 +457,15 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
     const updated = await saveProfile({ id: profileId, photos: updatedPhotos });
 
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('UPLOAD_PHOTOS', adminId, `${uploadedUrls.length} fotografías agregadas a ${profile.name}`, profileId);
+    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia agregados a ${profile.name}`, profileId);
 
     // Auto sync
     await syncProfileToChannel(profileId, adminId);
 
     broadcastEvent('PROFILE_UPDATED', updated);
-    res.json({ success: true, profile: updated, new_photos: uploadedUrls });
+    res.json({ success: true, profile: updated, new_media: uploadedUrls });
   } catch (err: any) {
-    res.status(500).json({ error: 'Error al subir fotos', details: err?.message });
+    res.status(500).json({ error: 'Error al subir imágenes o videos', details: err?.message });
   }
 });
 
@@ -580,7 +580,12 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       saveSystemSetting('auto_reply_delay_minutes', String(auto_reply_delay_minutes));
     }
     if (model_display_name !== undefined) {
-      saveSystemSetting('model_display_name', String(model_display_name).trim());
+      const cleanDisplayName = String(model_display_name).trim() || 'Tú';
+      saveSystemSetting('model_display_name', cleanDisplayName);
+      const creatorProfiles = await getAllProfiles();
+      if (creatorProfiles[0]) {
+        await saveProfile({ id: creatorProfiles[0].id, name: cleanDisplayName });
+      }
     }
     if (model_vip_link !== undefined) {
       saveSystemSetting('model_vip_link', String(model_vip_link).trim());
@@ -596,7 +601,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       telegram_only_access: isTelegramOnly,
       auto_reply_delay_minutes: autoReplyDelay,
       qr_image_url: getSystemSetting('qr_image_url') || '',
-      model_display_name: getSystemSetting('model_display_name') || 'Modelo VIP',
+      model_display_name: getSystemSetting('model_display_name') || 'Tú',
       model_vip_link: getSystemSetting('model_vip_link') || ''
     });
   } catch (err: any) {
@@ -635,5 +640,3 @@ router.post('/admin/settings/pinned', requireAdminAuth, async (req: Request, res
     res.status(500).json({ error: 'Error al guardar mensaje fijado' });
   }
 });
-
-
