@@ -45,7 +45,15 @@ export function getBotConfig() {
     .map(id => id.trim())
     .filter(Boolean);
   const signingSecret = process.env.ADMIN_SIGNING_SECRET || 'secret_jwt_key_santa_cruz';
-  const baseUrl = process.env.APP_BASE_URL || process.env.APP_URL || 'http://localhost:3000';
+  // Render provides its stable public HTTPS URL automatically. Prefer it over
+  // locally configured tunnel URLs so a stale TryCloudflare address can never
+  // overwrite the Telegram menu button or webhook after a deploy.
+  const baseUrl = (
+    process.env.RENDER_EXTERNAL_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.APP_URL ||
+    'http://localhost:3000'
+  ).replace(/\/+$/, '');
 
   return { token, username, secret, channelId, adminIds, signingSecret, baseUrl };
 }
