@@ -34,7 +34,10 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 export function getBotConfig() {
   const token = process.env.BOT_TOKEN || '';
   const storedUsername = getSystemSetting('bot_username');
-  let username = (storedUsername || process.env.BOT_USERNAME || 'CatalogoVIPSCZBot').replace(/^@/, '').trim();
+  // The deployed environment is authoritative for the bot identity. This
+  // prevents a username stored in a seeded/ephemeral SQLite file from linking
+  // the catalog to a different bot after a fresh deploy.
+  let username = (process.env.BOT_USERNAME || storedUsername || 'CatalogoVIPSCZBot').replace(/^@/, '').trim();
   if (username.toLowerCase() === 'catalogovipscz') {
     username = 'CatalogoVIPSCZBot';
   }
