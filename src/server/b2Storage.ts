@@ -97,7 +97,13 @@ export async function streamB2Object(req: Request, res: Response) {
     else res.end(await body?.transformToByteArray?.());
   } catch (error: any) {
     if (!res.headersSent) {
-      res.status(error?.$metadata?.httpStatusCode === 404 ? 404 : 502).json({ error: 'No se pudo cargar el archivo' });
+      const providerStatus = Number(error?.$metadata?.httpStatusCode) || 0;
+      const providerCode = String(error?.Code || error?.code || error?.name || 'UnknownError');
+      res.status(providerStatus === 404 ? 404 : 502).json({
+        error: 'No se pudo cargar el archivo',
+        provider_status: providerStatus || undefined,
+        provider_code: providerCode
+      });
     } else {
       res.end();
     }
