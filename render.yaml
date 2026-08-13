@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: flavia-ruti-vip-plus18
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        value: vip_ruti_bot
+      - key: TELEGRAM_WEBHOOK_SECRET
+        value: secreto_ruti_2026_vip
+      - key: ADMIN_SIGNING_SECRET
+        value: jwt_secreto_ruti_2026
