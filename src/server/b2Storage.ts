@@ -2,26 +2,34 @@ import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
 
-const bucket = process.env.B2_BUCKET_NAME?.trim() || '';
-const rawEndpoint = process.env.B2_ENDPOINT?.trim() || '';
-const endpoint = rawEndpoint && !/^https?:\/\//i.test(rawEndpoint) ? `https://${rawEndpoint}` : rawEndpoint;
-const keyId = process.env.B2_KEY_ID?.trim() || '';
-const applicationKey = process.env.B2_APPLICATION_KEY?.trim() || '';
-const endpointRegion = endpoint.match(/s3\.([a-z0-9-]+)\.backblazeb2\.com/i)?.[1];
+const requiredVariables = ['B2_BUCKET_NAME', 'B2_ENDPOINT', 'B2_KEY_ID', 'B2_APPLICATION_KEY'] as const;
 
-export const isB2Configured = Boolean(bucket && endpoint && keyId && applicationKey);
+export function missingB2Variables() {
+  return requiredVariables.filter(name => !process.env[name]?.trim());
+}
 
-const client = isB2Configured
-  ? new S3Client({
-      region: process.env.B2_REGION?.trim() || endpointRegion || 'us-west-004',
-      endpoint,
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: keyId,
-        secretAccessKey: applicationKey
-      }
-    })
-  : null;
+export function isB2Configured() {
+  return missingB2Variables().length === 0;
+}
+
+function getB2Connection() {
+  if (!isB2Configured()) return null;
+
+  const bucket = process.env.B2_BUCKET_NAME!.trim();
+  const rawEndpoint = process.env.B2_ENDPOINT!.trim();
+  const endpoint = !/^https?:\/\//i.test(rawEndpoint) ? `https://${rawEndpoint}` : rawEndpoint;
+  const keyId = process.env.B2_KEY_ID!.trim();
+  const applicationKey = process.env.B2_APPLICATION_KEY!.trim();
+  const endpointRegion = endpoint.match(/s3\.([a-z0-9-]+)\.backblazeb2\.com/i)?.[1];
+  const client = new S3Client({
+    region: process.env.B2_REGION?.trim() || endpointRegion || 'us-west-004',
+    endpoint,
+    forcePathStyle: true,
+    credentials: { accessKeyId: keyId, secretAccessKey: applicationKey }
+  });
+
+  return { bucket, client };
+}
 
 function safeFileName(name: string) {
   const extension = name.toLowerCase().match(/\.[a-z0-9]{1,8}$/)?.[0] || '';
@@ -29,11 +37,12 @@ function safeFileName(name: string) {
 }
 
 export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' | 'qr') {
-  if (!client) throw new Error('Backblaze B2 no está configurado');
+  const connection = getB2Connection();
+  if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
 
   const objectKey = `tu-vip/${folder}/${safeFileName(file.originalname)}`;
-  await client.send(new PutObjectCommand({
-    Bucket: bucket,
+  await connection.client.send(new PutObjectCommand({
+    Bucket: connection.bucket,
     Key: objectKey,
     Body: file.buffer,
     ContentType: file.mimetype,
@@ -50,8 +59,12 @@ export function mediaUrl(baseUrl: string, objectKey: string) {
 }
 
 export async function streamB2Object(req: Request, res: Response) {
-  if (!client) {
-    res.status(503).json({ error: 'Almacenamiento multimedia no configurado' });
+  const connection = getB2Connection();
+  if (!connection) {
+    res.status(503).json({
+      error: 'Almacenamiento multimedia no configurado',
+      missing: missingB2Variables()
+    });
     return;
   }
 
@@ -63,8 +76,8 @@ export async function streamB2Object(req: Request, res: Response) {
 
   try {
     const range = req.headers.range;
-    const object = await client.send(new GetObjectCommand({
-      Bucket: bucket,
+    const object = await connection.client.send(new GetObjectCommand({
+      Bucket: connection.bucket,
       Key: objectKey,
       Range: range
     }));

@@ -52,19 +52,15 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
-    const uniqueName = `img_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
-    cb(null, uniqueName);
-  }
-});
+function saveLocalUpload(file: Express.Multer.File, baseUrl: string) {
+  const ext = path.extname(file.originalname) || (file.mimetype.startsWith('video/') ? '.mp4' : '.jpg');
+  const filename = `media_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+  return `${baseUrl}/uploads/${filename}`;
+}
 
 const upload = multer({
-  storage: isB2Configured ? multer.memoryStorage() : storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // up to 50 MB per image/video
   fileFilter: (req, file, cb) => {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
@@ -453,11 +449,11 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
 
     if (files && files.length > 0) {
       for (const file of files) {
-        if (isB2Configured) {
+        if (isB2Configured()) {
           const objectKey = await uploadToB2(file, 'profiles');
           uploadedUrls.push(mediaUrl(config.baseUrl, objectKey));
         } else {
-          uploadedUrls.push(`${config.baseUrl}/uploads/${file.filename}`);
+          uploadedUrls.push(saveLocalUpload(file, config.baseUrl));
         }
       }
     }
@@ -626,9 +622,9 @@ router.post('/admin/settings/qr', requireAdminAuth, upload.single('qr_image'), a
       return;
     }
     const config = getBotConfig();
-    const qrUrl = isB2Configured
+    const qrUrl = isB2Configured()
       ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'qr'))
-      : `${config.baseUrl}/uploads/${req.file.filename}`;
+      : saveLocalUpload(req.file, config.baseUrl);
     saveSystemSetting('qr_image_url', qrUrl);
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, 'QR de Pago VIP actualizado');

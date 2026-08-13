@@ -68,10 +68,10 @@ async function startServer() {
   }
 
   app.listen(PORT, HOST, () => {
-    console.log(`[Flavia • Ruti VIP (+18)] =============================================`);
-    console.log(`[Flavia • Ruti VIP (+18)] 🌐 Servidor activo en: http://localhost:${PORT}`);
-    console.log(`[Flavia • Ruti VIP (+18)]    (Exclusivo +18 • Sin Comisiones ni Reservas)`);
-    console.log(`[Flavia • Ruti VIP (+18)] =============================================`);
+    console.log(`[Tú • Espacio VIP (+18)] =============================================`);
+    console.log(`[Tú • Espacio VIP (+18)] 🌐 Servidor activo en: http://localhost:${PORT}`);
+    console.log(`[Tú • Espacio VIP (+18)]    (Contenido privado para mayores de edad)`);
+    console.log(`[Tú • Espacio VIP (+18)] =============================================`);
     updateBotMenuButton().then(res => {
       console.log('[Telegram Bot] Bot menu button updated:', res);
     }).catch(err => {
