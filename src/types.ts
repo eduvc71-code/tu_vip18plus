@@ -20,7 +20,7 @@ export interface Profile {
   priority_order: number;
 }
 
-export type RequestStatus = 'pendiente' | 'confirmado' | 'rechazado' | 'completado';
+export type RequestStatus = 'pendiente' | 'qr_enviado' | 'auto_respondida' | 'confirmado' | 'rechazado' | 'completado' | 'fallida';
 
 export interface CustomerRequest {
   id: string;
@@ -31,6 +31,9 @@ export interface CustomerRequest {
   telegram_first_name?: string;
   status: RequestStatus;
   created_at: string;
+  admin_notified_at?: string;
+  auto_reply_at?: string;
+  responded_at?: string;
   notes?: string;
 }
 

@@ -19,6 +19,7 @@ import {
   clearConversationState,
   createCustomerRequest,
   getCustomerRequests,
+  getCustomerRequestById,
   updateCustomerRequestStatus,
   addAuditLog,
   addSyncError,
@@ -66,10 +67,38 @@ export function getBotConfig() {
 export function isAdminUser(telegramUserId: string | number): boolean {
   const { adminIds } = getBotConfig();
   if (adminIds.length === 0) {
-    // If no admin IDs are configured in env, treat first user or any developer user as admin for seamless experience
-    return true;
+    return false;
   }
   return adminIds.includes(String(telegramUserId));
+}
+
+export function verifyTelegramWebAppData(initData: string): { valid: boolean; user?: any } {
+  const { token } = getBotConfig();
+  if (!token || !initData) return { valid: false };
+
+  try {
+    const params = new URLSearchParams(initData);
+    const receivedHash = params.get('hash');
+    if (!receivedHash) return { valid: false };
+
+    params.delete('hash');
+    const authDate = Number(params.get('auth_date') || 0);
+    if (!authDate || Math.abs(Date.now() / 1000 - authDate) > 24 * 60 * 60) {
+      return { valid: false };
+    }
+
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${value}`)
+      .join('\n');
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(token).digest();
+    const computedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+    const valid = crypto.timingSafeEqual(Buffer.from(computedHash, 'hex'), Buffer.from(receivedHash, 'hex'));
+    const userJson = params.get('user');
+    return { valid, user: valid && userJson ? JSON.parse(userJson) : undefined };
+  } catch {
+    return { valid: false };
+  }
 }
 
 // Helper para POST HTTPS nativo en Node.js (evita errores de undici/fetch con DNS IPv6 en Windows)
@@ -122,6 +151,51 @@ export async function sendMessage(chatId: string | number, text: string, options
     parse_mode: 'Markdown',
     ...options
   });
+}
+
+function isPrivateChat(chat: any): boolean {
+  return chat?.type === 'private';
+}
+
+async function requirePrivateAdminChat(chat: any, fromId: string | number): Promise<boolean> {
+  if (!isAdminUser(fromId)) return false;
+  if (isPrivateChat(chat)) return true;
+  await sendMessage(chat.id, '🔒 Por seguridad, la gestión de clientes, QR y validaciones solo funciona en el chat privado con este bot.');
+  return false;
+}
+
+async function sendPrivateQrForRequest(requestId: string, adminChatId: string | number): Promise<void> {
+  const request = await getCustomerRequestById(requestId);
+  if (!request) {
+    await sendMessage(adminChatId, '❌ La solicitud ya no existe.');
+    return;
+  }
+  if (!request.telegram_user_id) {
+    await sendMessage(adminChatId, '⚠️ La solicitud no contiene un chat privado válido del cliente.');
+    return;
+  }
+  if (request.status !== 'pendiente') {
+    await sendMessage(adminChatId, `ℹ️ Esta solicitud ya fue procesada. Estado actual: *${request.status}*.`);
+    return;
+  }
+
+  const qrUrl = getSystemSetting('qr_image_url');
+  if (!qrUrl) {
+    await sendMessage(adminChatId, '⚠️ No hay una imagen QR configurada en el panel administrativo.');
+    return;
+  }
+
+  const replyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\nNuestra Administradora autorizó el envío del *QR oficial de pago* para tu solicitud.\n\n📲 Realiza el pago y conserva tu comprobante. La validación y cualquier coordinación posterior se realizarán únicamente mediante conversación privada con la Administradora.\n\n🔒 Este bot no publica comprobantes ni entrega accesos a grupos.`;
+  const result = await sendPhotoToUser(request.telegram_user_id, qrUrl, replyText);
+  if (!result.ok) {
+    console.error(`[Telegram Delivery] QR privado rechazado para solicitud ${requestId}: ${result.description || 'respuesta desconocida'}`);
+    await sendMessage(adminChatId, `❌ Telegram no pudo entregar el QR al cliente: ${result.description || 'error desconocido'}`);
+    return;
+  }
+
+  await updateCustomerRequestStatus(requestId, 'qr_enviado');
+  await addAuditLog('SEND_PRIVATE_QR', String(adminChatId), `QR privado enviado para solicitud ${requestId}`, requestId);
+  await sendMessage(adminChatId, '✅ QR enviado al chat privado del cliente. La solicitud quedó marcada como *QR ENVIADO*.');
 }
 
 export async function pinChatMessage(chatId: string | number, messageId: number) {
@@ -314,8 +388,25 @@ export async function processTelegramUpdate(update: any) {
   const fromId = message.from?.id;
   const text = message.text ? message.text.trim() : '';
 
+  if (text === '/mi_id' || text === '/registrar_admin') {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Abre el chat privado con este bot y vuelve a enviar el comando.');
+      return;
+    }
+    if (isAdminUser(fromId)) {
+      await sendMessage(chatId, `✅ *Administradora verificada*\n\nTu chat privado está registrado correctamente para recibir solicitudes.\nID: \`${fromId}\``);
+    } else {
+      await sendMessage(chatId, `ℹ️ Tu ID privado es \`${fromId}\`.\n\nEste ID todavía no coincide con la administradora configurada en el sistema.`);
+    }
+    return;
+  }
+
   // 1. Deep Link Client Request handling (e.g., /start req_prof_scz_01)
   if (text.startsWith('/start req_')) {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Las solicitudes de contenido solo pueden realizarse desde un chat privado.');
+      return;
+    }
     const profileId = text.replace('/start req_', '').trim();
     await handleClientAvailabilityRequest(message, profileId);
     return;
@@ -358,14 +449,6 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // 1.5. Comando administrativo para abrir el panel de gestión
-  if (text === '/panel') {
-    const { baseUrl } = getBotConfig();
-    const adminLink = `${baseUrl}/#admin`;
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nAcceso directo al gestor administrativo del catálogo:\n\n👉 [Ingresar al Panel Web](${adminLink})\n\n_Puedes abrir este enlace directamente desde tu navegador o celular sin contraseña._`);
-    return;
-  }
-
   // 2. Guard for Administrative Commands
   if (!isAdminUser(fromId)) {
     if (text.startsWith('/')) {
@@ -376,6 +459,18 @@ export async function processTelegramUpdate(update: any) {
 
   // Admin User Flow Processing
   const userIdStr = String(fromId);
+
+  if (!(await requirePrivateAdminChat(message.chat, fromId))) {
+    return;
+  }
+
+  // Administrative tools never run in a group or channel.
+  if (text === '/panel') {
+    const { baseUrl } = getBotConfig();
+    const adminLink = `${baseUrl}/#admin`;
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nAcceso directo al gestor administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`);
+    return;
+  }
 
   // Command switch
   if (text === '/start') {
@@ -427,24 +522,14 @@ export async function processTelegramUpdate(update: any) {
 
   if (text.startsWith('/qr ')) {
     const targetUserId = text.replace('/qr ', '').trim();
-    const qrUrl = getSystemSetting('qr_image_url');
-    if (!qrUrl) {
-      await sendMessage(chatId, '⚠️ *No hay imagen QR configurada* en la pantalla de administración de la página web. Sube primero el QR en el panel de administración.');
+    const pendingRequest = (await getCustomerRequests()).find(
+      request => request.telegram_user_id === targetUserId && request.status === 'pendiente'
+    );
+    if (!pendingRequest) {
+      await sendMessage(chatId, '⚠️ No encontré una solicitud pendiente para ese cliente.');
       return;
     }
-    const replyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola!\n\nNuestra Administradora ha procesado tu solicitud. Para confirmar tu suscripción / acceso VIP, te adjuntamos nuestro *QR de pago oficial*.\n\n📲 *Por favor, realiza el pago y envía tu comprobante / captura directamente al chat privado de la Administradora.* ¡Máxima discreción y confidencialidad garantizada!`;
-    const resQr = await sendPhotoToUser(targetUserId, qrUrl, replyText);
-    if (resQr.ok) {
-      const pendingRequest = (await getCustomerRequests()).find(
-        request => request.telegram_user_id === targetUserId && request.status === 'pendiente'
-      );
-      if (pendingRequest) {
-        await updateCustomerRequestStatus(pendingRequest.id, 'confirmado');
-      }
-      await sendMessage(chatId, `✅ *QR de pago VIP enviado exitosamente* al cliente con ID \`${targetUserId}\`.`);
-    } else {
-      await sendMessage(chatId, `❌ *Error al enviar QR al cliente* (\`${targetUserId}\`): ${resQr.description || 'Error desconocido'}`);
-    }
+    await sendPrivateQrForRequest(pendingRequest.id, chatId);
     return;
   }
 
@@ -708,7 +793,30 @@ async function handleCallbackQuery(cb: any) {
     return;
   }
 
+  if (!isPrivateChat(cb.message?.chat)) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Esta acción solo funciona en el chat privado.', show_alert: true });
+    return;
+  }
+
   await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+
+  if (data.startsWith('request_qr_')) {
+    await sendPrivateQrForRequest(data.replace('request_qr_', ''), chatId);
+    return;
+  }
+
+  if (data.startsWith('request_done_')) {
+    const requestId = data.replace('request_done_', '');
+    const request = await getCustomerRequestById(requestId);
+    if (!request) {
+      await sendMessage(chatId, '❌ La solicitud ya no existe.');
+      return;
+    }
+    await updateCustomerRequestStatus(requestId, 'completado');
+    await addAuditLog('COMPLETE_PRIVATE_REQUEST', userIdStr, `Solicitud ${requestId} atendida privadamente`, requestId);
+    await sendMessage(chatId, '✅ Solicitud marcada como *ATENDIDA*. El bot ya no enviará una respuesta automática.');
+    return;
+  }
 
   if (data === 'cancel_wizard') {
     await clearConversationState(userIdStr);

@@ -83,9 +83,22 @@ function initTables(database: Database): void {
       telegram_first_name TEXT,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      admin_notified_at TEXT,
+      auto_reply_at TEXT,
+      responded_at TEXT,
       notes TEXT
     );
   `);
+
+  const requestColumns = database.exec("PRAGMA table_info(customer_requests)");
+  const existingRequestColumns = new Set(
+    requestColumns[0]?.values.map(row => String(row[1])) || []
+  );
+  for (const column of ['admin_notified_at', 'auto_reply_at', 'responded_at']) {
+    if (!existingRequestColumns.has(column)) {
+      database.run(`ALTER TABLE customer_requests ADD COLUMN ${column} TEXT`);
+    }
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS conversations (
@@ -352,8 +365,8 @@ export async function createCustomerRequest(req: Partial<CustomerRequest>): Prom
   const now = new Date().toISOString();
 
   database.run(`
-    INSERT INTO customer_requests (id, profile_id, profile_name, telegram_user_id, telegram_username, telegram_first_name, status, created_at, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO customer_requests (id, profile_id, profile_name, telegram_user_id, telegram_username, telegram_first_name, status, created_at, admin_notified_at, auto_reply_at, responded_at, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `, [
     id,
     req.profile_id || '',
@@ -363,6 +376,9 @@ export async function createCustomerRequest(req: Partial<CustomerRequest>): Prom
     req.telegram_first_name || null,
     req.status || 'pendiente',
     now,
+    req.admin_notified_at || null,
+    req.auto_reply_at || null,
+    req.responded_at || null,
     req.notes || ''
   ]);
 
@@ -376,6 +392,9 @@ export async function createCustomerRequest(req: Partial<CustomerRequest>): Prom
     telegram_first_name: req.telegram_first_name,
     status: req.status as any || 'pendiente',
     created_at: now,
+    admin_notified_at: req.admin_notified_at,
+    auto_reply_at: req.auto_reply_at,
+    responded_at: req.responded_at,
     notes: req.notes
   };
 }
@@ -409,8 +428,36 @@ export async function getCustomerRequestById(id: string): Promise<CustomerReques
 
 export async function updateCustomerRequestStatus(id: string, status: string): Promise<void> {
   const database = await getDb();
-  database.run("UPDATE customer_requests SET status = ? WHERE id = ?", [status, id]);
+  database.run("UPDATE customer_requests SET status = ?, responded_at = CASE WHEN ? = 'pendiente' THEN responded_at ELSE ? END WHERE id = ?", [status, status, new Date().toISOString(), id]);
   saveDb();
+}
+
+export async function markCustomerRequestScheduled(id: string, adminNotifiedAt: string, autoReplyAt?: string): Promise<void> {
+  const database = await getDb();
+  database.run(
+    "UPDATE customer_requests SET admin_notified_at = ?, auto_reply_at = ? WHERE id = ?",
+    [adminNotifiedAt, autoReplyAt || null, id]
+  );
+  saveDb();
+}
+
+export async function getDueCustomerRequests(nowIso: string): Promise<CustomerRequest[]> {
+  const database = await getDb();
+  const stmt = database.prepare(`
+    SELECT * FROM customer_requests
+    WHERE status = 'pendiente'
+      AND auto_reply_at IS NOT NULL
+      AND auto_reply_at <= ?
+    ORDER BY auto_reply_at ASC
+  `);
+  stmt.bind([nowIso]);
+  const requests: CustomerRequest[] = [];
+  while (stmt.step()) {
+    requests.push(stmt.getAsObject() as unknown as CustomerRequest);
+  }
+  stmt.free();
+  saveDb();
+  return requests;
 }
 
 // Conversation State Machine for Telegram Bot

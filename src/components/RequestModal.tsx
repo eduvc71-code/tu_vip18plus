@@ -34,6 +34,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, tgUserConte
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          telegram_init_data: (window as any).Telegram?.WebApp?.initData || '',
           profile_id: profile.id,
           client_name: tgUserContext?.first_name || 'Cliente Telegram',
           client_telegram: tgUserContext?.username ? `@${tgUserContext.username}` : (tgUserContext?.id ? `ID:${tgUserContext.id}` : '@cliente_telegram'),

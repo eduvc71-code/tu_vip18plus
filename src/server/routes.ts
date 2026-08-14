@@ -12,6 +12,8 @@ import {
   createCustomerRequest,
   getCustomerRequests,
   getCustomerRequestById,
+  getDueCustomerRequests,
+  markCustomerRequestScheduled,
   updateCustomerRequestStatus,
   getAuditLogs,
   getSyncErrors,
@@ -26,6 +28,7 @@ import {
   syncProfileToChannel,
   verifyAdminToken,
   getBotConfig,
+  verifyTelegramWebAppData,
   sendMessage,
   sendPhotoToUser
 } from './telegram.js';
@@ -178,35 +181,68 @@ router.get('/profiles/:id', async (req: Request, res: Response) => {
   }
 });
 
-export function scheduleAutoReply(requestId: string, tgUserId: string, clientName: string, profileName: string) {
+export async function scheduleAutoReply(requestId: string) {
   const delayMinutesStr = getSystemSetting('auto_reply_delay_minutes') || '10';
   const delayMinutes = Number(delayMinutesStr) || 10;
-  const delayMs = delayMinutes * 60 * 1000;
+  const now = new Date();
+  const dueAt = new Date(now.getTime() + delayMinutes * 60 * 1000);
+  await markCustomerRequestScheduled(requestId, now.toISOString(), dueAt.toISOString());
+}
 
-  setTimeout(async () => {
-    try {
-      const checkReq = await getCustomerRequestById(requestId);
-      if (checkReq && checkReq.status === 'pendiente') {
-        const qrUrl = getSystemSetting('qr_image_url');
-        const autoReplyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${clientName || 'Estimado/a'}!\n\nNuestra Administradora ha revisado tu mensaje para *${profileName}*.\n\n${qrUrl ? '📲 *Te adjuntamos nuestro QR oficial para pago de suscripción VIP.* Por favor, realiza el pago y envía tu comprobante o captura **directamente por mensaje privado a la Administradora** para recibir tu acceso confidencial.' : 'La Admin se comunicará contigo por mensaje privado en cuanto esté disponible.'}\n\n🔒 Trato 100% Confidencial y Discreto.`;
-        if (qrUrl) {
-          await sendPhotoToUser(tgUserId, qrUrl, autoReplyText);
-        } else {
-          await sendMessage(tgUserId, autoReplyText);
-        }
-        console.log(`[AutoReply] Respuesta automática enviada tras ${delayMinutes} min a ${tgUserId} (Solicitud #${requestId})`);
+let autoReplyWorkerRunning = false;
+
+export async function processDueAutoReplies(): Promise<void> {
+  if (autoReplyWorkerRunning) return;
+  autoReplyWorkerRunning = true;
+  try {
+    const dueRequests = await getDueCustomerRequests(new Date().toISOString());
+    for (const request of dueRequests) {
+      if (!request.telegram_user_id) {
+        await updateCustomerRequestStatus(request.id, 'fallida');
+        continue;
       }
-    } catch (e) {
-      console.error('[AutoReply] Error en respuesta automática del bot:', e);
+
+      const qrUrl = getSystemSetting('qr_image_url');
+      const autoReplyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
+      const delivery = qrUrl
+        ? await sendPhotoToUser(request.telegram_user_id, qrUrl, autoReplyText)
+        : await sendMessage(request.telegram_user_id, autoReplyText);
+
+      if (delivery.ok) {
+        await updateCustomerRequestStatus(request.id, 'auto_respondida');
+        await addAuditLog('AUTO_REPLY_PRIVATE', 'Telegram Bot', `Respuesta privada automática para solicitud ${request.id}`, request.id);
+        console.log(`[AutoReply] Entrega privada confirmada para solicitud ${request.id}`);
+      } else {
+        console.error(`[AutoReply] Telegram rechazó la solicitud ${request.id}: ${delivery.description || 'respuesta desconocida'}`);
+      }
     }
-  }, delayMs);
+  } catch (error) {
+    console.error('[AutoReply] Error al procesar vencimientos:', error);
+  } finally {
+    autoReplyWorkerRunning = false;
+  }
+}
+
+export function startAutoReplyWorker(): NodeJS.Timeout {
+  void processDueAutoReplies();
+  return setInterval(() => void processDueAutoReplies(), 30_000);
 }
 
 // POST Customer Availability Request
 router.post('/requests', async (req: Request, res: Response) => {
   try {
-    const { profile_id, client_name, client_telegram, tg_user_id } = req.body;
+    const { profile_id, client_name, client_telegram, tg_user_id, telegram_init_data } = req.body;
     const purchaseMessage = 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
+
+    const verifiedTelegram = verifyTelegramWebAppData(String(telegram_init_data || ''));
+    if (tg_user_id && !verifiedTelegram.valid) {
+      res.status(401).json({ error: 'No fue posible validar tu sesión privada de Telegram. Cierra y vuelve a abrir la mini app desde el bot.' });
+      return;
+    }
+    const verifiedUser = verifiedTelegram.user;
+    const safeUserId = verifiedUser?.id ? String(verifiedUser.id) : undefined;
+    const safeClientName = verifiedUser?.first_name || client_name || 'Cliente Telegram/Web';
+    const safeClientTelegram = verifiedUser?.username ? `@${verifiedUser.username}` : client_telegram;
 
     if (!profile_id) {
       res.status(400).json({ error: 'El ID del perfil es requerido' });
@@ -222,35 +258,56 @@ router.post('/requests', async (req: Request, res: Response) => {
     const request = await createCustomerRequest({
       profile_id: profile.id,
       profile_name: profile.name,
-      telegram_user_id: tg_user_id ? String(tg_user_id) : undefined,
-      telegram_first_name: client_name || 'Cliente Telegram/Web',
-      telegram_username: client_telegram ? client_telegram.replace('@', '') : undefined,
+      telegram_user_id: safeUserId,
+      telegram_first_name: safeClientName,
+      telegram_username: safeClientTelegram ? safeClientTelegram.replace('@', '') : undefined,
       notes: purchaseMessage,
       status: 'pendiente'
     });
 
     // Send alert to Telegram Admins
     const { adminIds } = getBotConfig();
-    const clientHandle = client_telegram
-      ? (client_telegram.startsWith('@') || client_telegram.startsWith('ID:') ? client_telegram : `@${client_telegram}`)
+    const clientHandle = safeClientTelegram
+      ? (safeClientTelegram.startsWith('@') || safeClientTelegram.startsWith('ID:') ? safeClientTelegram : `@${safeClientTelegram}`)
       : '';
     const adminNotice = `
 🔔 *NUEVA SOLICITUD DE ACCESO VIP* 🔔
 
-👤 *Cliente*: ${client_name || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
-🆔 *Telegram ID*: \`${tg_user_id || 'No detectado'}\`
+👤 *Cliente*: ${safeClientName || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
+🆔 *Telegram ID*: \`${safeUserId || 'No detectado'}\`
 👠 *Perfil*: ${profile.name} (PRECIO VIP: Bs. ${profile.rate_bs})
 📍 *Zona*: ${profile.zone}
 💬 *Mensaje*: ${purchaseMessage}
 📅 *Fecha*: ${new Date().toLocaleString()}
 
-💬 _Para responder al cliente enviándole el QR de pago VIP adjunto, escribe en este chat:_\n\`/qr ${tg_user_id || 'ID_CLIENTE'}\`
+🔒 _Toda respuesta, envío de QR y validación debe realizarse por privado. El acceso al Grupo VIP no forma parte de este sistema._
     `;
 
     let deliveredToAdmin = false;
     for (const adminId of adminIds) {
       if (adminId) {
-        const delivery = await sendMessage(adminId, adminNotice);
+        const privateReplyUrl = safeUserId
+          ? (safeClientTelegram?.startsWith('@')
+              ? `https://t.me/${safeClientTelegram.slice(1)}`
+              : `tg://user?id=${safeUserId}`)
+          : undefined;
+        const firstRow = privateReplyUrl
+          ? [{ text: '💬 Responder en privado', url: privateReplyUrl }]
+          : [];
+        const delivery = await sendMessage(adminId, adminNotice, {
+          reply_markup: {
+            inline_keyboard: [
+              firstRow,
+              [
+                { text: '📲 Enviar QR privado', callback_data: `request_qr_${request.id}` },
+                { text: '✅ Marcar atendida', callback_data: `request_done_${request.id}` }
+              ]
+            ].filter(row => row.length > 0)
+          }
+        });
+        if (!delivery.ok) {
+          console.error(`[Telegram Delivery] Administradora ${String(adminId).slice(-4)}: ${delivery.description || 'respuesta desconocida'}`);
+        }
         deliveredToAdmin = deliveredToAdmin || Boolean(delivery.ok);
       }
     }
@@ -262,10 +319,12 @@ router.post('/requests', async (req: Request, res: Response) => {
     }
 
     // Confirm only after the administrator has received the request.
-    if (tg_user_id) {
-      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${client_name || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
-      await sendMessage(String(tg_user_id), userConfirmText);
-      scheduleAutoReply(request.id, String(tg_user_id), client_name || 'Estimado/a', profile.name);
+    if (safeUserId) {
+      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
+      await sendMessage(safeUserId, userConfirmText);
+      await scheduleAutoReply(request.id);
+    } else {
+      await markCustomerRequestScheduled(request.id, new Date().toISOString());
     }
 
     broadcastEvent('NEW_REQUEST', request);
@@ -509,14 +568,13 @@ router.post('/admin/requests/:id/reply', requireAdminAuth, async (req: Request, 
     }
 
     const newStatus = status || 'confirmado';
-    await updateCustomerRequestStatus(requestId, newStatus);
 
     let sentToTelegram = false;
     const targetUserId = request.telegram_user_id;
 
     if (targetUserId) {
       const qrUrl = getSystemSetting('qr_image_url');
-      const msgText = `✨ *RESPUESTA DE LA ADMINISTRADORA* ✨\n\n📌 *Perfil*: ${request.profile_name}\n\n💬 ${reply_message || 'Hola, tu mensaje ha sido respondido.'}\n\n📲 *Por favor, realiza el pago de tu SUSCRIPCIÓN VIP y envía tu comprobante o captura directamente al privado de la Administradora.* ¡Confidencialidad garantizada!\n\n*Estado*: ${newStatus.toUpperCase()}`;
+      const msgText = `✨ *RESPUESTA PRIVADA DE LA ADMINISTRADORA* ✨\n\n📌 *Contenido*: ${request.profile_name}\n\n💬 ${reply_message || 'Hola, tu solicitud ha sido atendida.'}\n\n📲 La coordinación y validación de la compra se realizan únicamente en privado. Este sistema no entrega accesos ni enlaces a grupos.\n\n*Estado*: ${newStatus.toUpperCase()}`;
       let sent;
       if (qrUrl) {
         sent = await sendPhotoToUser(targetUserId, qrUrl, msgText);
@@ -524,10 +582,15 @@ router.post('/admin/requests/:id/reply', requireAdminAuth, async (req: Request, 
         sent = await sendMessage(targetUserId, msgText);
       }
       sentToTelegram = sent.ok;
+      if (sentToTelegram) {
+        await updateCustomerRequestStatus(requestId, qrUrl ? 'qr_enviado' : newStatus);
+      }
+    } else {
+      await updateCustomerRequestStatus(requestId, newStatus);
     }
 
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('REPLY_REQUEST', adminId, `Respuesta enviada para solicitud de ${request.profile_name} (Cliente: ${request.telegram_first_name || 'Anónimo'})`, requestId);
+    await addAuditLog('REPLY_REQUEST', adminId, `${sentToTelegram ? 'Respuesta privada enviada' : 'Intento de respuesta'} para solicitud de ${request.profile_name} (Cliente: ${request.telegram_first_name || 'Anónimo'})`, requestId);
 
     broadcastEvent('REQUEST_UPDATED', { id: requestId, status: newStatus });
 

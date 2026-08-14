@@ -5,9 +5,9 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
-import { router as apiRouter } from './src/server/routes.js';
+import { router as apiRouter, startAutoReplyWorker } from './src/server/routes.js';
 import { getDb } from './src/server/db.js';
-import { updateBotMenuButton, registerBotWebhook } from './src/server/telegram.js';
+import { updateBotMenuButton, registerBotWebhook, getBotConfig } from './src/server/telegram.js';
 
 async function startServer() {
   // Ensure DB initialized
@@ -68,6 +68,8 @@ async function startServer() {
   }
 
   app.listen(PORT, HOST, () => {
+    startAutoReplyWorker();
+    console.log(`[Telegram Bot] Administradoras configuradas: ${getBotConfig().adminIds.length}`);
     console.log(`[Tú • Espacio VIP (+18)] =============================================`);
     console.log(`[Tú • Espacio VIP (+18)] 🌐 Servidor activo en: http://localhost:${PORT}`);
     console.log(`[Tú • Espacio VIP (+18)]    (Contenido privado para mayores de edad)`);
