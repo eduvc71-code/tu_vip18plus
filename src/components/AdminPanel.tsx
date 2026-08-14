@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CommissionLog } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog } from '../types';
 import { isVideoUrl } from './ProtectedMedia';
 import {
   X,
@@ -34,7 +34,7 @@ interface AdminPanelProps {
   channelId: string;
 }
 
-type AdminTab = 'profiles' | 'requests' | 'commissions' | 'telegram' | 'audit';
+type AdminTab = 'profiles' | 'requests' | 'telegram' | 'audit';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
@@ -49,7 +49,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
-  const [commissionLogs, setCommissionLogs] = useState<CommissionLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [syncErrors, setSyncErrors] = useState<SyncErrorLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -177,10 +176,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formData.age < 18) {
-      setMessage({ type: 'error', text: 'REGLA OBLIGATORIA: La edad debe ser mayor o igual a 18 años.' });
-      return;
-    }
     setLoading(true);
     setMessage(null);
     try {
@@ -410,21 +405,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-5xl bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-zinc-100 flex flex-col max-h-[92vh] overflow-hidden my-auto">
+      <div className="relative w-full max-w-3xl bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-zinc-100 flex flex-col max-h-[88vh] overflow-hidden my-auto">
 
         {/* ── Header ── */}
-        <div className="p-4 sm:p-6 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60 shrink-0">
+        <div className="p-3 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
               <Lock className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight font-serif">
+              <h2 className="text-base font-bold text-white tracking-tight font-serif">
                 Panel Administrativo — Tú VIP
               </h2>
-              <p className="text-xs text-zinc-400">
-                Canal Telegram: <span className="text-amber-400 font-mono">{channelId}</span>
-              </p>
+              <p className="text-[11px] text-zinc-400">Gestión de contenido y atención privada</p>
             </div>
           </div>
 
@@ -472,7 +465,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <div className="flex-1 flex flex-col overflow-hidden">
 
           {/* ── Tab Bar ── */}
-          <div className="flex items-center gap-0.5 px-3 sm:px-5 pt-3 bg-zinc-950/40 border-b border-zinc-800/80 overflow-x-auto scrollbar-none shrink-0">
+          <div className="flex items-center gap-0.5 px-3 sm:px-4 pt-2 bg-zinc-950/40 border-b border-zinc-800/80 overflow-x-auto scrollbar-none shrink-0">
             {tabs.map(tab => (
               <button
                 key={tab.id}
@@ -500,62 +493,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           {/* ── Tab Views ── */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
 
             {/* TAB: MY PROFILE FORM */}
             {activeTab === 'profiles' && (
-              <div className="max-w-2xl mx-auto space-y-6">
+              <div className="max-w-xl mx-auto space-y-5">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                   {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear tu perfil VIP'}
                 </h3>
 
                 <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-semibold">Nombre Público *</label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-semibold">Edad (Mínimo 18) *</label>
-                      <input
-                        type="number"
-                        min={18}
-                        required
-                        value={formData.age}
-                        onChange={(e) => setFormData({ ...formData, age: Number(e.target.value) })}
-                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-zinc-400 mb-1 font-semibold">Etiqueta / Categoría</label>
+                    <label className="block text-zinc-400 mb-1 font-semibold">Nombre Público *</label>
                     <input
                       type="text"
-                      value={formData.zone}
-                      onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
-                      placeholder="Ej: Contenido exclusivo, Lifestyle, VIP..."
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-zinc-400 mb-1 font-semibold">PRECIO SUSCRIPCIÓN (Bs.)</label>
-                      <input
-                        type="number"
-                        value={formData.rate_bs}
-                        onChange={(e) => setFormData({ ...formData, rate_bs: Number(e.target.value) })}
-                        className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-zinc-400 mb-1 font-semibold">PRECIO SUSCRIPCIÓN (Bs.)</label>
+                    <input
+                      type="number"
+                      value={formData.rate_bs}
+                      onChange={(e) => setFormData({ ...formData, rate_bs: Number(e.target.value) })}
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+                    />
                   </div>
 
                   <div>
@@ -638,25 +604,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </h4>
 
                     {editingProfile.photos && editingProfile.photos.length > 0 ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {editingProfile.photos.map((photoUrl, idx) => (
-                          <div key={idx} className="relative group rounded-xl overflow-hidden border border-zinc-800 aspect-square bg-zinc-900">
-                            {isVideoUrl(photoUrl) ? (
-                              <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                            ) : (
-                              <img src={photoUrl} alt={`Imagen ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePhoto(photoUrl)}
-                              className="absolute top-1 right-1 p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-md opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                              title="Eliminar archivo"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="absolute bottom-1 left-1 text-[10px] text-white bg-zinc-950/70 px-1.5 rounded font-mono">
-                              #{idx + 1}
-                            </span>
+                      <div className="space-y-4">
+                        {[
+                          { label: 'Imágenes', items: editingProfile.photos.filter(item => !isVideoUrl(item)) },
+                          { label: 'Videos', items: editingProfile.photos.filter(isVideoUrl) }
+                        ].filter(group => group.items.length > 0).map(group => (
+                          <div key={group.label} className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <h5 className="font-bold text-zinc-300">{group.label}</h5>
+                              <span className="text-[10px] text-zinc-500">{group.items.length} archivo(s)</span>
+                            </div>
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                              {group.items.map((photoUrl, idx) => (
+                                <div key={photoUrl} className="relative group rounded-xl overflow-hidden border border-zinc-800 aspect-square bg-zinc-900">
+                                  {isVideoUrl(photoUrl) ? (
+                                    <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                  ) : (
+                                    <img src={photoUrl} alt={`${group.label} ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemovePhoto(photoUrl)}
+                                    className="absolute top-1 right-1 p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+                                    title="Eliminar archivo"
+                                    aria-label="Eliminar archivo"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                  {idx === 0 && (
+                                    <span className="absolute bottom-1 left-1 text-[9px] text-white bg-amber-600/90 px-1.5 py-0.5 rounded font-bold uppercase">Más reciente</span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>

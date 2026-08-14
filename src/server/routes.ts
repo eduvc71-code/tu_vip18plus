@@ -532,7 +532,8 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
       }
     }
 
-    const updatedPhotos = [...(profile.photos || []), ...uploadedUrls];
+    // The latest upload is always the cover/first item and pushes older media back.
+    const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
     const updated = await saveProfile({ id: profileId, photos: updatedPhotos });
 
     const adminId = (req as any).adminUserId || 'Admin Web';

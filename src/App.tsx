@@ -7,7 +7,7 @@ import { RequestModal, TelegramUserContext } from './components/RequestModal';
 import { AgeModal } from './components/AgeModal';
 import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
-import { ShieldCheck, Heart, Send, Sparkles, AlertTriangle, Lock, UserCheck, X } from 'lucide-react';
+import { Heart, Send, Sparkles, UserCheck, X, Bot, MessageCircle, Crown } from 'lucide-react';
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -170,7 +170,7 @@ export default function App() {
       />
 
       {/* Main Catalog View */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
         
         {/* Intro Splash Welcome Banner (desaparece automático tras 5s o con botón X) */}
         {showIntroBanner && (
@@ -245,7 +245,7 @@ export default function App() {
             </div>
           ) : (
             <div className="flex justify-center">
-              <div className="w-full max-w-md">
+              <div className="w-full">
                 {filteredProfiles.map((p) => (
                   <ProfileCard
                     key={p.id}
@@ -262,19 +262,33 @@ export default function App() {
           )}
         </section>
 
+        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-6" aria-labelledby="como-funciona">
+          <div className="max-w-2xl">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400">Atención privada</p>
+            <h2 id="como-funciona" className="mt-1 font-serif text-xl font-bold text-white">Cómo funciona la adquisición</h2>
+            <p className="mt-2 text-sm leading-6 text-zinc-400">El bot organiza la solicitud y mantiene la conversación en Telegram. La Administradora conserva el control de la negociación, el pago, la validación y cualquier acceso posterior.</p>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            {[
+              { icon: <Bot className="h-5 w-5" />, title: '1. Solicitud', text: 'El bot recibe tu interés y avisa a la Administradora.' },
+              { icon: <MessageCircle className="h-5 w-5" />, title: '2. Negociación privada', text: 'Precio, QR y comprobante se coordinan en chats privados.' },
+              { icon: <Crown className="h-5 w-5" />, title: '3. Control administrativo', text: 'Solo la Administradora valida la compra y decide el acceso final.' }
+            ].map(item => (
+              <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">{item.icon}</div>
+                <h3 className="text-sm font-bold text-white">{item.title}</h3>
+                <p className="mt-1 text-xs leading-5 text-zinc-400">{item.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
       </main>
 
       {/* Legal Footer & Discretion Disclaimer */}
       <footer className="mt-12 bg-zinc-950 border-t border-zinc-900 text-zinc-400 text-xs py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
-          <div className="p-4 rounded-2xl bg-zinc-900/80 border border-amber-500/20 text-[11px] text-amber-200/90 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <p className="leading-relaxed">
-              <strong>Aviso de Privacidad y Cumplimiento Legal:</strong> Este sitio opera exclusivamente para la venta de contenido digital privado para adultos mayores de 18 años. Queda estrictamente prohibida la presencia de menores de edad.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-zinc-500 pt-2">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-zinc-500">
             <p>© {new Date().getFullYear()} {displayName}. Todos los derechos reservados.</p>
             <div className="flex items-center gap-4">
               <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 flex items-center gap-1 transition-colors">
