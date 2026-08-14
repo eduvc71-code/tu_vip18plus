@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Profile } from '../types';
-import { X, Send, AlertTriangle, MessageSquare, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { X, Send, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
 export interface TelegramUserContext {
   id: string;
@@ -10,22 +10,19 @@ export interface TelegramUserContext {
 
 interface RequestModalProps {
   profile: Profile | null;
-  botUsername: string;
   tgUserContext?: TelegramUserContext | null;
   onClose: () => void;
 }
 
-export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername, tgUserContext, onClose }) => {
+export const RequestModal: React.FC<RequestModalProps> = ({ profile, tgUserContext, onClose }) => {
   // ✅ Todos los hooks ANTES de cualquier return condicional (regla de hooks de React)
-  const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
 
   if (!profile) return null;
 
-  const cleanUsername = (botUsername || 'vip_ruti_bot').replace(/^@/, '').trim();
-  const webLinkUrl = `https://t.me/${cleanUsername}?start=req_${profile.id}`;
+  const purchaseMessage = 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
 
   const handleSubmitWebForm = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,13 +38,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
           client_name: tgUserContext?.first_name || 'Cliente Telegram',
           client_telegram: tgUserContext?.username ? `@${tgUserContext.username}` : (tgUserContext?.id ? `ID:${tgUserContext.id}` : '@cliente_telegram'),
           tg_user_id: tgUserContext?.id,
-          notes
+          notes: purchaseMessage
         })
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
         setSubmitted(true);
+        const telegramWebApp = (window as any).Telegram?.WebApp;
+        if (telegramWebApp?.close) {
+          window.setTimeout(() => telegramWebApp.close(), 500);
+        }
       } else {
         setError(data.error || 'Error al enviar la solicitud');
       }
@@ -74,7 +75,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
             <Send className="w-6 h-6" />
           </div>
           <h3 className="text-xl font-bold text-white tracking-tight">
-            Desbloquear Contenido
+            Adquirir Contenido
           </h3>
           <p className="text-xs text-amber-400 font-medium mt-1 leading-relaxed">
             Suscripción VIP: <span className="text-amber-300">Bs. {profile.rate_bs} / mes</span>
@@ -107,17 +108,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
             </div>
             <h4 className="text-lg font-bold text-white">¡Solicitud Notificada!</h4>
             <p className="text-xs text-zinc-300 leading-relaxed">
-              La Administradora de <strong>Tú VIP</strong> ha sido notificada. También puedes escribirle directamente en Telegram.
+              La Administradora de <strong>Tú VIP</strong> ha sido notificada. La negociación continuará de forma privada en Telegram.
             </p>
-            <a
-              href={webLinkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition-all shadow-md"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Abrir Chat en Telegram
-            </a>
             <button
               onClick={onClose}
               className="w-full py-2 text-xs text-zinc-400 hover:text-zinc-200 cursor-pointer"
@@ -127,19 +119,9 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
           </div>
         ) : (
           <form onSubmit={handleSubmitWebForm} className="space-y-4 text-left">
-            <div>
-              <label className="block text-[11px] uppercase font-bold text-zinc-300 mb-1.5">
-                Mensaje u Observación {tgUserContext && <span className="text-zinc-500 font-normal normal-case">(opcional)</span>}
-              </label>
-              <textarea
-                rows={4}
-                // ✅ Ya no es required si el usuario tiene contexto Telegram identificado
-                required={!tgUserContext}
-                placeholder="Escribe tu consulta sobre la suscripción VIP..."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500/80 resize-none placeholder:text-zinc-500 transition-colors"
-              />
+            <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-xl">
+              <span className="block text-[11px] uppercase font-bold text-zinc-400 mb-1.5">Mensaje a la Administradora</span>
+              <p className="text-xs text-zinc-200 leading-relaxed">{purchaseMessage}</p>
             </div>
 
             {error && (
@@ -154,7 +136,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, botUsername
               className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-md cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Send className="w-4 h-4" />
-              {submitting ? 'Enviando...' : 'Enviar Solicitud a la Administradora'}
+              {submitting ? 'Enviando...' : 'Adquirir Contenido'}
             </button>
           </form>
         )}

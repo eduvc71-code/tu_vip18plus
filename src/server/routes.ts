@@ -205,7 +205,8 @@ export function scheduleAutoReply(requestId: string, tgUserId: string, clientNam
 // POST Customer Availability Request
 router.post('/requests', async (req: Request, res: Response) => {
   try {
-    const { profile_id, client_name, client_telegram, tg_user_id, notes } = req.body;
+    const { profile_id, client_name, client_telegram, tg_user_id } = req.body;
+    const purchaseMessage = 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
 
     if (!profile_id) {
       res.status(400).json({ error: 'El ID del perfil es requerido' });
@@ -224,36 +225,47 @@ router.post('/requests', async (req: Request, res: Response) => {
       telegram_user_id: tg_user_id ? String(tg_user_id) : undefined,
       telegram_first_name: client_name || 'Cliente Telegram/Web',
       telegram_username: client_telegram ? client_telegram.replace('@', '') : undefined,
-      notes: notes || 'Solicitud de acceso enviada desde Tú Espacio VIP',
+      notes: purchaseMessage,
       status: 'pendiente'
     });
 
-    // Send immediate automated chat to user's Telegram if user_id is present
-    if (tg_user_id) {
-      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${client_name || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
-      await sendMessage(String(tg_user_id), userConfirmText);
-      scheduleAutoReply(request.id, String(tg_user_id), client_name || 'Estimado/a', profile.name);
-    }
-
     // Send alert to Telegram Admins
     const { adminIds } = getBotConfig();
+    const clientHandle = client_telegram
+      ? (client_telegram.startsWith('@') || client_telegram.startsWith('ID:') ? client_telegram : `@${client_telegram}`)
+      : '';
     const adminNotice = `
 🔔 *NUEVA SOLICITUD DE ACCESO VIP* 🔔
 
-👤 *Cliente*: ${client_name || 'Anónimo'} ${client_telegram ? '(@' + client_telegram + ')' : ''}
+👤 *Cliente*: ${client_name || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
 🆔 *Telegram ID*: \`${tg_user_id || 'No detectado'}\`
 👠 *Perfil*: ${profile.name} (PRECIO VIP: Bs. ${profile.rate_bs})
 📍 *Zona*: ${profile.zone}
-📝 *Notas*: ${notes || 'Sin observaciones'}
+💬 *Mensaje*: ${purchaseMessage}
 📅 *Fecha*: ${new Date().toLocaleString()}
 
 💬 _Para responder al cliente enviándole el QR de pago VIP adjunto, escribe en este chat:_\n\`/qr ${tg_user_id || 'ID_CLIENTE'}\`
     `;
 
+    let deliveredToAdmin = false;
     for (const adminId of adminIds) {
       if (adminId) {
-        await sendMessage(adminId, adminNotice);
+        const delivery = await sendMessage(adminId, adminNotice);
+        deliveredToAdmin = deliveredToAdmin || Boolean(delivery.ok);
       }
+    }
+
+    if (!deliveredToAdmin) {
+      await updateCustomerRequestStatus(request.id, 'fallida');
+      res.status(503).json({ error: 'No fue posible notificar a la Administradora. Intenta nuevamente.' });
+      return;
+    }
+
+    // Confirm only after the administrator has received the request.
+    if (tg_user_id) {
+      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${client_name || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
+      await sendMessage(String(tg_user_id), userConfirmText);
+      scheduleAutoReply(request.id, String(tg_user_id), client_name || 'Estimado/a', profile.name);
     }
 
     broadcastEvent('NEW_REQUEST', request);

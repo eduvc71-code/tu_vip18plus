@@ -18,6 +18,8 @@ import {
   setConversationState,
   clearConversationState,
   createCustomerRequest,
+  getCustomerRequests,
+  updateCustomerRequestStatus,
   addAuditLog,
   addSyncError,
   getSystemSetting,
@@ -433,6 +435,12 @@ export async function processTelegramUpdate(update: any) {
     const replyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola!\n\nNuestra Administradora ha procesado tu solicitud. Para confirmar tu suscripción / acceso VIP, te adjuntamos nuestro *QR de pago oficial*.\n\n📲 *Por favor, realiza el pago y envía tu comprobante / captura directamente al chat privado de la Administradora.* ¡Máxima discreción y confidencialidad garantizada!`;
     const resQr = await sendPhotoToUser(targetUserId, qrUrl, replyText);
     if (resQr.ok) {
+      const pendingRequest = (await getCustomerRequests()).find(
+        request => request.telegram_user_id === targetUserId && request.status === 'pendiente'
+      );
+      if (pendingRequest) {
+        await updateCustomerRequestStatus(pendingRequest.id, 'confirmado');
+      }
       await sendMessage(chatId, `✅ *QR de pago VIP enviado exitosamente* al cliente con ID \`${targetUserId}\`.`);
     } else {
       await sendMessage(chatId, `❌ *Error al enviar QR al cliente* (\`${targetUserId}\`): ${resQr.description || 'Error desconocido'}`);

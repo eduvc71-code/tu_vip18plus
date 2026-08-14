@@ -301,7 +301,6 @@ export default function App() {
       {/* Customer Availability Request Modal */}
       <RequestModal
         profile={requestProfile}
-        botUsername={botUsername}
         tgUserContext={tgUser}
         onClose={() => setRequestProfile(null)}
       />
