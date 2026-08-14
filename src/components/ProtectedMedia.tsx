@@ -1,5 +1,4 @@
 import React from 'react';
-import { Play, ShieldCheck } from 'lucide-react';
 
 interface ProtectedMediaProps {
   src: string;
@@ -62,11 +61,6 @@ export const ProtectedMedia: React.FC<ProtectedMediaProps> = ({
         <span className="-rotate-12 text-lg font-black uppercase tracking-[0.25em] text-white drop-shadow-lg">
           {modelName || 'Tú'} · VIP
         </span>
-      </div>
-
-      <div className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/45 px-2 py-1 text-[9px] font-semibold text-white/80 backdrop-blur-sm">
-        {isVideoUrl(src) ? <Play className="h-3 w-3" /> : <ShieldCheck className="h-3 w-3" />}
-        Vista protegida
       </div>
     </div>
   );

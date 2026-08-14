@@ -7,7 +7,7 @@ import { RequestModal, TelegramUserContext } from './components/RequestModal';
 import { AgeModal } from './components/AgeModal';
 import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
-import { Heart, Send, Sparkles, UserCheck, X, Bot, MessageCircle, Crown } from 'lucide-react';
+import { Heart, Send, Sparkles, UserCheck, X } from 'lucide-react';
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -22,10 +22,11 @@ export default function App() {
 
   const [botUsername, setBotUsername] = useState('vip_ruti_bot');
   const [channelId, setChannelId] = useState('-1003650435412');
-  const [telegramOnlyAccess, setTelegramOnlyAccess] = useState(false);
   const [modelDisplayName, setModelDisplayName] = useState('Tú');
   const [modelVipLink, setModelVipLink] = useState('');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [telegramAuthorized, setTelegramAuthorized] = useState(false);
+  const [accessChecking, setAccessChecking] = useState(true);
   const [pinnedText, setPinnedText] = useState('');
   const [pinnedActive, setPinnedActive] = useState(false);
 
@@ -42,35 +43,44 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // 1. Check Telegram Mini App WebApp script
-    const tgWebApp = (window as any).Telegram?.WebApp;
-    if (tgWebApp) {
-      try {
-        tgWebApp.ready();
-        tgWebApp.expand();
-        const unsafeUser = tgWebApp.initDataUnsafe?.user;
-        if (unsafeUser && unsafeUser.id) {
-          setTgUser({
-            id: String(unsafeUser.id),
-            first_name: unsafeUser.first_name || 'Usuario Telegram',
-            username: unsafeUser.username
-          });
-        }
-      } catch {
-        // Fallback
-      }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('admin_token')) {
+      setIsAdminOpen(true);
+      setAccessChecking(false);
+      return;
     }
 
-    // 2. Check URL params fallback (?tg_user_id=123456&username=dani&first_name=Dani)
-    const params = new URLSearchParams(window.location.search);
-    const qId = params.get('tg_user_id') || params.get('user_id') || params.get('tg_id');
-    if (qId) {
-      setTgUser({
-        id: qId,
-        first_name: params.get('first_name') || params.get('name') || 'Usuario Telegram',
-        username: params.get('username') || undefined
-      });
+    const tgWebApp = (window as any).Telegram?.WebApp;
+    const initData = String(tgWebApp?.initData || '');
+    if (!initData) {
+      setAccessChecking(false);
+      return;
     }
+
+    try {
+      tgWebApp.ready();
+      tgWebApp.expand();
+    } catch {
+      // Server verification below remains authoritative.
+    }
+
+    fetch('/api/telegram/access/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ init_data: initData })
+    })
+      .then(async response => ({ ok: response.ok, data: await response.json() }))
+      .then(({ ok, data }) => {
+        if (!ok || !data.valid || !data.user?.id) return;
+        setTelegramAuthorized(true);
+        setTgUser({
+          id: String(data.user.id),
+          first_name: data.user.first_name || 'Usuario Telegram',
+          username: data.user.username || undefined
+        });
+      })
+      .catch(() => setTelegramAuthorized(false))
+      .finally(() => setAccessChecking(false));
   }, []);
 
   // Fetch Public Info & Profiles
@@ -90,7 +100,6 @@ export default function App() {
         const info = await resInfo.json();
         if (info.bot_username) setBotUsername(info.bot_username);
         if (info.channel_id) setChannelId(info.channel_id);
-        if (info.telegram_only_access !== undefined) setTelegramOnlyAccess(Boolean(info.telegram_only_access));
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);
         if (info.pinned_message_active !== undefined) setPinnedActive(Boolean(info.pinned_message_active));
         if (info.model_display_name) setModelDisplayName(info.model_display_name);
@@ -105,11 +114,6 @@ export default function App() {
 
   useEffect(() => {
     fetchProfiles();
-
-    // Check hash for direct profile link or admin token
-    if (window.location.hash.startsWith('#admin')) {
-      setIsAdminOpen(true);
-    }
 
     // Subscribe to SSE for live real-time updates when Administrator updates profiles on Telegram
     const eventSource = new EventSource('/api/events');
@@ -128,28 +132,32 @@ export default function App() {
   // This template presents one creator profile.
   const filteredProfiles = profiles.slice(0, 1);
 
-  const isBypassed = typeof window !== 'undefined' && (
-    sessionStorage.getItem('telegram_gate_bypass') === 'true' ||
-    Boolean(localStorage.getItem('ruti_vip_admin_token')) ||
-    Boolean(new URLSearchParams(window.location.search).get('token'))
-  );
   const displayName = modelDisplayName?.trim() || 'Tú';
 
-  const isAccessAllowed = !telegramOnlyAccess || Boolean(tgUser) || isBypassed || isAdminOpen;
+  const adminRequested = typeof window !== 'undefined' && Boolean(new URLSearchParams(window.location.search).get('admin_token'));
+  const isAccessAllowed = telegramAuthorized && Boolean(tgUser);
+
+  if (adminRequested) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+        <AdminPanel
+          isOpen={isAdminOpen}
+          onClose={() => { window.location.href = '/'; }}
+          botUsername={botUsername}
+          channelId={channelId}
+        />
+      </div>
+    );
+  }
+
+  if (accessChecking) {
+    return <div className="min-h-screen bg-zinc-950" aria-label="Validando acceso desde Telegram" />;
+  }
 
   if (!isAccessAllowed) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
-        <TelegramGate
-          botUsername={botUsername}
-          onAdminClick={() => setIsAdminOpen(true)}
-        />
-        <AdminPanel
-          isOpen={isAdminOpen}
-          onClose={() => setIsAdminOpen(false)}
-          botUsername={botUsername}
-          channelId={channelId}
-        />
+        <TelegramGate botUsername={botUsername} />
       </div>
     );
   }
@@ -164,7 +172,6 @@ export default function App() {
       <Header
         botUsername={botUsername}
         modelName={displayName}
-        onOpenAdmin={() => setIsAdminOpen(true)}
         onRefresh={fetchProfiles}
         loading={loading}
       />
@@ -262,27 +269,6 @@ export default function App() {
           )}
         </section>
 
-        <section className="rounded-3xl border border-zinc-800 bg-zinc-900/50 p-5 sm:p-6" aria-labelledby="como-funciona">
-          <div className="max-w-2xl">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-400">Atención privada</p>
-            <h2 id="como-funciona" className="mt-1 font-serif text-xl font-bold text-white">Cómo funciona la adquisición</h2>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">El bot organiza la solicitud y mantiene la conversación en Telegram. La Administradora conserva el control de la negociación, el pago, la validación y cualquier acceso posterior.</p>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {[
-              { icon: <Bot className="h-5 w-5" />, title: '1. Solicitud', text: 'El bot recibe tu interés y avisa a la Administradora.' },
-              { icon: <MessageCircle className="h-5 w-5" />, title: '2. Negociación privada', text: 'Precio, QR y comprobante se coordinan en chats privados.' },
-              { icon: <Crown className="h-5 w-5" />, title: '3. Control administrativo', text: 'Solo la Administradora valida la compra y decide el acceso final.' }
-            ].map(item => (
-              <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">{item.icon}</div>
-                <h3 className="text-sm font-bold text-white">{item.title}</h3>
-                <p className="mt-1 text-xs leading-5 text-zinc-400">{item.text}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-
       </main>
 
       {/* Legal Footer & Discretion Disclaimer */}
@@ -294,9 +280,6 @@ export default function App() {
               <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 flex items-center gap-1 transition-colors">
                 <Send className="w-3.5 h-3.5" /> Bot de Telegram
               </a>
-              <button onClick={() => setIsAdminOpen(true)} className="hover:text-amber-400 transition-colors cursor-pointer">
-                Acceso Administrativo
-              </button>
             </div>
           </div>
         </div>
@@ -317,14 +300,6 @@ export default function App() {
         profile={requestProfile}
         tgUserContext={tgUser}
         onClose={() => setRequestProfile(null)}
-      />
-
-      {/* Admin Panel Modal */}
-      <AdminPanel
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        botUsername={botUsername}
-        channelId={channelId}
       />
 
     </div>

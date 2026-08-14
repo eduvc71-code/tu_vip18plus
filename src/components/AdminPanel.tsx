@@ -22,7 +22,6 @@ import {
   Inbox,
   Banknote,
   Pin,
-  Globe,
   Webhook,
   MessageSquare,
 } from 'lucide-react';
@@ -43,8 +42,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   channelId
 }) => {
   const [token, setToken] = useState('');
-  const [tokenInput, setTokenInput] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('profiles');
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -70,7 +69,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
-  const [telegramOnlyMode, setTelegramOnlyMode] = useState(false);
   const [autoReplyDelay, setAutoReplyDelay] = useState('10');
   const [modelDisplayName, setModelDisplayName] = useState('');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -90,7 +88,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      fetchData('');
+      const magicToken = new URLSearchParams(window.location.search).get('admin_token') || '';
+      if (magicToken) {
+        void verifyAndAuthenticate(magicToken);
+      } else {
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+      }
     }
   }, [isOpen]);
 
@@ -105,16 +109,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const data = await res.json();
       if (res.ok && data.valid) {
         setToken(tok);
-        localStorage.setItem('ruti_vip_admin_token', tok);
         setIsAuthenticated(true);
-        fetchData(tok);
+        await fetchData(tok);
       } else {
-        localStorage.removeItem('ruti_vip_admin_token');
         setIsAuthenticated(false);
       }
     } catch {
       setIsAuthenticated(false);
     } finally {
+      setAuthChecked(true);
       setLoading(false);
     }
   };
@@ -152,7 +155,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       if (resI.ok) {
         const infoData = await resI.json();
-        if (infoData.telegram_only_access !== undefined) setTelegramOnlyMode(Boolean(infoData.telegram_only_access));
         if (infoData.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(infoData.auto_reply_delay_minutes));
         if (infoData.qr_image_url !== undefined) setQrImageUrl(infoData.qr_image_url);
         if (infoData.pinned_message_text !== undefined) setPinnedMessageText(infoData.pinned_message_text);
@@ -169,9 +171,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('ruti_vip_admin_token');
     setToken('');
     setIsAuthenticated(false);
+    window.location.href = '/';
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -352,17 +354,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleSaveSettings = async (e?: React.FormEvent, customOnlyMode?: boolean) => {
+  const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
-    const onlyMode = customOnlyMode !== undefined ? customOnlyMode : telegramOnlyMode;
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           bot_username: newBotUsername,
-          telegram_only_access: onlyMode,
+          telegram_only_access: true,
           auto_reply_delay_minutes: autoReplyDelay,
           model_display_name: modelDisplayName,
           model_vip_link: modelVipLink
@@ -372,7 +373,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({ type: 'success', text: 'Configuración de Telegram y privacidad guardada.' });
         if (data.bot_username) setNewBotUsername(data.bot_username);
-        if (data.telegram_only_access !== undefined) setTelegramOnlyMode(data.telegram_only_access);
         if (data.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(data.auto_reply_delay_minutes));
         if (data.model_display_name !== undefined) setModelDisplayName(data.model_display_name || '');
         if (data.model_vip_link !== undefined) setModelVipLink(data.model_vip_link || '');
@@ -390,10 +390,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const resetNewForm = () => {
     setEditingProfile(null);
     setFormData({ name: '', age: 18, zone: 'Contenido +18 VIP', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
-    setActiveTab('new');
+    setActiveTab('profiles');
   };
 
   if (!isOpen) return null;
+
+  if (!authChecked || !isAuthenticated) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
+        <div className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-center shadow-2xl">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+            <Lock className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 font-serif text-lg font-bold text-white">
+            {!authChecked ? 'Validando acceso…' : 'Enlace administrativo inválido'}
+          </h2>
+          <p className="mt-2 text-xs leading-5 text-zinc-400">
+            {!authChecked ? 'Comprobando el enlace seguro enviado por Telegram.' : 'Solicita un enlace nuevo escribiendo /admin en el chat privado del bot.'}
+          </p>
+          {authChecked && (
+            <a href={`https://t.me/${botUsername}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-4 text-xs font-bold text-zinc-950">
+              Abrir bot oficial
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // ── Tab config ──────────────────────────────────────────────────────────────
   const tabs: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
@@ -694,7 +717,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       fd.append('qr_image', file);
                       try {
                         setLoading(true);
-                        const res = await fetch('/api/admin/settings/qr', { method: 'POST', body: fd });
+                        const res = await fetch('/api/admin/settings/qr', { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
                         if (res.ok) {
                           const data = await res.json();
                           if (data.qr_image_url) setQrImageUrl(data.qr_image_url);
@@ -774,28 +797,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                        {telegramOnlyMode ? <Lock className="w-4 h-4 text-amber-400" /> : <Globe className="w-4 h-4 text-zinc-400" />}
+                        <Lock className="w-4 h-4 text-amber-400" />
                         Modo Privado: Acceso Exclusivo desde Telegram
                       </h4>
                       <p className="text-zinc-400 text-xs mt-1">
                         Al activar, la web estará bloqueada para visitantes generales. Solo usuarios de Telegram (@{newBotUsername || 'bot'}) podrán acceder.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextMode = !telegramOnlyMode;
-                        setTelegramOnlyMode(nextMode);
-                        handleSaveSettings(undefined, nextMode);
-                      }}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                        telegramOnlyMode
-                          ? 'bg-emerald-500 text-zinc-950 hover:bg-emerald-400 shadow-md shadow-emerald-500/20'
-                          : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
-                      }`}
-                    >
-                      {telegramOnlyMode ? 'MODO PRIVADO ACTIVO' : 'ACCESO LIBRE WEB'}
-                    </button>
+                    <span className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-zinc-950 shadow-md shadow-emerald-500/20">
+                      SOLO TELEGRAM
+                    </span>
                   </div>
                 </div>
 

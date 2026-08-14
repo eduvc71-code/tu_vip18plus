@@ -19,9 +19,7 @@ import {
   getSyncErrors,
   addAuditLog,
   getSystemSetting,
-  saveSystemSetting,
-  verifyInvitationCode,
-  createInvitationCode
+  saveSystemSetting
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -74,8 +72,6 @@ const upload = multer({
   }
 });
 
-// Admin Authentication Middleware
-// Admin Authentication Middleware (Sin requerir token por solicitud del usuario)
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -86,8 +82,7 @@ function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
       return next();
     }
   }
-  (req as any).adminUserId = 'Admin Web (Sin Token)';
-  next();
+  res.status(401).json({ error: 'Acceso administrativo no autorizado. Solicita un enlace nuevo con /admin en el bot.' });
 }
 
 // PUBLIC ENDPOINTS
@@ -141,30 +136,14 @@ router.get('/profiles', async (req: Request, res: Response) => {
   }
 });
 
-// POST Verify Invitation Code
-router.post('/verify-code', async (req: Request, res: Response) => {
-  try {
-    const { code } = req.body;
-    if (!code) {
-      res.status(400).json({ error: 'Código no proporcionado', valid: false });
-      return;
-    }
-    
-    // Check master bypass
-    if (code.toUpperCase() === 'RUTIVIP2026') {
-      res.json({ valid: true, message: 'Master bypass access granted' });
-      return;
-    }
-
-    const isValid = await verifyInvitationCode(code.toUpperCase());
-    if (isValid) {
-      res.json({ valid: true });
-    } else {
-      res.status(401).json({ error: 'Código VIP inválido o ya utilizado', valid: false });
-    }
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error al verificar el código', valid: false });
+// POST Verify that the Mini App was opened from Telegram.
+router.post('/telegram/access/verify', (req: Request, res: Response) => {
+  const verified = verifyTelegramWebAppData(String(req.body?.init_data || ''));
+  if (!verified.valid || !verified.user?.id) {
+    res.status(401).json({ valid: false, error: 'Abre la Mini App desde el bot oficial de Telegram.' });
+    return;
   }
+  res.json({ valid: true, user: verified.user });
 });
 
 // GET Public Profile Detail

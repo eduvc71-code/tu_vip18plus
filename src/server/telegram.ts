@@ -24,7 +24,6 @@ import {
   addAuditLog,
   addSyncError,
   getSystemSetting,
-  createInvitationCode
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
 
@@ -362,7 +361,7 @@ export function verifyAdminToken(token: string): { valid: boolean; userId?: stri
   const { signingSecret } = getBotConfig();
   try {
     const decoded = jwt.verify(token, signingSecret) as any;
-    if (decoded && decoded.role === 'admin') {
+    if (decoded && decoded.role === 'admin' && isAdminUser(decoded.sub)) {
       return { valid: true, userId: decoded.sub };
     }
   } catch {
@@ -412,30 +411,22 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // 1.2. Código de Invitación VIP y Bienvenida Clientes (/invitar, /codigo, /vip, /start inv_, o /start sin ser admin)
+  // 1.2. Enlace genérico de invitación y bienvenida para cualquier usuario.
   const isInviteCmd = text.startsWith('/start inv_') || text === '/invitar' || text === '/codigo' || text === '/vip' || (!isAdminUser(fromId) && text === '/start');
   if (isInviteCmd) {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Abre el chat privado con el bot para generar el enlace de invitación.');
+      return;
+    }
     const { baseUrl, username } = getBotConfig();
     const cleanUsername = username || 'vip_ruti_bot';
-    
-    // Generar código dinámico y guardarlo en DB
-    const shortCode = await createInvitationCode(String(fromId || 'unknown'));
-    
-    const inviteLink = `https://t.me/${cleanUsername}?start=inv_${(Math.abs(Number(fromId) || 1234) % 8999) + 1000}`;
+    const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
 
-    let titleHeader = '💎 *TU ESPACIO VIP — ACCESO CONFIDENCIAL* 💎';
-    if (text.startsWith('/start inv_')) {
-      const ref = text.replace('/start inv_', '').trim();
-      titleHeader = `💎 *ACCESO VIP INVITADO (#${ref})* 💎`;
-    }
-
-    const vipMsg = `${titleHeader}\n\n` +
-      `¡Bienvenido/a, *${message.from?.first_name || 'Miembro VIP'}*! Tu acceso confidencial al directorio oficial se encuentra habilitado.\n\n` +
-      `🎫 *TU CÓDIGO DE INVITACIÓN EXCLUSIVO:*\n` +
-      `\`${shortCode}\`\n\n` +
-      `📲 *ENLACE DE INVITACIÓN PARA ACCESO AL BOT:*\n` +
+    const vipMsg = `💎 *TÚ • GRUPO VIP (+18)* 💎\n\n` +
+      `¡Bienvenido/a, *${message.from?.first_name || 'Invitado/a'}*! Abre el catálogo promocional desde el botón inferior.\n\n` +
+      `📲 *ENLACE GENÉRICO DE INVITACIÓN:*\n` +
       `👉 \`${inviteLink}\`\n\n` +
-      `_El catálogo es un círculo reservado (+18). Pulsa el botón "Ver Catálogo VIP" abajo o en el menú del bot para ver disponibilidad._`;
+      `_Este enlace puede compartirse con cualquier usuario. Siempre abre primero el bot y el catálogo valida la sesión de Telegram._`;
 
     await sendMessage(chatId, vipMsg, {
       reply_markup: {
@@ -465,10 +456,11 @@ export async function processTelegramUpdate(update: any) {
   }
 
   // Administrative tools never run in a group or channel.
-  if (text === '/panel') {
+  if (text === '/panel' || text === '/admin' || text.toLowerCase() === 'admin') {
     const { baseUrl } = getBotConfig();
-    const adminLink = `${baseUrl}/#admin`;
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nAcceso directo al gestor administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`);
+    const adminToken = generateAdminMagicToken(String(fromId));
+    const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nEste enlace personal vence en 4 horas y solo habilita el panel administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`);
     return;
   }
 
@@ -911,7 +903,8 @@ Sistema de Gestión — *Tú • Espacio VIP (+18)*.
 • \`/pausar ID\` — Ocultar de la web y marcar en canal.
 • \`/retirar ID\` — Retirar catálogo y canal.
 • \`/eliminar ID\` — Borrar perfil permanentemente.
-• \`/panel\` — Obtener enlace seguro para el Panel Web.
+• \`/admin\` — Obtener enlace seguro para el Panel Web.
+• \`/invitar\` — Generar el enlace genérico para cualquier invitado.
 • \`/cancelar\` — Cancelar cualquier operación en curso.
 
 _Todos los cambios realizados aquí se sincronizan automáticamente en la base de datos, canal y sitio web._
@@ -926,7 +919,7 @@ async function sendAdminHelp(chatId: string | number) {
 1️⃣ *Para crear un perfil*: Escribe \`/nuevo\` y sigue las preguntas.
 2️⃣ *Para publicar*: Escribe \`/publicar <ID>\`.
 3️⃣ *Para cambiar estado rápidamente*: Escribe \`/estado <ID>\`.
-4️⃣ *Para acceder a la web administrativa*: Escribe \`/panel\`.
+4️⃣ *Para acceder a la web administrativa*: Escribe \`/admin\`.
 
 ⚠️ *Reglas Obligatorias de Seguridad*:
 - Todos los perfiles deben ser mayores de 18 años.

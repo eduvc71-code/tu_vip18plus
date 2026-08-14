@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, Eye, ShieldCheck, Link, Images, Video, Play } from 'lucide-react';
+import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
 
 interface ProfileCardProps {
@@ -41,6 +41,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     if (!collection.length) return;
     setMediaType(type);
     setSelectedMedia(collection[0]);
+  };
+
+  const moveMedia = (direction: -1 | 1) => {
+    if (visibleMedia.length < 2) return;
+    const currentIndex = Math.max(0, visibleMedia.indexOf(selectedMedia));
+    const nextIndex = (currentIndex + direction + visibleMedia.length) % visibleMedia.length;
+    setSelectedMedia(visibleMedia[nextIndex]);
   };
 
   return (
@@ -87,36 +94,19 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               showControls={false}
               className="h-full w-full object-cover"
             />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/90 to-transparent" />
-            <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-300">Contenido privado</p>
-                <h2 className="mt-1 font-serif text-2xl font-bold text-white">{modelName}</h2>
-              </div>
-              <span className="rounded-full border border-white/15 bg-black/55 p-2.5 text-white backdrop-blur-sm">
-                {isVideoUrl(selectedMedia) ? <Play className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-              </span>
-            </div>
           </button>
 
           {visibleMedia.length > 1 && (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {visibleMedia.map((item, index) => (
-                <button
-                  type="button"
-                  key={`${item}-${index}`}
-                  onClick={() => setSelectedMedia(item)}
-                  aria-label={`${mediaType === 'videos' ? 'Video' : 'Imagen'} ${index + 1}`}
-                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 bg-zinc-900 transition-colors ${selectedMedia === item ? 'border-amber-400' : 'border-transparent hover:border-zinc-600'}`}
-                >
-                  {isVideoUrl(item) ? (
-                    <video src={item} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                  ) : (
-                    <img src={item} alt="" draggable={false} className="h-full w-full object-cover" />
-                  )}
-                  {index === 0 && <span className="absolute left-1 top-1 rounded bg-black/70 px-1 text-[8px] font-bold uppercase text-white">Nuevo</span>}
-                </button>
-              ))}
+            <div className="mt-3 flex items-center justify-center gap-3">
+              <button type="button" onClick={() => moveMedia(-1)} aria-label="Medio anterior" className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 transition-colors hover:border-amber-500/50 hover:text-amber-300">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <span className="min-w-14 text-center text-xs font-semibold text-zinc-400">
+                {visibleMedia.indexOf(selectedMedia) + 1} / {visibleMedia.length}
+              </span>
+              <button type="button" onClick={() => moveMedia(1)} aria-label="Medio siguiente" className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 transition-colors hover:border-amber-500/50 hover:text-amber-300">
+                <ChevronRight className="h-5 w-5" />
+              </button>
             </div>
           )}
         </div>
