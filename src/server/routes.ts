@@ -295,6 +295,9 @@ router.post('/requests', async (req: Request, res: Response) => {
           ? [{ text: '💬 Responder en privado', url: privateReplyUrl }]
           : [];
         const delivery = await sendMessage(adminId, adminNotice, {
+          // Client names and usernames may contain Markdown control characters.
+          // Send the notification as plain text so Telegram never rejects it.
+          parse_mode: undefined,
           reply_markup: {
             inline_keyboard: [
               firstRow,
