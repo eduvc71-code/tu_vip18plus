@@ -20,9 +20,9 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
-  const [botUsername, setBotUsername] = useState('vip_ruti_bot');
-  const [channelId, setChannelId] = useState('-1003650435412');
-  const [modelDisplayName, setModelDisplayName] = useState('Tú');
+  const [botUsername, setBotUsername] = useState('IAM_Danii_VIP_bot');
+  const [channelId, setChannelId] = useState('-1004356066811');
+  const [modelDisplayName, setModelDisplayName] = useState('IAM Danii');
   const [modelVipLink, setModelVipLink] = useState('');
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [telegramAuthorized, setTelegramAuthorized] = useState(false);
@@ -46,6 +46,18 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('admin_token')) {
       setIsAdminOpen(true);
+      setAccessChecking(false);
+      return;
+    }
+
+    // Permitir previsualización en navegador local con ?dev=true o ?preview=true
+    if (params.get('dev') === 'true' || params.get('preview') === 'true') {
+      setTelegramAuthorized(true);
+      setTgUser({
+        id: '123456789',
+        first_name: 'Usuario Demo',
+        username: 'demo_user'
+      });
       setAccessChecking(false);
       return;
     }
@@ -132,7 +144,7 @@ export default function App() {
   // This template presents one creator profile.
   const filteredProfiles = profiles.slice(0, 1);
 
-  const displayName = modelDisplayName?.trim() || 'Tú';
+  const displayName = modelDisplayName?.trim() || 'IAM Danii';
 
   const adminRequested = typeof window !== 'undefined' && Boolean(new URLSearchParams(window.location.search).get('admin_token'));
   const isAccessAllowed = telegramAuthorized && Boolean(tgUser);
@@ -166,7 +178,7 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-zinc-950">
       
       {/* Age Modal Gate (+18) */}
-      <AgeModal onConfirm={() => fetchProfiles()} />
+      <AgeModal onConfirm={() => fetchProfiles()} modelName={displayName} />
 
       {/* Main Header & Navbar */}
       <Header
@@ -253,15 +265,15 @@ export default function App() {
           ) : (
             <div className="flex justify-center">
               <div className="w-full">
-                {filteredProfiles.map((p) => (
+                {filteredProfiles.map((p: Profile) => (
                   <ProfileCard
                     key={p.id}
                     profile={p}
                     botUsername={botUsername}
                     modelName={displayName}
                     modelVipLink={modelVipLink}
-                    onSelectProfile={(prof) => setSelectedProfile(prof)}
-                    onRequestAvailability={(prof) => setRequestProfile(prof)}
+                    onSelectProfile={(prof: Profile) => setSelectedProfile(prof)}
+                    onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
                   />
                 ))}
               </div>
@@ -292,12 +304,13 @@ export default function App() {
         modelName={displayName}
         modelVipLink={modelVipLink}
         onClose={() => setSelectedProfile(null)}
-        onRequestAvailability={(prof) => setRequestProfile(prof)}
+        onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
       />
 
       {/* Customer Availability Request Modal */}
       <RequestModal
         profile={requestProfile}
+        modelName={displayName}
         tgUserContext={tgUser}
         onClose={() => setRequestProfile(null)}
       />

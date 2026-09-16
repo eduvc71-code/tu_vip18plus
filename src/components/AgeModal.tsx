@@ -3,14 +3,15 @@ import { ShieldAlert, CheckCircle2, Lock, AlertTriangle, Sparkles } from 'lucide
 
 interface AgeModalProps {
   onConfirm: () => void;
+  modelName: string;
 }
 
-export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm }) => {
+export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
-    const verified = sessionStorage.getItem('ruti_vip_age_verified_splash');
+    const verified = sessionStorage.getItem('danii_vip_age_verified_splash');
     if (!verified) {
       setIsOpen(true);
     }
@@ -18,7 +19,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm }) => {
 
   const handleAccept = () => {
     if (!accepted) return;
-    sessionStorage.setItem('ruti_vip_age_verified_splash', 'true');
+    sessionStorage.setItem('danii_vip_age_verified_splash', 'true');
     setIsOpen(false);
     onConfirm();
   };
@@ -38,7 +39,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm }) => {
         </div>
 
         <h2 className="text-lg font-extrabold text-center tracking-tight text-white mb-1">
-          TÚ • ESPACIO VIP (+18)
+          {modelName ? `${modelName.toUpperCase()} • ESPACIO VIP (+18)` : 'CANAL VIP FREE (+18)'}
         </h2>
         <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold text-center mb-4">
           Galería Privada y Confidencial
@@ -68,7 +69,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm }) => {
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            ENTRAR AL CATÁLOGO VIP
+            ENTRAR AL CANAL VIP FREE
           </button>
           <button
             onClick={handleReject}

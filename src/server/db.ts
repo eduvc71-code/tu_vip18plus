@@ -35,12 +35,13 @@ export async function getDb(): Promise<Database> {
 function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_only_access', 'true')`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
-  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', 'Tú')`);
+  const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_vip_link', '')`);
-  database.run(`UPDATE system_settings SET value = 'Tú' WHERE key = 'model_display_name' AND value IN ('Modelo VIP', 'Flavia')`);
-  database.run(`UPDATE profiles SET name = 'Tú' WHERE lower(trim(name)) = 'flavia'`);
+  database.run(`UPDATE system_settings SET value = ? WHERE key = 'model_display_name' AND value IN ('Modelo VIP', 'Flavia', 'Tú', 'TU_VIP')`, [defaultModelName]);
+  database.run(`UPDATE profiles SET name = ? WHERE lower(trim(name)) IN ('flavia', 'ruti', 'tú', 'tu_vip', 'modelo vip')`, [defaultModelName]);
   database.run(`UPDATE profiles SET zone = 'Contenido +18 VIP' WHERE lower(zone) LIKE '%santa cruz%'`);
-  database.run(`UPDATE system_settings SET value = 'CatalogoVIPSCZBot' WHERE key = 'bot_username' AND value = 'catalogovipscz'`);
+  database.run(`UPDATE system_settings SET value = 'IAM_Danii_VIP_bot' WHERE key = 'bot_username' AND value IN ('catalogovipscz', 'CatalogoVIPSCZBot', 'vip_ruti_bot')`);
 }
 
 export function saveDb(): void {
@@ -69,9 +70,18 @@ function initTables(database: Database): void {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       telegram_message_id INTEGER,
-      priority_order INTEGER DEFAULT 0
+      priority_order INTEGER DEFAULT 0,
+      ephemeral_config TEXT
     );
   `);
+
+  const profileCols = database.exec("PRAGMA table_info(profiles)");
+  const existingProfileCols = new Set(
+    profileCols[0]?.values.map(row => String(row[1])) || []
+  );
+  if (!existingProfileCols.has('ephemeral_config')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN ephemeral_config TEXT`);
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS customer_requests (
@@ -156,28 +166,31 @@ function seedInitialData(database: Database): void {
 
   if (count === 0) {
     const now = new Date().toISOString();
+    const brandName = process.env.VIP_BRAND_NAME || 'IAM DANII VIP';
+    const modelName = process.env.VIP_MODEL_NAME || 'IAM Danii';
 
     const sampleProfiles: Partial<Profile>[] = [
       {
-        id: 'prof_ruti_vip',
-        name: 'Tú',
+        id: 'prof_vip_main',
+        name: modelName,
         age: 21,
         zone: 'Contenido +18 VIP',
         description: 'Modelo exclusiva y creadora de contenido VIP (+18). Acceso confidencial a galería privada, packs exclusivos y atención directa sin intermediarios ni reservas.',
-        rate_bs: 150,
+        rate_bs: 450,
         commission_bs: 0,
         photos: [
           'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
           'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=800&q=80'
         ],
+        ephemeral_config: {},
         status: 'disponible',
         priority_order: 1
       }
     ];
 
     const stmt = database.prepare(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, status, created_at, updated_at, telegram_message_id, priority_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
     `);
 
     for (const p of sampleProfiles) {
@@ -190,6 +203,7 @@ function seedInitialData(database: Database): void {
         p.rate_bs!,
         p.commission_bs!,
         JSON.stringify(p.photos!),
+        JSON.stringify(p.ephemeral_config || {}),
         p.status!,
         now,
         now,
@@ -207,7 +221,7 @@ function seedInitialData(database: Database): void {
       'SYSTEM_INIT',
       'System',
       null,
-      'Base de datos inicializada para Tú Espacio VIP (+18)',
+      'Base de datos inicializada para ' + modelName + ' Canal VIP Free (+18)',
       now
     ]);
   }
@@ -242,6 +256,11 @@ export async function getAllProfiles(): Promise<Profile[]> {
     } catch {
       obj.photos = [];
     }
+    try {
+      obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
+    } catch {
+      obj.ephemeral_config = {};
+    }
     return obj as Profile;
   });
 }
@@ -262,6 +281,11 @@ export async function getPublicProfiles(): Promise<Profile[]> {
     } catch {
       obj.photos = [];
     }
+    try {
+      obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
+    } catch {
+      obj.ephemeral_config = {};
+    }
     return obj as Profile;
   });
 }
@@ -280,7 +304,13 @@ export async function getProfileById(id: string): Promise<Profile | null> {
     } catch {
       photosParsed = [];
     }
-    return { ...row, photos: photosParsed } as unknown as Profile;
+    let ephemeralParsed: any = {};
+    try {
+      ephemeralParsed = row.ephemeral_config ? JSON.parse(row.ephemeral_config) : {};
+    } catch {
+      ephemeralParsed = {};
+    }
+    return { ...row, photos: photosParsed, ephemeral_config: ephemeralParsed } as unknown as Profile;
   }
   stmt.free();
   return null;
@@ -304,13 +334,16 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedRate = profile.rate_bs ?? existing.rate_bs;
     const updatedCommission = profile.commission_bs ?? existing.commission_bs;
     const updatedPhotos = profile.photos ? JSON.stringify(profile.photos) : JSON.stringify(existing.photos);
+    const updatedEphemeral = profile.ephemeral_config !== undefined
+      ? JSON.stringify(profile.ephemeral_config)
+      : (existing.ephemeral_config ? JSON.stringify(existing.ephemeral_config) : '{}');
     const updatedStatus = profile.status ?? existing.status;
     const updatedTgMsgId = profile.telegram_message_id !== undefined ? profile.telegram_message_id : existing.telegram_message_id;
     const updatedPriority = profile.priority_order ?? existing.priority_order;
 
     database.run(`
       UPDATE profiles
-      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?
+      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -320,6 +353,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedRate,
       updatedCommission,
       updatedPhotos,
+      updatedEphemeral,
       updatedStatus,
       now,
       updatedTgMsgId,
@@ -328,8 +362,8 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     ]);
   } else {
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, status, created_at, updated_at, telegram_message_id, priority_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -339,6 +373,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       profile.rate_bs || 0,
       0,
       JSON.stringify(profile.photos || []),
+      JSON.stringify(profile.ephemeral_config || {}),
       profile.status || 'borrador',
       now,
       now,

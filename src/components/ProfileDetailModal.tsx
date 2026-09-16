@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Profile } from '../types';
-import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link } from 'lucide-react';
-import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
+import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link, Flame } from 'lucide-react';
+import { isVideoUrl } from './ProtectedMedia';
+import { EphemeralViewer } from './EphemeralViewer';
 
 interface ProfileDetailModalProps {
   profile: Profile | null;
@@ -23,11 +24,45 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   // ✅ Todos los hooks ANTES de cualquier return condicional (regla de hooks de React)
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
 
+  const [seenEphemeralUrls, setSeenEphemeralUrls] = useState<Set<string>>(() => {
+    const seen = new Set<string>();
+    if (typeof window !== 'undefined' && profile?.ephemeral_config) {
+      Object.keys(profile.ephemeral_config).forEach(url => {
+        try {
+          if (localStorage.getItem(`danii_seen_ephemeral_${btoa(url).replace(/=/g, '')}`)) {
+            seen.add(url);
+          }
+        } catch { /* Ignore storage error */ }
+      });
+    }
+    return seen;
+  });
+
+  const handleMediaExpired = (expiredUrl: string) => {
+    try {
+      localStorage.setItem(`danii_seen_ephemeral_${btoa(expiredUrl).replace(/=/g, '')}`, 'true');
+    } catch { /* Ignore storage error */ }
+    setSeenEphemeralUrls(prev => {
+      const next = new Set(prev);
+      next.add(expiredUrl);
+      return next;
+    });
+    setActivePhotoIdx(0);
+  };
+
+  const media = useMemo(() => {
+    if (!profile?.photos?.length) {
+      return ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+    }
+    const filtered = profile.photos.filter(url => !seenEphemeralUrls.has(url));
+    return filtered.length > 0 ? filtered : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+  }, [profile?.photos, seenEphemeralUrls]);
+
   if (!profile) return null;
 
-  const media = profile.photos && profile.photos.length > 0
-    ? profile.photos
-    : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+  const currentMediaUrl = media[activePhotoIdx] || media[0];
+  const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[currentMediaUrl]?.enabled);
+  const currentDuration = profile.ephemeral_config?.[currentMediaUrl]?.duration_seconds || 5;
 
   const isAvailable = profile.status === 'disponible';
 
@@ -47,12 +82,29 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           
           {/* Photo Lightbox Section */}
           <div className="relative bg-zinc-950 min-h-[320px] md:min-h-[480px] flex items-center justify-center">
-            <ProtectedMedia
-              src={media[activePhotoIdx]}
+            <EphemeralViewer
+              src={currentMediaUrl}
               alt={`Contenido de ${modelName}`}
               modelName={modelName}
               className="w-full h-full object-cover max-h-[500px]"
+              isEphemeral={isCurrentEphemeral}
+              durationSeconds={currentDuration}
+              isSeen={seenEphemeralUrls.has(currentMediaUrl)}
+              onExpired={() => handleMediaExpired(currentMediaUrl)}
+              onRequestVip={() => {
+                onClose();
+                onRequestAvailability(profile);
+              }}
             />
+
+            {isCurrentEphemeral && !seenEphemeralUrls.has(currentMediaUrl) && (
+              <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-600/90 text-white shadow-xl backdrop-blur-sm">
+                  <Flame className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                  Sugestiva ({currentDuration}s)
+                </span>
+              </div>
+            )}
 
             {media.length > 1 && (
               <>

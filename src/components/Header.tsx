@@ -13,9 +13,6 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="flex h-20 items-center justify-between">
         <div className="flex items-center gap-3.5">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 via-amber-500 to-amber-700 font-serif text-xl font-black tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20">
-            Tú
-          </div>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-serif text-xl font-bold tracking-tight text-white">{modelName}</h1>

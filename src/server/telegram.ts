@@ -36,23 +36,15 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 export function getBotConfig() {
   const token = process.env.BOT_TOKEN || '';
   const storedUsername = getSystemSetting('bot_username');
-  // The deployed environment is authoritative for the bot identity. This
-  // prevents a username stored in a seeded/ephemeral SQLite file from linking
-  // the catalog to a different bot after a fresh deploy.
-  let username = (process.env.BOT_USERNAME || storedUsername || 'CatalogoVIPSCZBot').replace(/^@/, '').trim();
-  if (username.toLowerCase() === 'catalogovipscz') {
-    username = 'CatalogoVIPSCZBot';
-  }
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || 'secret_token_santa_cruz';
-  const channelId = process.env.CHANNEL_ID || '-1003650435412';
+  let username = (process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+  const channelId = process.env.CHANNEL_ID || '-1004356066811';
   const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '')
     .split(',')
     .map(id => id.trim())
     .filter(Boolean);
-  const signingSecret = process.env.ADMIN_SIGNING_SECRET || 'secret_jwt_key_santa_cruz';
-  // Render provides its stable public HTTPS URL automatically. Prefer it over
-  // locally configured tunnel URLs so a stale TryCloudflare address can never
-  // overwrite the Telegram menu button or webhook after a deploy.
+  const signingSecret = process.env.ADMIN_SIGNING_SECRET || 'secret_jwt_key_danii_vip';
+  const brandName = process.env.VIP_BRAND_NAME || 'IAM DANII VIP';
   const baseUrl = (
     process.env.RENDER_EXTERNAL_URL ||
     process.env.APP_BASE_URL ||
@@ -60,7 +52,7 @@ export function getBotConfig() {
     'http://localhost:3000'
   ).replace(/\/+$/, '');
 
-  return { token, username, secret, channelId, adminIds, signingSecret, baseUrl };
+  return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl };
 }
 
 export function isAdminUser(telegramUserId: string | number): boolean {
@@ -210,7 +202,7 @@ export async function updateBotMenuButton() {
   return await callTelegramApi('setChatMenuButton', {
     menu_button: {
       type: 'web_app',
-      text: 'Ver Catálogo VIP',
+      text: 'Ver Canal VIP Free',
       web_app: {
         url: baseUrl
       }
@@ -218,14 +210,39 @@ export async function updateBotMenuButton() {
   });
 }
 
+export async function registerBotCommands() {
+  return await callTelegramApi('setMyCommands', {
+    commands: [
+      { command: 'start', description: 'Abrir Catálogo VIP Free' },
+      { command: 'canal', description: 'Enlace al Canal Free oficial' },
+      { command: 'precios', description: 'Tarifas y suscripciones VIP' },
+      { command: 'info', description: 'Información y discreción' },
+      { command: 'ayuda', description: 'Soporte y dudas frecuentes' },
+      { command: 'admin', description: 'Panel Web (Solo Administradora)' }
+    ]
+  });
+}
+
 export async function registerBotWebhook() {
   const { baseUrl, secret } = getBotConfig();
+  if (!baseUrl || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    console.log('[Telegram Bot] Omitiendo registro de webhook en entorno local/localhost:', baseUrl);
+    return { ok: true, description: 'Localhost detected, skipped webhook registration' };
+  }
+
   const webhookUrl = `${baseUrl}/api/telegram/webhook`;
-  return await callTelegramApi('setWebhook', {
+  const payload: any = {
     url: webhookUrl,
-    secret_token: secret,
     allowed_updates: ['message', 'callback_query']
-  });
+  };
+  if (secret) {
+    payload.secret_token = secret;
+  }
+
+  const res = await callTelegramApi('setWebhook', payload);
+  await registerBotCommands().catch(err => console.error('Error registrando comandos:', err));
+  await updateBotMenuButton().catch(err => console.error('Error actualizando menu button:', err));
+  return res;
 }
 
 // Telegram Channel Sync Function
@@ -385,6 +402,7 @@ export async function processTelegramUpdate(update: any) {
 
   const chatId = message.chat.id;
   const fromId = message.from?.id;
+  const userIdStr = String(fromId || '');
   const text = message.text ? message.text.trim() : '';
 
   if (text === '/mi_id' || text === '/registrar_admin') {
@@ -411,46 +429,61 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // 1.2. Enlace genérico de invitación y bienvenida para cualquier usuario.
-  const isInviteCmd = text.startsWith('/start inv_') || text === '/invitar' || text === '/codigo' || text === '/vip' || (!isAdminUser(fromId) && text === '/start');
-  if (isInviteCmd) {
+  const normText = text.toLowerCase().trim();
+
+  // 1.2. Client Commands & Menus (Interactive for all users)
+  if (
+    normText.startsWith('/start inv_') ||
+    normText === '/start' ||
+    normText === '/invitar' ||
+    normText === '/codigo' ||
+    normText === '/vip' ||
+    normText === '/menu'
+  ) {
     if (!isPrivateChat(message.chat)) {
-      await sendMessage(chatId, '🔒 Abre el chat privado con el bot para generar el enlace de invitación.');
+      await sendMessage(chatId, '🔒 Abre el chat privado con el bot para ver el catálogo y menú.');
       return;
     }
-    const { baseUrl, username } = getBotConfig();
-    const cleanUsername = username || 'vip_ruti_bot';
-    const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
+    if (isAdminUser(fromId)) {
+      await clearConversationState(userIdStr);
+      await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
+      return;
+    }
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
+    return;
+  }
 
-    const vipMsg = `💎 *TÚ • GRUPO VIP (+18)* 💎\n\n` +
-      `¡Bienvenido/a, *${message.from?.first_name || 'Invitado/a'}*! Abre el catálogo promocional desde el botón inferior.\n\n` +
-      `📲 *ENLACE GENÉRICO DE INVITACIÓN:*\n` +
-      `👉 \`${inviteLink}\`\n\n` +
-      `_Este enlace puede compartirse con cualquier usuario. Siempre abre primero el bot y el catálogo valida la sesión de Telegram._`;
+  if (normText === '/canal' || normText === '/ver_canal' || normText === '/vercanal') {
+    await sendClientCanal(chatId);
+    return;
+  }
 
-    await sendMessage(chatId, vipMsg, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '💎 Ver Catálogo VIP (Mini App)', web_app: { url: baseUrl } }
-          ]
-        ]
-      }
-    });
+  if (normText === '/precios' || normText === '/precio' || normText === '/tarifas' || normText === '/tarifa') {
+    await sendClientPrecios(chatId);
+    return;
+  }
+
+  if (normText === '/info' || normText === '/informacion' || normText === '/información') {
+    await sendClientInfo(chatId);
+    return;
+  }
+
+  if (normText === '/ayuda' || normText === '/help' || normText === '/soporte') {
+    if (isAdminUser(fromId)) {
+      await sendAdminHelp(chatId);
+    } else {
+      await sendClientAyuda(chatId);
+    }
     return;
   }
 
   // 2. Guard for Administrative Commands
   if (!isAdminUser(fromId)) {
-    if (text.startsWith('/')) {
-      await sendMessage(chatId, `💎 *Tú • Espacio VIP (+18)*\n\nPara acceder a la galería y contenido confidencial, pulsa el botón *"Ver Catálogo VIP"* abajo en el menú del bot.\n\nO escribe /invitar para generar tu Código y Enlace de Invitación al bot.`);
-    }
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
   }
 
   // Admin User Flow Processing
-  const userIdStr = String(fromId);
-
   if (!(await requirePrivateAdminChat(message.chat, fromId))) {
     return;
   }
@@ -460,7 +493,19 @@ export async function processTelegramUpdate(update: any) {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
     const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nEste enlace personal vence en 4 horas y solo habilita el panel administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`);
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nEste enlace personal vence en 4 horas y solo habilita el panel administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔐 Ingresar al Panel Web', url: adminLink }
+          ],
+          [
+            { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
+            { text: '📋 Listar Perfiles', callback_data: 'admin_btn_list' }
+          ]
+        ]
+      }
+    });
     return;
   }
 
@@ -478,7 +523,7 @@ export async function processTelegramUpdate(update: any) {
 
   if (text === '/anclar' || text === '/pin') {
     const { baseUrl, username } = getBotConfig();
-    const cleanUsername = username || 'vip_ruti_bot';
+    const cleanUsername = username || process.env.BOT_USERNAME || 'vip_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *TÚ VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Bienvenido al canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
@@ -773,6 +818,140 @@ async function getTelegramFileUrl(fileId: string): Promise<string> {
   return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
 }
 
+export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
+  const { baseUrl, username, brandName } = getBotConfig();
+  const cleanUsername = username || process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot';
+  const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
+
+  const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE (+18)* 💎\n\n` +
+    `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
+    `Aquí podrás explorar avances exclusivos, teasers promocionales y acceder a la galería privada de contenido (+18).\n\n` +
+    `📲 *Enlace de Invitación Oficial:*\n` +
+    `👉 \`${inviteLink}\`\n\n` +
+    `👇 *Selecciona una opción:*`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+        ],
+        [
+          { text: '📢 Ver Canal Free', callback_data: 'client_cmd_canal' }
+        ],
+        [
+          { text: '💰 Tarifas y Precios', callback_data: 'client_cmd_precios' },
+          { text: 'ℹ️ Información VIP', callback_data: 'client_cmd_info' }
+        ],
+        [
+          { text: '❓ Ayuda y Soporte', callback_data: 'client_cmd_ayuda' }
+        ]
+      ]
+    }
+  });
+}
+
+export async function sendClientCanal(chatId: string | number) {
+  const { baseUrl, channelId } = getBotConfig();
+  const cleanChannelId = channelId.replace(/^-100/, '');
+  const channelUrl = `https://t.me/c/${cleanChannelId}/1`;
+
+  const text = `📢 *CANAL OFICIAL FREE (+18)* 📢\n\n` +
+    `En nuestro canal compartimos previews, novedades y promociones especiales.\n\n` +
+    `👉 *Abre la Mini App para ver la galería completa sin censura:*`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+        ],
+        [
+          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+        ]
+      ]
+    }
+  });
+}
+
+export async function sendClientPrecios(chatId: string | number) {
+  const { baseUrl } = getBotConfig();
+  const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP (+18)* 💰\n\n` +
+    `✨ *¿Qué incluye la Suscripción VIP?*\n` +
+    `• Acceso ilimitado a la galería privada completa (fotos y videos en alta definición).\n` +
+    `• Contenido sugestivo y exclusivo sin censura.\n` +
+    `• Novedades y actualizaciones continuas.\n` +
+    `• Trato confidencial y atención directa 1 a 1.\n\n` +
+    `💵 *Tarifa Oficial:* Bs. 450 / mes (o pack promocional)\n\n` +
+    `🔒 *Forma de Pago Segura:* La Administradora entrega el *QR oficial de pago* de forma 100% privada. Tras validar tu comprobante, recibirás el link privado y confidencial para unirte al Grupo/Canal VIP.\n\n` +
+    `_Explora el contenido en la Mini App y pulsa "Adquirir Contenido" para solicitar disponibilidad._`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+        ],
+        [
+          { text: 'ℹ️ Información y Seguridad', callback_data: 'client_cmd_info' },
+          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+        ]
+      ]
+    }
+  });
+}
+
+export async function sendClientInfo(chatId: string | number) {
+  const { baseUrl } = getBotConfig();
+  const text = `ℹ️ *INFORMACIÓN, SEGURIDAD Y DISCRECIÓN* ℹ️\n\n` +
+    `🔒 *Garantía de Confidencialidad:*\n` +
+    `• Contenido 100% digital exclusivo para mayores de 18 años (+18).\n` +
+    `• Material protegido con marca de agua digital.\n` +
+    `• Todas las conversaciones, pagos y accesos son estrictamente privados.\n\n` +
+    `⚠️ *Aviso Importante:* Este bot no publica comprobantes ni enlaces en grupos públicos. Toda coordinación se realiza por mensaje privado directo con la Administradora.`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+        ],
+        [
+          { text: '💰 Ver Tarifas y Precios', callback_data: 'client_cmd_precios' },
+          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+        ]
+      ]
+    }
+  });
+}
+
+export async function sendClientAyuda(chatId: string | number) {
+  const { baseUrl } = getBotConfig();
+  const text = `❓ *PREGUNTAS FRECUENTES Y AYUDA* ❓\n\n` +
+    `1️⃣ *¿Cómo abro la galería?*\n` +
+    `Pulsa el botón *"Ver Canal VIP Free"* en el menú inferior del bot o en cualquier mensaje.\n\n` +
+    `2️⃣ *¿Qué son las imágenes sugestivas/efímeras?*\n` +
+    `Son imágenes teaser que solo se pueden ver durante unos segundos antes de desaparecer permanentemente de tu galería.\n\n` +
+    `3️⃣ *¿Cómo me suscribo?*\n` +
+    `Pulsa *"Adquirir Contenido"* en la Mini App o escribe /precios para recibir el QR privado de la Administradora.\n\n` +
+    `4️⃣ *¿Problemas o dudas?*\n` +
+    `Escribe tu mensaje en este chat privado para recibir asistencia directa.`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+        ],
+        [
+          { text: '💰 Ver Precios', callback_data: 'client_cmd_precios' },
+          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+        ]
+      ]
+    }
+  });
+}
+
 // Callback Query Handler (Inline Keyboard clicks)
 async function handleCallbackQuery(cb: any) {
   const chatId = cb.message.chat.id;
@@ -780,8 +959,26 @@ async function handleCallbackQuery(cb: any) {
   const data = cb.data || '';
   const userIdStr = String(fromId);
 
+  // 1. Client Callbacks (accessible to everyone)
+  if (data.startsWith('client_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    if (data === 'client_cmd_canal') {
+      await sendClientCanal(chatId);
+    } else if (data === 'client_cmd_precios') {
+      await sendClientPrecios(chatId);
+    } else if (data === 'client_cmd_info') {
+      await sendClientInfo(chatId);
+    } else if (data === 'client_cmd_ayuda') {
+      await sendClientAyuda(chatId);
+    } else if (data === 'client_cmd_menu') {
+      await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
+    }
+    return;
+  }
+
+  // 2. Admin verification for all other callbacks
   if (!isAdminUser(fromId)) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'No autorizado', show_alert: true });
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Acceso solo para administradoras.', show_alert: true });
     return;
   }
 
@@ -791,6 +988,42 @@ async function handleCallbackQuery(cb: any) {
   }
 
   await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+
+  // Admin action button callbacks
+  if (data === 'admin_btn_new') {
+    await setConversationState(userIdStr, 'NEW_NAME', {});
+    await sendMessage(chatId, '➕ *Crear Nuevo Perfil (Paso 1/5)*\n\nPor favor, escribe el *Nombre Público*:');
+    return;
+  }
+
+  if (data === 'admin_btn_list') {
+    await handleListProfiles(chatId);
+    return;
+  }
+
+  if (data === 'admin_btn_help') {
+    await sendAdminHelp(chatId);
+    return;
+  }
+
+  if (data === 'admin_btn_pin') {
+    const { baseUrl, username, brandName } = getBotConfig();
+    const cleanUsername = username || process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot';
+    const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
+    const msg = `💎 *${brandName || 'IAM DANII'} VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
+      `Canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
+      `📲 *ENLACE DE INVITACIÓN DIRECTA AL BOT:*\n` +
+      `👉 \`${inviteLink}\`\n\n` +
+      `_Trato directo, discreto y 100% confidencial (+18). Pulsa el botón "Ver Canal VIP Free" en el menú inferior para abrir la galería._`;
+
+    const res = await sendMessage(chatId, msg);
+    if (res && res.result && res.result.message_id) {
+      await pinChatMessage(chatId, res.result.message_id);
+    }
+    await updateBotMenuButton();
+    await sendMessage(chatId, `✅ *Mensaje anclado en Telegram y botón "Ver Canal VIP Free" sincronizado.*`);
+    return;
+  }
 
   if (data.startsWith('request_qr_')) {
     await sendPrivateQrForRequest(data.replace('request_qr_', ''), chatId);
@@ -887,45 +1120,61 @@ async function handleCallbackQuery(cb: any) {
 
 // Handlers for Command Specific Functions
 async function sendAdminWelcome(chatId: string | number, name: string) {
-  const msg = `
-👑 *¡Bienvenida, Administradora ${name}!*
+  const { baseUrl, brandName } = getBotConfig();
+  const adminToken = generateAdminMagicToken(String(chatId));
+  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
 
-Sistema de Gestión — *Tú • Espacio VIP (+18)*.
+  const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
+    `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
+    `👇 *Acciones Rápidas con Botones:*\n` +
+    `Pulsa un botón para gestionar o escribe los comandos manuales:`;
 
-📋 *Comandos Administrativos Disponibles*:
-• \`/nuevo\` — Crear un nuevo perfil paso a paso.
-• \`/listar\` — Ver todos los perfiles registrados y sus estados.
-• \`/ver ID\` — Consultar ficha completa de un perfil.
-• \`/editar ID\` — Modificar datos de un perfil.
-• \`/fotos ID\` — Gestionar fotografías de un perfil.
-• \`/estado ID\` — Cambiar estado (disponible/ocupada/pausada/retirada).
-• \`/publicar ID\` — Publicar o actualizar en el canal de Telegram y la web.
-• \`/pausar ID\` — Ocultar de la web y marcar en canal.
-• \`/retirar ID\` — Retirar catálogo y canal.
-• \`/eliminar ID\` — Borrar perfil permanentemente.
-• \`/admin\` — Obtener enlace seguro para el Panel Web.
-• \`/invitar\` — Generar el enlace genérico para cualquier invitado.
-• \`/cancelar\` — Cancelar cualquier operación en curso.
-
-_Todos los cambios realizados aquí se sincronizan automáticamente en la base de datos, canal y sitio web._
-`;
-  await sendMessage(chatId, msg);
+  await sendMessage(chatId, msg, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '🔐 Abrir Panel Web Administrativo', url: adminLink }
+        ],
+        [
+          { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
+          { text: '📋 Listar Perfiles', callback_data: 'admin_btn_list' }
+        ],
+        [
+          { text: '📌 Fijar Anuncio en Canal', callback_data: 'admin_btn_pin' },
+          { text: '📖 Manual / Ayuda Admin', callback_data: 'admin_btn_help' }
+        ]
+      ]
+    }
+  });
 }
 
 async function sendAdminHelp(chatId: string | number) {
-  const msg = `
-📖 *Manual de Uso Rápido*:
+  const { baseUrl, brandName } = getBotConfig();
+  const adminToken = generateAdminMagicToken(String(chatId));
+  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
 
-1️⃣ *Para crear un perfil*: Escribe \`/nuevo\` y sigue las preguntas.
-2️⃣ *Para publicar*: Escribe \`/publicar <ID>\`.
-3️⃣ *Para cambiar estado rápidamente*: Escribe \`/estado <ID>\`.
-4️⃣ *Para acceder a la web administrativa*: Escribe \`/admin\`.
+  const msg = `📖 *Manual de Administración — ${brandName || 'IAM DANII VIP'}* 📖\n\n` +
+    `1️⃣ *Para gestionar perfiles*: Pulsa los botones abajo o usa \`/nuevo\` y \`/listar\`.\n` +
+    `2️⃣ *Para publicar*: Escribe \`/publicar <ID>\`.\n` +
+    `3️⃣ *Para cambiar estado*: Escribe \`/estado <ID>\`.\n` +
+    `4️⃣ *Para acceder a la web*: Pulsa "Abrir Panel Web".\n\n` +
+    `⚠️ *Reglas Obligatorias de Seguridad:*\n` +
+    `• Todos los perfiles deben ser mayores de 18 años.\n` +
+    `• Toda validación y entrega de accesos VIP es 1-a-1 por chat privado.`;
 
-⚠️ *Reglas Obligatorias de Seguridad*:
-- Todos los perfiles deben ser mayores de 18 años.
-- No publique números ni direcciones exactas.
-`;
-  await sendMessage(chatId, msg);
+  await sendMessage(chatId, msg, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '🔐 Abrir Panel Web', url: adminLink }
+        ],
+        [
+          { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
+          { text: '📋 Listar Perfiles', callback_data: 'admin_btn_list' }
+        ]
+      ]
+    }
+  });
 }
 
 async function handleListProfiles(chatId: string | number) {

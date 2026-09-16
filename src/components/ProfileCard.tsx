@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
-import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
+import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
+import { isVideoUrl } from './ProtectedMedia';
+import { EphemeralViewer } from './EphemeralViewer';
 
 interface ProfileCardProps {
   profile: Profile;
@@ -19,35 +20,99 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   onSelectProfile,
   onRequestAvailability
 }) => {
-  const allMedia = useMemo(() => profile.photos?.length
-    ? profile.photos
-    : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'], [profile.photos]);
+  const [seenEphemeralUrls, setSeenEphemeralUrls] = useState<Set<string>>(() => {
+    const seen = new Set<string>();
+    if (typeof window !== 'undefined' && profile.ephemeral_config) {
+      Object.keys(profile.ephemeral_config).forEach(url => {
+        try {
+          if (localStorage.getItem(`danii_seen_ephemeral_${btoa(url).replace(/=/g, '')}`)) {
+            seen.add(url);
+          }
+        } catch { /* Ignore storage error */ }
+      });
+    }
+    return seen;
+  });
+
+  const handleMediaExpired = (expiredUrl: string) => {
+    try {
+      localStorage.setItem(`danii_seen_ephemeral_${btoa(expiredUrl).replace(/=/g, '')}`, 'true');
+    } catch { /* Ignore storage error */ }
+    setSeenEphemeralUrls(prev => {
+      const next = new Set(prev);
+      next.add(expiredUrl);
+      return next;
+    });
+  };
+
+  const allMedia = useMemo(() => {
+    const raw = profile.photos?.length
+      ? profile.photos
+      : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+    const filtered = raw.filter(url => !seenEphemeralUrls.has(url));
+    return filtered.length > 0 ? filtered : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+  }, [profile.photos, seenEphemeralUrls]);
+
   const images = useMemo(() => allMedia.filter(item => !isVideoUrl(item)), [allMedia]);
   const videos = useMemo(() => allMedia.filter(isVideoUrl), [allMedia]);
-  const [mediaType, setMediaType] = useState<'images' | 'videos'>(isVideoUrl(allMedia[0]) ? 'videos' : 'images');
+  const [mediaType, setMediaType] = useState<'images' | 'videos'>(images.length > 0 ? 'images' : (videos.length > 0 ? 'videos' : 'images'));
   const [selectedMedia, setSelectedMedia] = useState(allMedia[0]);
+  const [imageIndex, setImageIndex] = useState(0);
 
   const visibleMedia = mediaType === 'images' ? images : videos;
   const isAvailable = profile.status === 'disponible' || profile.status === 'activa';
+  const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[selectedMedia]?.enabled);
+  const currentDuration = profile.ephemeral_config?.[selectedMedia]?.duration_seconds || 5;
 
+  // Reset to first media when collections change
   useEffect(() => {
-    const nextType = isVideoUrl(allMedia[0]) ? 'videos' : 'images';
-    setMediaType(nextType);
-    setSelectedMedia((nextType === 'images' ? images : videos)[0] || allMedia[0]);
+    if (images.length > 0) {
+      setMediaType('images');
+      setSelectedMedia(images[0]);
+      setImageIndex(0);
+    } else if (videos.length > 0) {
+      setMediaType('videos');
+      setSelectedMedia(videos[0]);
+      setImageIndex(0);
+    } else {
+      setSelectedMedia(allMedia[0]);
+    }
   }, [allMedia, images, videos]);
+
+  // Auto-rotate images every 3.5 seconds (only when not viewing an ephemeral image)
+  useEffect(() => {
+    if (mediaType === 'images' && images.length > 1 && !isCurrentEphemeral) {
+      const interval = setInterval(() => {
+        setImageIndex(prev => (prev + 1) % images.length);
+        setSelectedMedia(images[imageIndex]);
+      }, 3500);
+      return () => clearInterval(interval);
+    }
+  }, [mediaType, images.length, imageIndex, isCurrentEphemeral]);
 
   const selectType = (type: 'images' | 'videos') => {
     const collection = type === 'images' ? images : videos;
     if (!collection.length) return;
     setMediaType(type);
     setSelectedMedia(collection[0]);
+    if (type === 'images') {
+      setImageIndex(0);
+    }
   };
 
   const moveMedia = (direction: -1 | 1) => {
     if (visibleMedia.length < 2) return;
-    const currentIndex = Math.max(0, visibleMedia.indexOf(selectedMedia));
-    const nextIndex = (currentIndex + direction + visibleMedia.length) % visibleMedia.length;
-    setSelectedMedia(visibleMedia[nextIndex]);
+    if (mediaType === 'images') {
+      setImageIndex(prev => {
+        const next = (prev + direction + images.length) % images.length;
+        setSelectedMedia(images[next]);
+        return next;
+      });
+    } else {
+      const currentIndex = Math.max(0, visibleMedia.indexOf(selectedMedia));
+      const nextIndex = (currentIndex + direction + visibleMedia.length) % visibleMedia.length;
+      setSelectedMedia(visibleMedia[nextIndex]);
+    }
   };
 
   return (
@@ -80,21 +145,29 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => onSelectProfile(profile)}
-            className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-black text-left sm:aspect-[16/11]"
-            aria-label="Abrir contenido en vista completa"
-          >
-            <ProtectedMedia
+          <div className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-black text-left sm:aspect-[16/11]">
+            <EphemeralViewer
               src={selectedMedia}
               alt={`Contenido de ${modelName}`}
               modelName={modelName}
               autoPlay={isVideoUrl(selectedMedia)}
               showControls={false}
               className="h-full w-full object-cover"
+              isEphemeral={isCurrentEphemeral}
+              durationSeconds={currentDuration}
+              isSeen={seenEphemeralUrls.has(selectedMedia)}
+              onExpired={() => handleMediaExpired(selectedMedia)}
+              onRequestVip={() => onRequestAvailability(profile)}
             />
-          </button>
+            {isCurrentEphemeral && !seenEphemeralUrls.has(selectedMedia) && (
+              <div className="absolute bottom-2 left-2 z-20 pointer-events-none">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-600/90 text-white shadow-lg backdrop-blur-sm">
+                  <Flame className="w-3 h-3 text-amber-300" />
+                  Sugestiva ({currentDuration}s)
+                </span>
+              </div>
+            )}
+          </div>
 
           {visibleMedia.length > 1 && (
             <div className="mt-3 flex items-center justify-center gap-3">
@@ -102,7 +175,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 <ChevronLeft className="h-5 w-5" />
               </button>
               <span className="min-w-14 text-center text-xs font-semibold text-zinc-400">
-                {visibleMedia.indexOf(selectedMedia) + 1} / {visibleMedia.length}
+                {mediaType === 'images' ? (imageIndex + 1) : (visibleMedia.indexOf(selectedMedia) + 1)} / {visibleMedia.length}
               </span>
               <button type="button" onClick={() => moveMedia(1)} aria-label="Medio siguiente" className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 transition-colors hover:border-amber-500/50 hover:text-amber-300">
                 <ChevronRight className="h-5 w-5" />
@@ -136,8 +209,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 href={modelVipLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-xs font-semibold text-zinc-200 hover:border-amber-500/40 hover:text-amber-300"
-              >
+                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-xs font-semibold text-zinc-200 hover:border-amber-500/40 hover:text-amber-300">
                 <Link className="h-4 w-4" /> Abrir red social
               </a>
             )}
@@ -150,14 +222,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-800 px-4 text-zinc-200 hover:bg-zinc-700"
               aria-label="Ver contenido completo"
             >
-              <Eye className="h-5 w-5" />
+              <Eye className="h-4 w-4" />
             </button>
             <button
               type="button"
               onClick={() => onRequestAvailability(profile)}
               id={`btn-request-${profile.id}`}
-              className="min-h-12 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-sm font-extrabold text-zinc-950 shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-amber-500 flex items-center justify-center gap-2"
-            >
+              className="min-h-12 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-sm font-extrabold text-zinc-950 shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-amber-500 flex items-center justify-center gap-2">
               <Send className="h-4 w-4" /> Adquirir Contenido
             </button>
           </div>

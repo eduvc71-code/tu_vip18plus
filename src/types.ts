@@ -2,7 +2,16 @@
  * Shared type definitions for Tú • Espacio VIP (+18)
  */
 
-export type ProfileStatus = 'borrador' | 'disponible' | 'ocupada' | 'pausada' | 'retirada';
+export type ProfileStatus = 'borrador' | 'disponible' | 'ocupada' | 'pausada' | 'retirada' | 'activa';
+
+export interface EphemeralMediaConfig {
+  [mediaUrl: string]: {
+    enabled?: boolean;
+    ephemeral?: boolean;
+    duration?: number; // Duración en segundos (ej. 5, 10, 15)
+    duration_seconds?: number;
+  };
+}
 
 export interface Profile {
   id: string;
@@ -13,6 +22,7 @@ export interface Profile {
   rate_bs: number; // Precio suscripción / pack VIP en Bs.
   commission_bs: number; // 0 (sin comisión)
   photos: string[]; // URLs or paths to uploaded images and videos
+  ephemeral_config?: EphemeralMediaConfig;
   status: ProfileStatus;
   created_at: string;
   updated_at: string;
@@ -20,7 +30,7 @@ export interface Profile {
   priority_order: number;
 }
 
-export type RequestStatus = 'pendiente' | 'qr_enviado' | 'auto_respondida' | 'confirmado' | 'rechazado' | 'completado' | 'fallida';
+export type RequestStatus = 'pendiente' | 'qr_enviado' | 'auto_respondida' | 'confirmado' | 'rechazado' | 'completado' | 'fallida' | 'comision_pagada';
 
 export interface CustomerRequest {
   id: string;

@@ -24,6 +24,7 @@ import {
   Pin,
   Webhook,
   MessageSquare,
+  Flame,
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -313,12 +314,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleRemovePhoto = async (photoUrl: string) => {
     if (!editingProfile) return;
     const updatedPhotos = (editingProfile.photos || []).filter(p => p !== photoUrl);
-    setEditingProfile({ ...editingProfile, photos: updatedPhotos });
+    const updatedEphemeral = { ...(editingProfile.ephemeral_config || {}) };
+    delete updatedEphemeral[photoUrl];
+    setEditingProfile({ ...editingProfile, photos: updatedPhotos, ephemeral_config: updatedEphemeral });
     try {
       const res = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ photos: updatedPhotos })
+        body: JSON.stringify({ photos: updatedPhotos, ephemeral_config: updatedEphemeral })
       });
       if (res.ok) {
         setMessage({ type: 'success', text: 'Archivo multimedia eliminado del perfil.' });
@@ -326,6 +329,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       setMessage({ type: 'error', text: 'Error al eliminar el archivo' });
+    }
+  };
+
+  const handleUpdateEphemeral = async (photoUrl: string, enabled: boolean, durationSeconds: number = 5) => {
+    if (!editingProfile) return;
+    const currentConfig = { ...(editingProfile.ephemeral_config || {}) };
+    if (enabled) {
+      currentConfig[photoUrl] = { enabled: true, duration_seconds: durationSeconds };
+    } else {
+      delete currentConfig[photoUrl];
+    }
+    const updatedProfile = { ...editingProfile, ephemeral_config: currentConfig };
+    setEditingProfile(updatedProfile);
+    try {
+      const res = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ephemeral_config: currentConfig })
+      });
+      if (res.ok) {
+        setMessage({
+          type: 'success',
+          text: enabled ? `Imagen configurada como Sugestiva / Efímera (${durationSeconds}s)` : 'Modo efímero desactivado para este archivo'
+        });
+        fetchData();
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error al actualizar configuración efímera' });
     }
   };
 
@@ -438,7 +469,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-white tracking-tight font-serif">
-                Panel Administrativo — Tú VIP
+                Panel Administrativo — {formData.name || modelDisplayName || 'VIP'}
               </h2>
               <p className="text-[11px] text-zinc-400">Gestión de contenido y atención privada</p>
             </div>
@@ -522,7 +553,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {activeTab === 'profiles' && (
               <div className="max-w-xl mx-auto space-y-5">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear tu perfil VIP'}
+                  {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear Perfil VIP'}
                 </h3>
 
                 <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
@@ -637,28 +668,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               <h5 className="font-bold text-zinc-300">{group.label}</h5>
                               <span className="text-[10px] text-zinc-500">{group.items.length} archivo(s)</span>
                             </div>
-                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                              {group.items.map((photoUrl, idx) => (
-                                <div key={photoUrl} className="relative group rounded-xl overflow-hidden border border-zinc-800 aspect-square bg-zinc-900">
-                                  {isVideoUrl(photoUrl) ? (
-                                    <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                                  ) : (
-                                    <img src={photoUrl} alt={`${group.label} ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemovePhoto(photoUrl)}
-                                    className="absolute top-1 right-1 p-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white shadow-md opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
-                                    title="Eliminar archivo"
-                                    aria-label="Eliminar archivo"
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                  {idx === 0 && (
-                                    <span className="absolute bottom-1 left-1 text-[9px] text-white bg-amber-600/90 px-1.5 py-0.5 rounded font-bold uppercase">Más reciente</span>
-                                  )}
-                                </div>
-                              ))}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                              {group.items.map((photoUrl, idx) => {
+                                const isEphemeral = Boolean(editingProfile.ephemeral_config?.[photoUrl]?.enabled);
+                                const duration = editingProfile.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
+
+                                return (
+                                  <div key={photoUrl} className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 flex flex-col">
+                                    <div className="relative aspect-square w-full bg-zinc-950 overflow-hidden">
+                                      {isVideoUrl(photoUrl) ? (
+                                        <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                      ) : (
+                                        <img src={photoUrl} alt={`${group.label} ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
+                                      )}
+
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemovePhoto(photoUrl)}
+                                        className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md transition-opacity cursor-pointer z-10"
+                                        title="Eliminar archivo"
+                                        aria-label="Eliminar archivo"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+
+                                      {isEphemeral ? (
+                                        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-md">
+                                          <Flame className="w-3 h-3 text-amber-300" />
+                                          {duration}s
+                                        </span>
+                                      ) : (
+                                        idx === 0 && (
+                                          <span className="absolute bottom-1.5 left-1.5 text-[9px] text-white bg-amber-600/90 px-1.5 py-0.5 rounded font-bold uppercase">Más reciente</span>
+                                        )
+                                      )}
+                                    </div>
+
+                                    {/* Ephemeral Controller Bar */}
+                                    <div className="p-2 bg-zinc-950/90 border-t border-zinc-800/80 space-y-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleUpdateEphemeral(photoUrl, !isEphemeral, duration)}
+                                        className={`w-full py-1.5 px-2 rounded-lg text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                                          isEphemeral
+                                            ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300 hover:bg-rose-500/30'
+                                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50'
+                                        }`}
+                                      >
+                                        <Flame className={`w-3 h-3 ${isEphemeral ? 'text-rose-400' : 'text-amber-400'}`} />
+                                        {isEphemeral ? '🔥 Sugestiva Activa' : '⚡ Hacer Sugestiva'}
+                                      </button>
+
+                                      {isEphemeral && (
+                                        <div className="flex items-center justify-between gap-1 pt-0.5">
+                                          <span className="text-[9px] text-zinc-400 font-medium">Tiempo:</span>
+                                          <div className="flex gap-1">
+                                            {[5, 10, 15, 30].map((sec) => (
+                                              <button
+                                                key={sec}
+                                                type="button"
+                                                onClick={() => handleUpdateEphemeral(photoUrl, true, sec)}
+                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors ${
+                                                  duration === sec
+                                                    ? 'bg-amber-500 text-zinc-950 shadow'
+                                                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                                }`}
+                                              >
+                                                {sec}s
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         ))}

@@ -111,7 +111,8 @@ router.get('/info', (req: Request, res: Response) => {
   const telegramOnly = tgVal === null ? true : (tgVal === 'true');
   const autoReplyDelay = getSystemSetting('auto_reply_delay_minutes') || '10';
   res.json({
-    app_name: 'Catálogo VIP',
+    app_name: 'Canal VIP Free',
+    brand_name: config.brandName || 'IAM DANII VIP',
     bot_username: config.username,
     bot_configured: Boolean(config.token),
     channel_id: config.channelId,
@@ -120,7 +121,7 @@ router.get('/info', (req: Request, res: Response) => {
     qr_image_url: getSystemSetting('qr_image_url') || '',
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
-    model_display_name: getSystemSetting('model_display_name') || 'Tú',
+    model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
     model_vip_link: getSystemSetting('model_vip_link') || '',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
@@ -302,7 +303,8 @@ router.post('/requests', async (req: Request, res: Response) => {
 
     // Confirm only after the administrator has received the request.
     if (safeUserId) {
-      const userConfirmText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
+      const brandTitle = profile.name ? `${profile.name} • Espacio VIP (+18)` : 'Canal VIP Free (+18)';
+      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
       await sendMessage(safeUserId, userConfirmText);
       await scheduleAutoReply(request.id);
     } else {
@@ -371,7 +373,7 @@ router.get('/admin/profiles', requireAdminAuth, async (req: Request, res: Respon
 // POST Create Profile from Web Admin Panel
 router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order } = req.body;
+    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order, ephemeral_config } = req.body;
 
     if (!name || !age || age < 18) {
       res.status(400).json({ error: 'El nombre es obligatorio y la edad debe ser igual o mayor a 18 años.' });
@@ -388,6 +390,7 @@ router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Respo
       rate_bs: Number(rate_bs) || 0,
       commission_bs: 0,
       photos: Array.isArray(photos) ? photos : [],
+      ephemeral_config: ephemeral_config || {},
       status: status || 'borrador',
       priority_order: Number(priority_order) || 0
     });
@@ -417,7 +420,7 @@ router.put('/admin/profiles/:id', requireAdminAuth, async (req: Request, res: Re
       return;
     }
 
-    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order } = req.body;
+    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order, ephemeral_config } = req.body;
 
     if (age !== undefined && Number(age) < 18) {
       res.status(400).json({ error: 'La edad debe ser mayor o igual a 18 años.' });
@@ -433,6 +436,7 @@ router.put('/admin/profiles/:id', requireAdminAuth, async (req: Request, res: Re
       rate_bs: rate_bs !== undefined ? Number(rate_bs) : existing.rate_bs,
       commission_bs: commission_bs !== undefined ? Number(commission_bs) : existing.commission_bs,
       photos: Array.isArray(photos) ? photos : existing.photos,
+      ephemeral_config: ephemeral_config ?? existing.ephemeral_config,
       status: status ?? existing.status,
       priority_order: priority_order !== undefined ? Number(priority_order) : existing.priority_order
     });

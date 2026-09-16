@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: flavia-ruti-vip-plus18
+    name: iam-danii-vip-plus18
     env: node
     plan: free
     buildCommand: npm install && npm run build
@@ -13,9 +13,9 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: BOT_USERNAME
-        value: vip_ruti_bot
+        value: IAM_Danii_VIP_bot
       - key: TELEGRAM_WEBHOOK_SECRET
-        generateValue: true
+        sync: false
       - key: ADMIN_SIGNING_SECRET
         generateValue: true
       - key: CHANNEL_ID

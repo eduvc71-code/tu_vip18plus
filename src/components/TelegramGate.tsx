@@ -6,7 +6,7 @@ interface TelegramGateProps {
 }
 
 export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
-  const cleanUsername = (botUsername || 'vip_ruti_bot').replace(/^@/, '').trim();
+  const cleanUsername = (botUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
   const botUrl = `https://t.me/${cleanUsername}`;
 
   return (
@@ -18,7 +18,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
 
         <div className="space-y-2">
           <span className="inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Contenido Exclusivo +18</span>
-          <h2 className="font-serif text-2xl font-bold tracking-tight text-white">Tú • Acceso VIP</h2>
+          <h2 className="font-serif text-2xl font-bold tracking-tight text-white">Canal VIP Free (+18)</h2>
           <p className="mx-auto max-w-xs text-xs leading-relaxed text-zinc-400">Esta Mini App se abre exclusivamente desde el bot oficial de Telegram.</p>
         </div>
 
@@ -27,7 +27,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
             <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
             <span>ACCESO MEDIANTE TELEGRAM</span>
           </div>
-          <p className="text-[11px] leading-normal text-zinc-400">Abre el bot y utiliza el botón “Ver Catálogo VIP”. Los enlaces de invitación también dirigen primero al bot.</p>
+          <p className="text-[11px] leading-normal text-zinc-400">Abre el bot y utiliza el botón “Ver Canal VIP Free”. Los enlaces de invitación también dirigen primero al bot.</p>
         </div>
 
         <a

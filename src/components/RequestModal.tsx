@@ -10,11 +10,12 @@ export interface TelegramUserContext {
 
 interface RequestModalProps {
   profile: Profile | null;
+  modelName?: string;
   tgUserContext?: TelegramUserContext | null;
   onClose: () => void;
 }
 
-export const RequestModal: React.FC<RequestModalProps> = ({ profile, tgUserContext, onClose }) => {
+export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, tgUserContext, onClose }) => {
   // ✅ Todos los hooks ANTES de cualquier return condicional (regla de hooks de React)
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -109,7 +110,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, tgUserConte
             </div>
             <h4 className="text-lg font-bold text-white">¡Solicitud Notificada!</h4>
             <p className="text-xs text-zinc-300 leading-relaxed">
-              La Administradora de <strong>Tú VIP</strong> ha sido notificada. La negociación continuará de forma privada en Telegram.
+              La Administradora de <strong>{modelName ? `${modelName} VIP` : 'Canal VIP'}</strong> ha sido notificada. La negociación continuará de forma privada en Telegram.
             </p>
             <button
               onClick={onClose}
