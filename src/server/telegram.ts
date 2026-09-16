@@ -176,7 +176,8 @@ async function sendPrivateQrForRequest(requestId: string, adminChatId: string | 
     return;
   }
 
-  const replyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\nNuestra Administradora autorizó el envío del *QR oficial de pago* para tu solicitud.\n\n📲 Realiza el pago y conserva tu comprobante. La validación y cualquier coordinación posterior se realizarán únicamente mediante conversación privada con la Administradora.\n\n🔒 Este bot no publica comprobantes ni entrega accesos a grupos.`;
+  const { brandName } = getBotConfig();
+  const replyText = `✨ *${brandName || 'IAM Danii VIP'} • Espacio VIP (+18)* ✨\n\nNuestra Administradora autorizó el envío del *QR oficial de pago* para tu solicitud.\n\n📲 Realiza el pago y conserva tu comprobante. La validación y cualquier coordinación posterior se realizarán únicamente mediante conversación privada con la Administradora.\n\n🔒 Este bot no publica comprobantes ni entrega accesos a grupos.`;
   const result = await sendPhotoToUser(request.telegram_user_id, qrUrl, replyText);
   if (!result.ok) {
     console.error(`[Telegram Delivery] QR privado rechazado para solicitud ${requestId}: ${result.description || 'respuesta desconocida'}`);
