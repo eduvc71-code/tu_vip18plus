@@ -1,4 +1,10 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client
+} from '@aws-sdk/client-s3';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
 
@@ -36,7 +42,7 @@ function safeFileName(name: string) {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}${extension}`;
 }
 
-export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' | 'qr') {
+export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' | 'qr' | 'backups') {
   const connection = getB2Connection();
   if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
 
@@ -52,6 +58,63 @@ export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' |
   }));
 
   return objectKey;
+}
+
+export async function uploadBufferToB2(
+  buffer: Buffer,
+  filename: string,
+  mimetype: string,
+  subfolder: string = 'backups'
+) {
+  const connection = getB2Connection();
+  if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
+
+  const objectKey = `tu-vip/${subfolder}/${safeFileName(filename)}`;
+  await connection.client.send(new PutObjectCommand({
+    Bucket: connection.bucket,
+    Key: objectKey,
+    Body: buffer,
+    ContentType: mimetype || 'application/octet-stream',
+    ContentDisposition: 'inline',
+    CacheControl: 'private, no-store',
+    Metadata: { originalname: encodeURIComponent(filename) }
+  }));
+
+  return objectKey;
+}
+
+export async function listB2Backups(limit = 100) {
+  const connection = getB2Connection();
+  if (!connection) return [];
+  try {
+    const res = await connection.client.send(new ListObjectsV2Command({
+      Bucket: connection.bucket,
+      Prefix: 'tu-vip/backups/',
+      MaxKeys: limit
+    }));
+    return (res.Contents || []).map(item => ({
+      key: item.Key || '',
+      size: item.Size || 0,
+      lastModified: item.LastModified ? item.LastModified.toISOString() : new Date().toISOString(),
+      name: (item.Key || '').split('/').pop() || ''
+    })).sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+  } catch (err) {
+    console.error('[B2 List Backups Error]:', err);
+    return [];
+  }
+}
+
+export async function deleteB2Backup(key: string) {
+  const connection = getB2Connection();
+  if (!connection) throw new Error('Backblaze B2 no configurado');
+  if (!key.startsWith('tu-vip/backups/') || key.includes('..')) {
+    throw new Error('Clave de archivo de respaldo inválida');
+  }
+  await connection.client.send(new DeleteObjectCommand({
+    Bucket: connection.bucket,
+    Key: key
+  }));
+  return true;
 }
 
 export function mediaUrl(baseUrl: string, objectKey: string) {

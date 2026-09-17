@@ -26,6 +26,7 @@ import {
   getSystemSetting,
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
+import { uploadBufferToB2, isB2Configured } from './b2Storage.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -223,7 +224,8 @@ export async function registerBotCommands() {
       { command: 'precios', description: 'Tarifas y suscripciones VIP' },
       { command: 'info', description: 'Información y discreción' },
       { command: 'ayuda', description: 'Soporte y dudas frecuentes' },
-      { command: 'admin', description: 'Panel Web (Solo Administradora)' }
+      { command: 'admin', description: 'Panel Web (Solo Administradora)' },
+      { command: 'respaldo', description: 'Backup Server Mini APP (Servidor Seguro)' }
     ]
   });
 }
@@ -546,9 +548,22 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  if (text === '/cancelar') {
+  const caption = (message.caption || '').toLowerCase();
+  const isBackupCaption = caption.includes('#respaldo') || caption.includes('#backup') || caption.includes('/respaldo') || caption.includes('/backup');
+  if (isBackupCaption && (message.photo || message.video || message.document)) {
+    await handleBackupUploadFromTelegram(chatId, userIdStr, message);
+    return;
+  }
+
+  if (text === '/respaldo' || text === '/backup' || text === '/respaldar') {
+    await setConversationState(userIdStr, 'BACKUP_MODE', {});
+    await sendBackupModeInstructions(chatId, userIdStr);
+    return;
+  }
+
+  if (text === '/cancelar' || text === '/fin') {
     await clearConversationState(userIdStr);
-    await sendMessage(chatId, '❌ *Operación cancelada*. Has regresado al menú principal.');
+    await sendMessage(chatId, '❌ *Operación cancelada / finalizada*. Has regresado al menú principal.');
     return;
   }
 
@@ -642,6 +657,16 @@ async function handleConversationStep(chatId: string | number, userId: string, m
   const text = message.text ? message.text.trim() : '';
 
   switch (state.step) {
+    case 'BACKUP_MODE': {
+      if (text === '/fin' || text === '/salir' || text === '/cancelar') {
+        await clearConversationState(userId);
+        await sendMessage(chatId, '✅ *Modo Respaldo Finalizado*. Has regresado al menú principal.');
+        return;
+      }
+      await handleBackupUploadFromTelegram(chatId, userId, message);
+      break;
+    }
+
     case 'NEW_NAME': {
       if (!text) {
         await sendMessage(chatId, '⚠️ Por favor envía un nombre válido.');
@@ -824,6 +849,121 @@ async function getTelegramFileUrl(fileId: string): Promise<string> {
   return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
 }
 
+async function sendBackupModeInstructions(chatId: string | number, userId: string) {
+  const backupIntro = `💾 *BACKUP SERVER MINI APP — SERVIDOR SEGURO B2* 💾\n\n` +
+    `🔒 *Modo Servidor Seguro Activado (Backblaze B2)*\n\n` +
+    `Puedes enviarme directamente en este chat:\n` +
+    `📸 *Fotografías* (JPG, PNG, WEBP)\n` +
+    `🎥 *Videos* (MP4, MOV, WEBM)\n` +
+    `📁 *Documentos o Archivos Multimedia*\n\n` +
+    `⚠️ *Condiciones del Servidor Seguro*:\n` +
+    `• Tamaño: *Igual o menor a 20 MB* por archivo (Límite oficial Telegram Bot API).\n` +
+    `• Destino: Carpeta privada segura \`tu-vip/backups/admin_${userId}/\`.\n` +
+    `• 🚫 *Aislamiento Total*: NINGÚN archivo de respaldo se publicará en el canal ni se agregará al catálogo público de la Mini App.\n\n` +
+    `👉 *Envía tus fotos o videos ahora*, o pulsa el botón abajo para salir:`;
+
+  await sendMessage(chatId, backupIntro, {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }
+        ]
+      ]
+    }
+  });
+}
+
+async function handleBackupUploadFromTelegram(chatId: string | number, userId: string, message: any) {
+  const { token } = getBotConfig();
+
+  let fileId = '';
+  let fileName = '';
+  let fileSize = 0;
+  let mimeType = '';
+
+  if (message.photo && message.photo.length > 0) {
+    const largestPhoto = message.photo[message.photo.length - 1];
+    fileId = largestPhoto.file_id;
+    fileSize = largestPhoto.file_size || 0;
+    fileName = `foto_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.jpg`;
+    mimeType = 'image/jpeg';
+  } else if (message.video) {
+    fileId = message.video.file_id;
+    fileSize = message.video.file_size || 0;
+    fileName = message.video.file_name || `video_${Date.now()}_${Math.random().toString(36).slice(2, 6)}.mp4`;
+    mimeType = message.video.mime_type || 'video/mp4';
+  } else if (message.document) {
+    fileId = message.document.file_id;
+    fileSize = message.document.file_size || 0;
+    fileName = message.document.file_name || `doc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    mimeType = message.document.mime_type || 'application/octet-stream';
+  }
+
+  if (!fileId) {
+    await sendMessage(chatId, '⚠️ Por favor envía una foto o video válido para respaldar, o pulsa abajo para salir.', {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }]
+        ]
+      }
+    });
+    return;
+  }
+
+  const maxBytes = 20 * 1024 * 1024; // 20 MB Telegram Bot API limit
+  if (fileSize > maxBytes) {
+    const sizeMb = (fileSize / (1024 * 1024)).toFixed(1);
+    await sendMessage(chatId, `⚠️ *Archivo demasiado grande para Telegram Bot API*\n\nPeso: *${sizeMb} MB* (Límite: 20 MB).\n\n💡 Telegram no permite que bots descarguen archivos mayores a 20 MB.\n👉 Para videos pesados de más de 20 MB, por favor súbelos directamente desde la pestaña *"Backup Server"* en el Panel Web Administrativo.`);
+    return;
+  }
+
+  await sendMessage(chatId, `⏳ *Descargando y respaldando en Servidor Seguro B2...*\nArchivo: \`${fileName}\``);
+
+  try {
+    const fileData = await callTelegramApi('getFile', { file_id: fileId });
+    if (!fileData.ok || !fileData.result?.file_path) {
+      throw new Error(fileData.description || 'No se pudo obtener el archivo desde Telegram');
+    }
+
+    const downloadUrl = `https://api.telegram.org/file/bot${token}/${fileData.result.file_path}`;
+    const res = await fetch(downloadUrl);
+    if (!res.ok) {
+      throw new Error(`Error al descargar de Telegram (status ${res.status})`);
+    }
+
+    const arrayBuf = await res.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+
+    // Upload to Backblaze B2 under tu-vip/backups/admin_{userId}/
+    const subfolder = `backups/admin_${userId}`;
+    const objectKey = await uploadBufferToB2(buffer, fileName, mimeType, subfolder);
+
+    const sizeFormatted = fileSize < 1024 * 1024
+      ? `${(fileSize / 1024).toFixed(1)} KB`
+      : `${(fileSize / (1024 * 1024)).toFixed(2)} MB`;
+
+    await addAuditLog('BACKUP_MEDIA_TELEGRAM', userId, `Archivo respaldado en B2: ${fileName} (${sizeFormatted})`);
+
+    const reply = `✅ *¡Archivo Respaldado con Éxito en Servidor Seguro B2!* 💾\n\n` +
+      `📁 *Archivo*: \`${fileName}\`\n` +
+      `📦 *Tamaño*: \`${sizeFormatted}\`\n` +
+      `🔒 *Ubicación Privada*: \`${objectKey}\`\n` +
+      `🚫 *Aislamiento*: Privado (No publicado en catálogo)\n\n` +
+      `_Envía otro archivo para seguir respaldando o pulsa abajo para finalizar._`;
+
+    await sendMessage(chatId, reply, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }]
+        ]
+      }
+    });
+  } catch (error: any) {
+    console.error('[Telegram Backup Error]:', error);
+    await sendMessage(chatId, `❌ *Error al respaldar archivo*: ${error.message || 'Error desconocido'}`);
+  }
+}
+
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
   const { baseUrl, username, brandName } = getBotConfig();
   const cleanUsername = username || process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot';
@@ -996,6 +1136,18 @@ async function handleCallbackQuery(cb: any) {
   await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
 
   // Admin action button callbacks
+  if (data === 'admin_btn_backup') {
+    await setConversationState(userIdStr, 'BACKUP_MODE', {});
+    await sendBackupModeInstructions(chatId, userIdStr);
+    return;
+  }
+
+  if (data === 'admin_btn_exit_backup') {
+    await clearConversationState(userIdStr);
+    await sendMessage(chatId, '✅ *Modo Respaldo Finalizado*. Has regresado al menú administrativo.');
+    return;
+  }
+
   if (data === 'admin_btn_new') {
     await setConversationState(userIdStr, 'NEW_NAME', {});
     await sendMessage(chatId, '➕ *Crear Nuevo Perfil (Paso 1/5)*\n\nPor favor, escribe el *Nombre Público*:');
@@ -1133,13 +1285,17 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
     `👇 *Acciones Rápidas con Botones:*\n` +
-    `Pulsa un botón para gestionar o escribe los comandos manuales:`;
+    `Pulsa un botón para gestionar o escribe los comandos manuales:\n\n` +
+    `💾 *[ 💾 Backup Server Mini APP ]* ⬅️ _(Click para Activar Servidor seguro B2)_`;
 
   await sendMessage(chatId, msg, {
     reply_markup: {
       inline_keyboard: [
         [
           { text: '🔐 Abrir Panel Web Administrativo', url: adminLink }
+        ],
+        [
+          { text: '💾 Backup Server Mini APP', callback_data: 'admin_btn_backup' }
         ],
         [
           { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
