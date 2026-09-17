@@ -79,16 +79,15 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     }
   }, [allMedia, images, videos]);
 
-  // Auto-rotate images every 3.5 seconds (only when not viewing an ephemeral image)
+  // Auto-rotate media (both images and videos) every 4 seconds when not viewing an ephemeral image
   useEffect(() => {
-    if (mediaType === 'images' && images.length > 1 && !isCurrentEphemeral) {
+    if (visibleMedia.length > 1 && !isCurrentEphemeral) {
       const interval = setInterval(() => {
-        setImageIndex(prev => (prev + 1) % images.length);
-        setSelectedMedia(images[imageIndex]);
-      }, 3500);
+        moveMedia(1);
+      }, 4000);
       return () => clearInterval(interval);
     }
-  }, [mediaType, images.length, imageIndex, isCurrentEphemeral]);
+  }, [visibleMedia.length, isCurrentEphemeral, selectedMedia, mediaType]);
 
   const selectType = (type: 'images' | 'videos') => {
     const collection = type === 'images' ? images : videos;
@@ -145,14 +144,19 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             </button>
           </div>
 
-          <div className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl bg-black text-left sm:aspect-[16/11]">
+          {/* Compact media preview container (divided vertically in 2, tap to see full designed size) */}
+          <div
+            onClick={() => onSelectProfile(profile)}
+            className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[260px] sm:max-h-[300px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
+            title="Toca para ver en tamaño completo"
+          >
             <EphemeralViewer
               src={selectedMedia}
               alt={`Contenido de ${modelName}`}
               modelName={modelName}
               autoPlay={isVideoUrl(selectedMedia)}
               showControls={false}
-              className="h-full w-full object-cover"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               isEphemeral={isCurrentEphemeral}
               durationSeconds={currentDuration}
               isSeen={seenEphemeralUrls.has(selectedMedia)}
@@ -160,6 +164,11 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               onRequestVip={() => onRequestAvailability(profile)}
             />
 
+            <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-950/80 text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-md">
+                <Eye className="w-3.5 h-3.5 text-amber-400" /> Toca para ampliar
+              </span>
+            </div>
           </div>
 
           {visibleMedia.length > 1 && (
@@ -212,10 +221,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <button
               type="button"
               onClick={() => onSelectProfile(profile)}
-              className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-800 px-4 text-zinc-200 hover:bg-zinc-700"
-              aria-label="Ver contenido completo"
+              className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-800/90 hover:bg-zinc-800 px-4 text-zinc-200 hover:text-amber-300 hover:border-amber-500/40 flex items-center justify-center gap-1.5 font-bold text-xs transition-colors cursor-pointer"
+              aria-label="Ver contenido en tamaño completo"
+              title="Ver contenido en tamaño completo"
             >
-              <Eye className="h-4 w-4" />
+              <Eye className="h-4 w-4 text-amber-400" />
+              <span>Ver</span>
             </button>
             <button
               type="button"

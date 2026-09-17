@@ -11,7 +11,8 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
   const [accepted, setAccepted] = useState(false);
 
   useEffect(() => {
-    const verified = sessionStorage.getItem('danii_vip_age_verified_splash');
+    // Si ya es suscriptor o usuario verificado previamente, no volver a abrir el splash
+    const verified = localStorage.getItem('danii_vip_age_verified');
     if (!verified) {
       setIsOpen(true);
     }
@@ -19,7 +20,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
 
   const handleAccept = () => {
     if (!accepted) return;
-    sessionStorage.setItem('danii_vip_age_verified_splash', 'true');
+    localStorage.setItem('danii_vip_age_verified', 'true');
     setIsOpen(false);
     onConfirm();
   };

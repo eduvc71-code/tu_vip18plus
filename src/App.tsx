@@ -85,6 +85,9 @@ export default function App() {
       .then(({ ok, data }) => {
         if (!ok || !data.valid || !data.user?.id) return;
         setTelegramAuthorized(true);
+        try {
+          localStorage.setItem('danii_vip_age_verified', 'true');
+        } catch {}
         setTgUser({
           id: String(data.user.id),
           first_name: data.user.first_name || 'Usuario Telegram',
@@ -110,7 +113,12 @@ export default function App() {
       }
       if (resInfo.ok) {
         const info = await resInfo.json();
-        if (info.bot_username) setBotUsername(info.bot_username);
+        if (info.bot_username) {
+          const safeBot = (!info.bot_username || /ruti|flavia/i.test(info.bot_username))
+            ? 'IAM_Danii_VIP_bot'
+            : info.bot_username.replace(/^@/, '').trim();
+          setBotUsername(safeBot);
+        }
         if (info.channel_id) setChannelId(info.channel_id);
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);
         if (info.pinned_message_active !== undefined) setPinnedActive(Boolean(info.pinned_message_active));

@@ -36,7 +36,11 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 export function getBotConfig() {
   const token = process.env.BOT_TOKEN || '';
   const storedUsername = getSystemSetting('bot_username');
-  let username = (process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot';
+  if (/ruti|flavia|catalogovip/i.test(rawUsername)) {
+    rawUsername = 'IAM_Danii_VIP_bot';
+  }
+  let username = rawUsername.replace(/^@/, '').trim();
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   const channelId = process.env.CHANNEL_ID || '-1004356066811';
   const adminIds = (process.env.ADMIN_TELEGRAM_IDS || '')
