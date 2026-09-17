@@ -408,6 +408,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleAddBackupToProfile = async (backupUrl: string) => {
+    const targetProfile = editingProfile || profiles[0];
+    if (!targetProfile) {
+      setMessage({ type: 'error', text: 'No se encontró un perfil activo para vincular el archivo.' });
+      return;
+    }
+    const currentPhotos = targetProfile.photos || [];
+    if (currentPhotos.includes(backupUrl)) {
+      setMessage({ type: 'error', text: 'Este archivo ya se encuentra en la galería VIP.' });
+      return;
+    }
+    const updatedPhotos = [...currentPhotos, backupUrl];
+    if (editingProfile) {
+      setEditingProfile({ ...editingProfile, photos: updatedPhotos });
+    }
+    try {
+      const res = await fetch(`/api/admin/profiles/${targetProfile.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ photos: updatedPhotos })
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: '¡Archivo del respaldo vinculado a la Galería VIP con éxito!' });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al actualizar la galería del perfil.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al vincular archivo.' });
+    }
+  };
+
   const handleUpdateEphemeral = async (photoUrl: string, enabled: boolean, durationSeconds: number = 5) => {
     if (!editingProfile) return;
     const currentConfig = { ...(editingProfile.ephemeral_config || {}) };
@@ -1337,6 +1369,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleAddBackupToProfile(item.url)}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 font-bold transition-all text-[11px] flex items-center gap-1.5 cursor-pointer"
+                                title="Publicar este archivo de respaldo en la galería VIP de la Mini App"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Usar en Galería VIP
+                              </button>
                               <a
                                 href={item.url}
                                 target="_blank"
