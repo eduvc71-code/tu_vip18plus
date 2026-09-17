@@ -7,7 +7,7 @@ interface TelegramGateProps {
 
 export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
   const isLegacy = !botUsername || /ruti|flavia|iam_danii|danii_oficial/i.test(botUsername);
-  const cleanUsername = isLegacy ? 'Danii_Oficial_VIP_SCZ_bot' : botUsername.replace(/^@/, '').trim();
+  const cleanUsername = isLegacy ? 'Danii_Catalogo_SCZ_bot' : botUsername.replace(/^@/, '').trim();
   const botUrl = `https://t.me/${cleanUsername}`;
 
   return (

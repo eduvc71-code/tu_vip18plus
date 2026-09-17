@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefresh, loading }) => {
-  const safeBot = (!botUsername || /ruti|flavia|iam_danii|danii_oficial/i.test(botUsername)) ? 'Danii_Oficial_VIP_SCZ_bot' : botUsername.replace(/^@/, '').trim();
+  const safeBot = (!botUsername || /ruti|flavia|iam_danii|danii_oficial/i.test(botUsername)) ? 'Danii_Catalogo_SCZ_bot' : botUsername.replace(/^@/, '').trim();
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-xl backdrop-blur-xl">

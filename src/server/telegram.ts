@@ -38,9 +38,9 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 export function getBotConfig() {
   const token = process.env.BOT_TOKEN || '';
   const storedUsername = getSystemSetting('bot_username');
-  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Oficial_VIP_SCZ_bot';
-  if (/ruti|flavia|catalogovip|iam_danii|danii_oficialvip_bot/i.test(rawUsername)) {
-    rawUsername = 'Danii_Oficial_VIP_SCZ_bot';
+  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Catalogo_SCZ_bot';
+  if (/ruti|flavia|catalogovip|iam_danii|danii_oficial/i.test(rawUsername)) {
+    rawUsername = 'Danii_Catalogo_SCZ_bot';
   }
   let username = rawUsername.replace(/^@/, '').trim();
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
@@ -1059,7 +1059,7 @@ async function handleBackupUploadFromTelegram(chatId: string | number, userId: s
 
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
   const { baseUrl, username, brandName } = getBotConfig();
-  const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Oficial_VIP_SCZ_bot';
+  const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
   const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE (+18)* 💎\n\n` +
@@ -1284,7 +1284,7 @@ async function handleCallbackQuery(cb: any) {
 
   if (data === 'admin_btn_pin') {
     const { baseUrl, username, brandName } = getBotConfig();
-    const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Oficial_VIP_SCZ_bot';
+    const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *${brandName || 'IAM DANII'} VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +

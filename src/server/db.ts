@@ -40,7 +40,7 @@ function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_vip_link', '')`);
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'model_display_name' AND value IN ('Modelo VIP', 'Flavia', 'Tú', 'TU_VIP')`, [defaultModelName]);
   database.run(`UPDATE profiles SET name = ? WHERE lower(trim(name)) IN ('flavia', 'ruti', 'tú', 'tu_vip', 'modelo vip')`, [defaultModelName]);
-  database.run(`UPDATE system_settings SET value = 'Danii_Oficial_VIP_SCZ_bot' WHERE key = 'bot_username' AND (value LIKE '%ruti%' OR value LIKE '%flavia%' OR value LIKE '%catalogo%' OR value LIKE '%iam_danii%' OR value LIKE '%danii_oficial%')`);
+  database.run(`UPDATE system_settings SET value = 'Danii_Catalogo_SCZ_bot' WHERE key = 'bot_username'`);
 }
 
 export function saveDb(): void {
