@@ -29,6 +29,9 @@ import {
   HardDrive,
   FileVideo,
   FileImage,
+  ChevronLeft,
+  ChevronRight,
+  Maximize2
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -103,6 +106,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [channelVerified, setChannelVerified] = useState<boolean | null>(null);
   const [channelTitle, setChannelTitle] = useState<string>('');
   const [verifyingChannel, setVerifyingChannel] = useState(false);
+  const [enlargedMediaUrl, setEnlargedMediaUrl] = useState<string | null>(null);
 
   useEffect(() => {
     setNewBotUsername(botUsername || '');
@@ -1109,113 +1113,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               {group.items.map((photoUrl, idx) => {
                                 const isEphemeral = Boolean(editingProfile.ephemeral_config?.[photoUrl]?.enabled);
                                 const duration = editingProfile.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
+                                const hasDescription = Boolean(editingProfile.media_descriptions?.[photoUrl]);
+                                const isCover = editingProfile.photos?.[0] === photoUrl;
 
                                 return (
-                                  <div key={photoUrl} className="relative rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900 flex flex-col">
+                                  <div
+                                    key={photoUrl}
+                                    onClick={() => {
+                                      setEnlargedMediaUrl(photoUrl);
+                                      setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
+                                    }}
+                                    className="group relative rounded-2xl overflow-hidden border border-zinc-800 hover:border-amber-500/70 bg-zinc-900 flex flex-col cursor-pointer transition-all hover:shadow-xl hover:shadow-amber-500/10 active:scale-[0.98]"
+                                  >
                                     <div className="relative aspect-square w-full bg-zinc-950 overflow-hidden">
                                       {isVideoUrl(photoUrl) ? (
                                         <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
                                       ) : (
-                                        <img src={photoUrl} alt={`${group.label} ${idx + 1}`} draggable={false} className="w-full h-full object-cover" />
+                                        <img src={photoUrl} alt={`${group.label} ${idx + 1}`} draggable={false} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                                       )}
 
+                                      {/* Hover overlay with zoom prompt */}
+                                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-center p-2">
+                                        <span className="p-2 rounded-full bg-amber-500 text-zinc-950 shadow-lg">
+                                          <Maximize2 className="w-4 h-4" />
+                                        </span>
+                                        <span className="text-[10px] font-black text-white bg-black/80 px-2 py-0.5 rounded-md border border-amber-500/40">
+                                          Toca para ampliar
+                                        </span>
+                                      </div>
+
+                                      {/* Badges */}
+                                      <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+                                        {isCover && (
+                                          <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
+                                            Portada
+                                          </span>
+                                        )}
+                                        {isEphemeral && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-rose-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow">
+                                            <Flame className="w-2.5 h-2.5" /> {duration}s
+                                          </span>
+                                        )}
+                                        {hasDescription && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-blue-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow" title="Tiene descripción">
+                                            <MessageSquare className="w-2.5 h-2.5" />
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {/* Quick Delete */}
                                       <button
                                         type="button"
-                                        onClick={() => handleRemovePhoto(photoUrl)}
-                                        className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md transition-opacity cursor-pointer z-10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemovePhoto(photoUrl);
+                                        }}
+                                        className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md transition-opacity cursor-pointer z-20 opacity-80 group-hover:opacity-100"
                                         title="Eliminar archivo"
                                         aria-label="Eliminar archivo"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                       </button>
-
-                                    </div>
-
-                                    {/* Ephemeral Controller Bar */}
-                                    <div className="p-2 bg-zinc-950/90 border-t border-zinc-800/80 space-y-1.5">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleUpdateEphemeral(photoUrl, !isEphemeral, duration)}
-                                        className={`w-full py-1.5 px-2 rounded-lg text-[10px] font-extrabold transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                                          isEphemeral
-                                            ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300 hover:bg-rose-500/30'
-                                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/50'
-                                        }`}
-                                      >
-                                        <Flame className={`w-3 h-3 ${isEphemeral ? 'text-rose-400' : 'text-amber-400'}`} />
-                                        {isEphemeral ? '🔥 Sugestiva Activa' : '⚡ Hacer Sugestiva'}
-                                      </button>
-
-                                      {isEphemeral && (
-                                        <div className="flex items-center justify-between gap-1 pt-0.5">
-                                          <span className="text-[9px] text-zinc-400 font-medium">Tiempo:</span>
-                                          <div className="flex gap-1">
-                                            {[5, 10, 15, 30].map((sec) => (
-                                              <button
-                                                key={sec}
-                                                type="button"
-                                                onClick={() => handleUpdateEphemeral(photoUrl, true, sec)}
-                                                className={`px-1.5 py-0.5 rounded text-[9px] font-bold cursor-pointer transition-colors ${
-                                                  duration === sec
-                                                    ? 'bg-amber-500 text-zinc-950 shadow'
-                                                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                                }`}
-                                              >
-                                                {sec}s
-                                              </button>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                      {/* Per-File Description Controller */}
-                                      <div className="pt-1.5 border-t border-zinc-800/80 space-y-1">
-                                        {editingDescForUrl === photoUrl ? (
-                                          <div className="space-y-1.5">
-                                            <textarea
-                                              rows={2}
-                                              value={tempDescText}
-                                              onChange={(e) => setTempDescText(e.target.value)}
-                                              placeholder="Descripción para este archivo..."
-                                              className="w-full p-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-[10px] resize-none focus:outline-none focus:border-amber-500"
-                                            />
-                                            <div className="flex items-center gap-1 justify-end">
-                                              <button
-                                                type="button"
-                                                onClick={() => setEditingDescForUrl(null)}
-                                                className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[9px] font-bold cursor-pointer"
-                                              >
-                                                Cancelar
-                                              </button>
-                                              <button
-                                                type="button"
-                                                onClick={() => handleUpdateMediaDescription(photoUrl, tempDescText)}
-                                                className="px-2.5 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-zinc-950 text-[9px] font-bold cursor-pointer"
-                                              >
-                                                Guardar
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <div className="space-y-1">
-                                            {editingProfile.media_descriptions?.[photoUrl] && (
-                                              <p className="text-[10px] text-zinc-300 italic line-clamp-2 bg-zinc-900/60 p-1 rounded border border-zinc-800">
-                                                "{editingProfile.media_descriptions[photoUrl]}"
-                                              </p>
-                                            )}
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setEditingDescForUrl(photoUrl);
-                                                setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
-                                              }}
-                                              className="w-full py-1 px-1.5 rounded-lg text-[9px] font-semibold bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60 flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                                            >
-                                              <Edit className="w-3 h-3 text-amber-400" />
-                                              {editingProfile.media_descriptions?.[photoUrl] ? 'Editar Descripción' : '➕ Descripción'}
-                                            </button>
-                                          </div>
-                                        )}
-                                      </div>
                                     </div>
                                   </div>
                                 );
@@ -1226,6 +1184,280 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                     ) : (
                       <p className="text-zinc-500 italic">No hay fotos cargadas aún en este perfil.</p>
+                    )}
+
+                    {/* MODAL VISTA AMPLIADA Y CONFIGURACIÓN (SUGESTIVA & DESCRIPCIÓN) */}
+                    {enlargedMediaUrl && (
+                      <div
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
+                        onClick={() => setEnlargedMediaUrl(null)}
+                      >
+                        <div
+                          className="relative w-full max-w-3xl bg-zinc-900 border border-amber-500/40 rounded-3xl overflow-hidden shadow-2xl shadow-amber-500/10 flex flex-col my-auto max-h-[95vh]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Header */}
+                          <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-zinc-800 bg-zinc-950/80">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-zinc-300">
+                                {isVideoUrl(enlargedMediaUrl) ? '🎥 Video' : '📸 Fotografía'}
+                              </span>
+                              {editingProfile.photos && (
+                                <span className="text-xs font-mono text-amber-400 font-bold">
+                                  ({(editingProfile.photos.indexOf(enlargedMediaUrl) + 1)} de {editingProfile.photos.length})
+                                </span>
+                              )}
+                              {editingProfile.photos?.[0] === enlargedMediaUrl && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold uppercase">
+                                  ⭐ Portada Principal
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {editingProfile.photos && editingProfile.photos.length > 1 && (
+                                <div className="flex items-center gap-1 mr-1">
+                                  <button
+                                    type="button"
+                                    disabled={editingProfile.photos.indexOf(enlargedMediaUrl) <= 0}
+                                    onClick={() => {
+                                      const idx = editingProfile.photos!.indexOf(enlargedMediaUrl);
+                                      if (idx > 0) {
+                                        const prev = editingProfile.photos![idx - 1];
+                                        setEnlargedMediaUrl(prev);
+                                        setTempDescText(editingProfile.media_descriptions?.[prev] || '');
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                    title="Foto anterior"
+                                  >
+                                    <ChevronLeft className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={editingProfile.photos.indexOf(enlargedMediaUrl) >= editingProfile.photos.length - 1}
+                                    onClick={() => {
+                                      const idx = editingProfile.photos!.indexOf(enlargedMediaUrl);
+                                      if (idx < editingProfile.photos!.length - 1) {
+                                        const next = editingProfile.photos![idx + 1];
+                                        setEnlargedMediaUrl(next);
+                                        setTempDescText(editingProfile.media_descriptions?.[next] || '');
+                                      }
+                                    }}
+                                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer"
+                                    title="Siguiente foto"
+                                  >
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setEnlargedMediaUrl(null)}
+                                className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-all cursor-pointer"
+                                title="Cerrar vista grande"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Large Media Display Container */}
+                          <div className="relative flex-1 bg-black/95 flex items-center justify-center p-2 sm:p-4 min-h-[220px] max-h-[50vh] overflow-hidden select-none">
+                            {isVideoUrl(enlargedMediaUrl) ? (
+                              <video
+                                src={enlargedMediaUrl}
+                                controls
+                                playsInline
+                                autoPlay
+                                className="max-h-[48vh] w-auto max-w-full object-contain rounded-xl shadow-2xl mx-auto"
+                              />
+                            ) : (
+                              <img
+                                src={enlargedMediaUrl}
+                                alt="Vista ampliada"
+                                className="max-h-[48vh] w-auto max-w-full object-contain rounded-xl shadow-2xl mx-auto"
+                              />
+                            )}
+
+                            {/* Floating arrows */}
+                            {editingProfile.photos && editingProfile.photos.indexOf(enlargedMediaUrl) > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const idx = editingProfile.photos!.indexOf(enlargedMediaUrl);
+                                  const prev = editingProfile.photos![idx - 1];
+                                  setEnlargedMediaUrl(prev);
+                                  setTempDescText(editingProfile.media_descriptions?.[prev] || '');
+                                }}
+                                className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/70 hover:bg-amber-500 text-white hover:text-zinc-950 backdrop-blur-sm transition-all shadow-lg cursor-pointer"
+                              >
+                                <ChevronLeft className="w-5 h-5" />
+                              </button>
+                            )}
+                            {editingProfile.photos && editingProfile.photos.indexOf(enlargedMediaUrl) < editingProfile.photos.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const idx = editingProfile.photos!.indexOf(enlargedMediaUrl);
+                                  const next = editingProfile.photos![idx + 1];
+                                  setEnlargedMediaUrl(next);
+                                  setTempDescText(editingProfile.media_descriptions?.[next] || '');
+                                }}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/70 hover:bg-amber-500 text-white hover:text-zinc-950 backdrop-blur-sm transition-all shadow-lg cursor-pointer"
+                              >
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Controles: Sugestiva & Descripción visibles aquí */}
+                          <div className="p-4 sm:p-5 bg-zinc-950 border-t border-zinc-800 space-y-3.5 overflow-y-auto max-h-[40vh]">
+                            {/* Sección Sugestiva / Efímera */}
+                            {(() => {
+                              const isEphemeral = Boolean(editingProfile.ephemeral_config?.[enlargedMediaUrl]?.enabled);
+                              const duration = editingProfile.ephemeral_config?.[enlargedMediaUrl]?.duration_seconds || 5;
+
+                              return (
+                                <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 space-y-2">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <div>
+                                      <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                        <Flame className={`w-4 h-4 ${isEphemeral ? 'text-rose-400' : 'text-zinc-400'}`} />
+                                        Modo Sugestivo / Efímero
+                                      </h5>
+                                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                                        {isEphemeral
+                                          ? `Activa: la imagen se muestra borrosa y solo se revela por ${duration} segundos al tocarla.`
+                                          : 'Configura si esta foto es sugestiva para que requiera interacción con temporizador.'}
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateEphemeral(enlargedMediaUrl, !isEphemeral, duration)}
+                                      className={`py-2 px-3.5 rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
+                                        isEphemeral
+                                          ? 'bg-rose-500 hover:bg-rose-600 text-white shadow-rose-500/20'
+                                          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                                      }`}
+                                    >
+                                      <Flame className="w-3.5 h-3.5" />
+                                      {isEphemeral ? '🔥 Sugestiva Activa' : '⚡ Hacer Sugestiva'}
+                                    </button>
+                                  </div>
+
+                                  {isEphemeral && (
+                                    <div className="pt-2 border-t border-zinc-800 flex items-center justify-between gap-2">
+                                      <span className="text-[11px] text-zinc-400 font-semibold">Segundos de revelación:</span>
+                                      <div className="flex items-center gap-1.5">
+                                        {[5, 10, 15, 30].map((sec) => (
+                                          <button
+                                            key={sec}
+                                            type="button"
+                                            onClick={() => handleUpdateEphemeral(enlargedMediaUrl, true, sec)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                                              duration === sec
+                                                ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
+                                                : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700'
+                                            }`}
+                                          >
+                                            {sec}s
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {/* Sección Descripción */}
+                            <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                  <MessageSquare className="w-4 h-4 text-amber-400" />
+                                  Descripción individual de esta foto o video
+                                </h5>
+                                <span className="text-[10px] text-zinc-500">
+                                  Se muestra al publicar en Telegram y en la Mini App
+                                </span>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row gap-2">
+                                <input
+                                  type="text"
+                                  value={tempDescText}
+                                  onChange={(e) => setTempDescText(e.target.value)}
+                                  placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería negra..."
+                                  className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    await handleUpdateMediaDescription(enlargedMediaUrl, tempDescText);
+                                  }}
+                                  className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-all cursor-pointer shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center gap-1"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Guardar Descripción
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Acciones inferiores */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                              <div className="flex items-center gap-2">
+                                {editingProfile.photos && editingProfile.photos[0] !== enlargedMediaUrl && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      const currentList = editingProfile.photos || [];
+                                      const reordered = [enlargedMediaUrl, ...currentList.filter(p => p !== enlargedMediaUrl)];
+                                      setEditingProfile({ ...editingProfile, photos: reordered });
+                                      try {
+                                        await fetch(`/api/admin/profiles/${editingProfile.id}`, {
+                                          method: 'PUT',
+                                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                          body: JSON.stringify({ photos: reordered })
+                                        });
+                                        setMessage({ type: 'success', text: '⭐ Foto seleccionada como Portada Principal' });
+                                        fetchData();
+                                      } catch {
+                                        setMessage({ type: 'error', text: 'Error al cambiar foto de portada' });
+                                      }
+                                    }}
+                                    className="py-2 px-3 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  >
+                                    ⭐ Poner como Portada
+                                  </button>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const toRemove = enlargedMediaUrl;
+                                    setEnlargedMediaUrl(null);
+                                    handleRemovePhoto(toRemove);
+                                  }}
+                                  className="py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Eliminar Archivo
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => setEnlargedMediaUrl(null)}
+                                className="ml-auto py-2 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer"
+                              >
+                                Cerrar Vista
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
