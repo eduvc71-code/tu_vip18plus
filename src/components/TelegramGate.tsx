@@ -18,8 +18,8 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
         </div>
 
         <div className="space-y-2">
-          <span className="inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Contenido Exclusivo +18</span>
-          <h2 className="font-serif text-2xl font-bold tracking-tight text-white">Canal VIP Free (+18)</h2>
+          <span className="inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Contenido Exclusivo</span>
+          <h2 className="font-serif text-2xl font-bold tracking-tight text-white">Canal VIP Free</h2>
           <p className="mx-auto max-w-xs text-xs leading-relaxed text-zinc-400">Esta Mini App se abre desde Telegram o enlace autorizado.</p>
         </div>
 
@@ -29,7 +29,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
               onClick={onContinue}
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
-              <span>🔞 Continuar al Catálogo (+18)</span>
+              <span>Continuar al Catálogo</span>
             </button>
           )}
 

@@ -204,6 +204,16 @@ function initTables(database: Database): void {
   `);
 
   database.run(`
+    CREATE TABLE IF NOT EXISTS subscribers (
+      telegram_user_id TEXT PRIMARY KEY,
+      telegram_username TEXT,
+      telegram_first_name TEXT,
+      created_at TEXT NOT NULL,
+      last_seen TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
     CREATE TABLE IF NOT EXISTS invitation_codes (
       code TEXT PRIMARY KEY,
       telegram_user_id TEXT NOT NULL,
@@ -1053,4 +1063,27 @@ export async function deletePoll(id: string): Promise<boolean> {
   database.run("DELETE FROM poll_user_votes WHERE poll_id = ?", [id]);
   saveDb();
   return true;
+}
+
+export async function registerSubscriber(userId: string, username?: string, firstName?: string): Promise<void> {
+  const database = await getDb();
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO subscribers (telegram_user_id, telegram_username, telegram_first_name, created_at, last_seen)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(telegram_user_id) DO UPDATE SET
+      telegram_username = excluded.telegram_username,
+      telegram_first_name = excluded.telegram_first_name,
+      last_seen = excluded.last_seen
+  `, [String(userId), username || null, firstName || null, now, now]);
+  saveDb();
+}
+
+export async function getSubscribersCount(): Promise<number> {
+  const database = await getDb();
+  const res = database.exec("SELECT COUNT(*) as count FROM subscribers");
+  if (res.length > 0 && res[0].values.length > 0) {
+    return Number(res[0].values[0][0]) || 0;
+  }
+  return 0;
 }

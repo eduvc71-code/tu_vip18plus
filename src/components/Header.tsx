@@ -22,7 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
               </h1>
               <p className="flex items-center gap-1 text-[10px] text-zinc-400 leading-none mt-0.5">
                 <Shield className="h-3 w-3 shrink-0 text-amber-400" />
-                <span>Contenido Exclusivo +18</span>
+                <span>Contenido Exclusivo</span>
               </p>
             </div>
           </div>

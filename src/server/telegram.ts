@@ -30,6 +30,7 @@ import {
   getPublicCustomButtons,
   getAllCustomButtons,
   getAllPolls,
+  registerSubscriber
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
 import { uploadBufferToB2, isB2Configured, mediaUrl } from './b2Storage.js';
@@ -296,21 +297,6 @@ export async function updateBotMenuButton() {
   });
 }
 
-export async function registerBotCommands() {
-  return await callTelegramApi('setMyCommands', {
-    commands: [
-      { command: 'start', description: 'Abrir Catálogo VIP Free' },
-      { command: 'canal', description: 'Enlace al Canal Free oficial' },
-      { command: 'setcanal', description: 'Vincular canal Telegram (Admin)' },
-      { command: 'precios', description: 'Tarifas y suscripciones VIP' },
-      { command: 'info', description: 'Información y discreción' },
-      { command: 'id', description: 'Ver mi Telegram ID y estado del bot' },
-      { command: 'ayuda', description: 'Soporte y dudas frecuentes' },
-      { command: 'admin', description: 'Panel Web (Solo Administradora)' }
-    ]
-  });
-}
-
 export async function registerBotWebhook() {
   const { baseUrl, secret } = getBotConfig();
   if (!baseUrl || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
@@ -328,7 +314,6 @@ export async function registerBotWebhook() {
   }
 
   const res = await callTelegramApi('setWebhook', payload);
-  await registerBotCommands().catch(err => console.error('Error registrando comandos:', err));
   await updateBotMenuButton().catch(err => console.error('Error actualizando menu button:', err));
   return res;
 }
@@ -750,6 +735,9 @@ export async function processTelegramUpdate(update: any) {
       await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
       return;
     }
+    if (fromId) {
+      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
+    }
     await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
   }
@@ -850,6 +838,9 @@ export async function processTelegramUpdate(update: any) {
     if (normText === '/admin' || normText === '/panel' || normText === 'admin') {
       await sendMessage(chatId, `🔒 *Acceso Administrativo*\n\nTu Telegram ID es: \`${fromId}\`\n\nEste ID aún no está activado como Administradora.\n\n👉 *Para activarte de inmediato, envía en este chat:*\n\`/admin 2024\`  o  \`/admin admin123\``);
       return;
+    }
+    if (fromId) {
+      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
     }
     await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
@@ -1389,64 +1380,95 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 }
 
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
-  const { baseUrl, username, brandName } = getBotConfig();
+  const { baseUrl, username, brandName, channelId } = getBotConfig();
   const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
-  const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
+  const cleanChannelId = channelId ? channelId.replace(/^-100/, '') : '';
+  const storedChannelUsername = getSystemSetting('channel_username');
+  const channelUrl = storedChannelUsername 
+    ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
+    : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
 
-  const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE (+18)* 💎\n\n` +
+  const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
-    `Aquí podrás explorar avances exclusivos, teasers promocionales y acceder a la galería privada de contenido (+18).\n\n` +
-    `📲 *Enlace de Invitación Oficial:*\n` +
-    `👉 \`${inviteLink}\`\n\n` +
-    `👇 *Selecciona una opción:*`;
+    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al catálogo oficial sin censura.\n\n` +
+    `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
+
+  const inlineKeyboard: any[][] = [];
+  if (channelUrl) {
+    inlineKeyboard.push([
+      { text: '📢 Entrar al Canal Free Oficial', url: channelUrl }
+    ]);
+  }
+  inlineKeyboard.push([
+    { text: '💎 Abrir Mini App (Catálogo VIP)', web_app: { url: baseUrl } }
+  ]);
+  inlineKeyboard.push([
+    { text: '💰 Tarifas y Precios VIP', callback_data: 'client_cmd_precios' },
+    { text: 'ℹ️ Información', callback_data: 'client_cmd_info' }
+  ]);
+  inlineKeyboard.push([
+    { text: '❓ Ayuda y Soporte', callback_data: 'client_cmd_ayuda' }
+  ]);
+
+  const welcomeMediaUrl = getSystemSetting('welcome_media_url');
+  const welcomeMediaType = getSystemSetting('welcome_media_type');
+
+  if (welcomeMediaUrl) {
+    const isVideo = welcomeMediaType === 'video' || /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(welcomeMediaUrl);
+    const method = isVideo ? 'sendVideo' : 'sendPhoto';
+    const payloadKey = isVideo ? 'video' : 'photo';
+    const res = await callTelegramApi(method, {
+      chat_id: chatId,
+      [payloadKey]: welcomeMediaUrl,
+      caption: text,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+    if (res && res.ok) return res;
+  }
 
   return await sendMessage(chatId, text, {
     reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
-        ],
-        [
-          { text: '📢 Ver Canal Free', callback_data: 'client_cmd_canal' }
-        ],
-        [
-          { text: '💰 Tarifas y Precios', callback_data: 'client_cmd_precios' },
-          { text: 'ℹ️ Información VIP', callback_data: 'client_cmd_info' }
-        ],
-        [
-          { text: '❓ Ayuda y Soporte', callback_data: 'client_cmd_ayuda' }
-        ]
-      ]
+      inline_keyboard: inlineKeyboard
     }
   });
 }
 
 export async function sendClientCanal(chatId: string | number) {
   const { baseUrl, channelId } = getBotConfig();
-  const cleanChannelId = channelId.replace(/^-100/, '');
-  const channelUrl = `https://t.me/c/${cleanChannelId}/1`;
+  const cleanChannelId = channelId ? channelId.replace(/^-100/, '') : '';
+  const storedChannelUsername = getSystemSetting('channel_username');
+  const channelUrl = storedChannelUsername 
+    ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
+    : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
 
-  const text = `📢 *CANAL OFICIAL FREE (+18)* 📢\n\n` +
+  const text = `📢 *CANAL OFICIAL FREE* 📢\n\n` +
     `En nuestro canal compartimos previews, novedades y promociones especiales.\n\n` +
-    `👉 *Abre la Mini App para ver la galería completa sin censura:*`;
+    `👉 *Abre la Mini App para ver la galería completa:*`;
+
+  const inlineKeyboard: any[][] = [];
+  if (channelUrl) {
+    inlineKeyboard.push([
+      { text: '📢 Ir al Canal Telegram', url: channelUrl }
+    ]);
+  }
+  inlineKeyboard.push([
+    { text: '💎 Ver Catálogo VIP (Mini App)', web_app: { url: baseUrl } }
+  ]);
+  inlineKeyboard.push([
+    { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+  ]);
 
   return await sendMessage(chatId, text, {
     reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
-        ],
-        [
-          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
-        ]
-      ]
+      inline_keyboard: inlineKeyboard
     }
   });
 }
 
 export async function sendClientPrecios(chatId: string | number) {
   const { baseUrl } = getBotConfig();
-  const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP (+18)* 💰\n\n` +
+  const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP* 💰\n\n` +
     `✨ *¿Qué incluye la Suscripción VIP?*\n` +
     `• Acceso ilimitado a la galería privada completa (fotos y videos en alta definición).\n` +
     `• Contenido sugestivo y exclusivo sin censura.\n` +

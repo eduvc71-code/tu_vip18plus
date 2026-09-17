@@ -42,7 +42,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
           {modelName ? modelName.toUpperCase() : 'CANAL VIP FREE'}
         </h2>
         <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold text-center mb-4">
-          Galería Privada y Confidencial (+18)
+          Galería Privada y Confidencial
         </p>
 
         <label className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl cursor-pointer mb-4 hover:bg-amber-500/15 transition-colors">

@@ -216,7 +216,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
                 <span className="text-xs text-amber-300/90 font-semibold bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1">
                   <ShieldCheck className="w-3 h-3 text-amber-400" />
-                  +18 Contenido
+                  Contenido Exclusivo
                 </span>
               </div>
 

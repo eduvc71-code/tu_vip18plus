@@ -169,6 +169,8 @@ router.get('/info', (req: Request, res: Response) => {
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
     model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
     model_vip_link: getSystemSetting('model_vip_link') || '',
+    welcome_media_url: getSystemSetting('welcome_media_url') || '',
+    welcome_media_type: getSystemSetting('welcome_media_type') || '',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
 });
@@ -920,6 +922,44 @@ router.post('/admin/settings/pinned', requireAdminAuth, async (req: Request, res
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar mensaje fijado' });
+  }
+});
+
+// POST Upload Welcome Media (Photo or Video for Bot onboarding)
+router.post('/admin/settings/welcome-media', requireAdminAuth, upload.single('welcome_media'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No se envió ningún archivo de foto o video' });
+      return;
+    }
+    const config = getBotConfig();
+    const isVideo = req.file.mimetype.startsWith('video/');
+    const mediaType = isVideo ? 'video' : 'photo';
+    const mediaFileUrl = isB2Configured()
+      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'profiles'))
+      : saveLocalUpload(req.file, config.baseUrl);
+
+    saveSystemSetting('welcome_media_url', mediaFileUrl);
+    saveSystemSetting('welcome_media_type', mediaType);
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, `Foto/Video de bienvenida actualizado (${mediaType})`);
+    res.json({ success: true, welcome_media_url: mediaFileUrl, welcome_media_type: mediaType });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar foto/video de bienvenida', details: err?.message });
+  }
+});
+
+// DELETE Welcome Media
+router.delete('/admin/settings/welcome-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    saveSystemSetting('welcome_media_url', '');
+    saveSystemSetting('welcome_media_type', '');
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, 'Foto/Video de bienvenida eliminado');
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar foto/video de bienvenida' });
   }
 });
 
