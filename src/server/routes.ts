@@ -183,7 +183,8 @@ export async function processDueAutoReplies(): Promise<void> {
       }
 
       const qrUrl = getSystemSetting('qr_image_url');
-      const autoReplyText = `✨ *Tú • Espacio VIP (+18)* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
+      const brandTitle = getSystemSetting('model_display_name') || getBotConfig().brandName || 'IAM Danii VIP';
+      const autoReplyText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
       const delivery = qrUrl
         ? await sendPhotoToUser(request.telegram_user_id, qrUrl, autoReplyText)
         : await sendMessage(request.telegram_user_id, autoReplyText);
@@ -303,7 +304,8 @@ router.post('/requests', async (req: Request, res: Response) => {
 
     // Confirm only after the administrator has received the request.
     if (safeUserId) {
-      const brandTitle = profile.name ? `${profile.name} • Espacio VIP (+18)` : 'Canal VIP Free (+18)';
+      const publicName = getSystemSetting('model_display_name') || profile.name || 'IAM Danii';
+      const brandTitle = `${publicName} • Espacio VIP (+18)`;
       const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
       await sendMessage(safeUserId, userConfirmText);
       await scheduleAutoReply(request.id);

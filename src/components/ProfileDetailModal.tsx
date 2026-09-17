@@ -97,14 +97,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               }}
             />
 
-            {isCurrentEphemeral && !seenEphemeralUrls.has(currentMediaUrl) && (
-              <div className="absolute top-4 left-4 z-20 pointer-events-none">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-600/90 text-white shadow-xl backdrop-blur-sm">
-                  <Flame className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                  Sugestiva ({currentDuration}s)
-                </span>
-              </div>
-            )}
+
 
             {media.length > 1 && (
               <>

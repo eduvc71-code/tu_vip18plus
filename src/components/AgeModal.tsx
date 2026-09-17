@@ -38,8 +38,8 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
           <Sparkles className="w-6 h-6 animate-pulse" />
         </div>
 
-        <h2 className="text-lg font-extrabold text-center tracking-tight text-white mb-1">
-          {modelName ? `${modelName.toUpperCase()} • ESPACIO VIP (+18)` : 'CANAL VIP FREE (+18)'}
+        <h2 className="text-lg font-extrabold text-center tracking-tight text-white mb-1 truncate px-2">
+          {modelName ? modelName.toUpperCase() : 'CANAL VIP FREE'}
         </h2>
         <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold text-center mb-4">
           Galería Privada y Confidencial

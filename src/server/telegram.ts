@@ -281,8 +281,9 @@ export async function syncProfileToChannel(profileId: string, performer: string 
 
   const statusBadge = profile.status === 'disponible' ? '🟢 DISPONIBLE' : profile.status === 'ocupada' ? '🔴 OCUPADA' : '⏸️ PAUSADA';
 
+  const { brandName } = getBotConfig();
   const caption = `
-✨ *TÚ • ESPACIO VIP (+18)* ✨
+✨ *${brandName || 'IAM DANII VIP'}* ✨
 
 👤 *Nombre*: ${profile.name}
 🔞 *Edad*: ${profile.age} años (Verificada +18)
@@ -1362,13 +1363,14 @@ async function handleClientAvailabilityRequest(message: any, profileId: string) 
   });
 
   // Reply to Client
+  const { brandName } = getBotConfig();
   const clientReply = `
 ✨ *SOLICITUD DE DISPONIBILIDAD REGISTRADA* ✨
 
 Perfil consultado: *${profile.name}*
 Precio VIP: *Bs. ${profile.rate_bs}*
 
-📌 Tu solicitud ha sido notificada directamente a la Administradora oficial de *Tú • Espacio VIP (+18)*. Te responderemos por este mismo medio a la brevedad.
+📌 Tu solicitud ha sido notificada directamente a la Administradora oficial de *${brandName || 'IAM DANII VIP'}*. Te responderemos por este mismo medio a la brevedad.
 
 ⚠️ *ADVERTENCIA DE SEGURIDAD*:
 No realice ningún tipo de pago o transferencia sin antes recibir confirmación oficial y directa por parte de la Administradora.

@@ -57,9 +57,9 @@ export const ProtectedMedia: React.FC<ProtectedMediaProps> = ({
         />
       )}
 
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.18] select-none">
-        <span className="-rotate-12 text-sm sm:text-base font-black uppercase tracking-[0.25em] text-white drop-shadow-lg">
-          {modelName ? (modelName.toUpperCase().includes('VIP') ? modelName : `${modelName} · VIP`) : 'IAM Danii · VIP'}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20 select-none">
+        <span className="-rotate-12 text-center text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white drop-shadow-lg px-4">
+          Vista Protegida · Contenido Privado {modelName ? modelName.replace(/_/g, ' ') : 'IAM Danii'}
         </span>
       </div>
     </div>

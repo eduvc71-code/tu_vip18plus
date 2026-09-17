@@ -463,15 +463,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* ── Header ── */}
         <div className="p-3 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-              <Lock className="w-5 h-5" />
+          <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
+              <Lock className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight font-serif">
-                Panel Administrativo — {formData.name || modelDisplayName || 'VIP'}
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight font-serif truncate">
+                Panel Administrativo — {modelDisplayName || formData.name || 'IAM Danii'}
               </h2>
-              <p className="text-[11px] text-zinc-400">Gestión de contenido y atención privada</p>
+              <p className="text-[11px] text-zinc-400 truncate">Gestión de contenido y atención privada</p>
             </div>
           </div>
 
@@ -692,16 +692,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                         <X className="w-3.5 h-3.5" />
                                       </button>
 
-                                      {isEphemeral ? (
-                                        <span className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white shadow-md">
-                                          <Flame className="w-3 h-3 text-amber-300" />
-                                          {duration}s
-                                        </span>
-                                      ) : (
-                                        idx === 0 && (
-                                          <span className="absolute bottom-1.5 left-1.5 text-[9px] text-white bg-amber-600/90 px-1.5 py-0.5 rounded font-bold uppercase">Más reciente</span>
-                                        )
-                                      )}
                                     </div>
 
                                     {/* Ephemeral Controller Bar */}

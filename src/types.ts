@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for Tú • Espacio VIP (+18)
+ * Shared type definitions for IAM Danii VIP
  */
 
 export type ProfileStatus = 'borrador' | 'disponible' | 'ocupada' | 'pausada' | 'retirada' | 'activa';

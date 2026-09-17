@@ -12,11 +12,10 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
   <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-2xl backdrop-blur-xl">
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
       <div className="flex h-20 items-center justify-between">
-        <div className="flex items-center gap-3.5">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="font-serif text-xl font-bold tracking-tight text-white">{modelName}</h1>
-              <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-400">VIP</span>
+        <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="font-serif text-lg sm:text-xl font-bold tracking-tight text-white truncate max-w-[220px] sm:max-w-md">{modelName}</h1>
             </div>
             <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-zinc-400">
               <Shield className="h-3.5 w-3.5 shrink-0 text-amber-400" />

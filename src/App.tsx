@@ -216,11 +216,11 @@ export default function App() {
                     </span>
                   )}
                 </div>
-                <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif">
+                <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif truncate">
                   Galería Privada de {displayName}
                 </h2>
-                <p className="text-xs text-zinc-300 mt-0.5">
-                  Bienvenido a mi espacio VIP. Suscripciones y contenido exclusivo.
+                <p className="text-xs text-zinc-300 mt-0.5 truncate">
+                  Suscripciones y contenido exclusivo.
                 </p>
                 {modelVipLink && (
                   <a

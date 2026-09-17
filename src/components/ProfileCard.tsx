@@ -159,14 +159,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               onExpired={() => handleMediaExpired(selectedMedia)}
               onRequestVip={() => onRequestAvailability(profile)}
             />
-            {isCurrentEphemeral && !seenEphemeralUrls.has(selectedMedia) && (
-              <div className="absolute bottom-2 left-2 z-20 pointer-events-none">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-600/90 text-white shadow-lg backdrop-blur-sm">
-                  <Flame className="w-3 h-3 text-amber-300" />
-                  Sugestiva ({currentDuration}s)
-                </span>
-              </div>
-            )}
+
           </div>
 
           {visibleMedia.length > 1 && (
