@@ -39,7 +39,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 export function getBotConfig() {
   const ACTIVE_BOT_TOKEN = '8949665976:AAFp1VoeLwPTXDCfvED1g0PAFJgAZAr56Sw';
   let token = (process.env.BOT_TOKEN || '').trim();
-  if (!token || token.startsWith('8695899086') || token.startsWith('8987474220') || token.includes('AAFa9l') || token.includes('AAEDUH')) {
+  if (!token || !token.startsWith('8949665976')) {
     token = ACTIVE_BOT_TOKEN;
   }
   const storedUsername = getSystemSetting('bot_username');

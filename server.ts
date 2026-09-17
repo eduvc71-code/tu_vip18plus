@@ -69,6 +69,7 @@ async function startServer() {
 
   app.listen(PORT, HOST, () => {
     startAutoReplyWorker();
+    console.log(`[Telegram Bot] Bot Token ID: ${getBotConfig().token.split(':')[0]}`);
     console.log(`[Telegram Bot] Administradoras configuradas: ${getBotConfig().adminIds.length}`);
     console.log(`[Tú • Espacio VIP (+18)] =============================================`);
     console.log(`[Tú • Espacio VIP (+18)] 🌐 Servidor activo en: http://localhost:${PORT}`);
