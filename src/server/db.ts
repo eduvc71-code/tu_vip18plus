@@ -84,6 +84,9 @@ function initTables(database: Database): void {
   if (!existingProfileCols.has('reactions')) {
     database.run(`ALTER TABLE profiles ADD COLUMN reactions TEXT`);
   }
+  if (!existingProfileCols.has('media_descriptions')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_descriptions TEXT`);
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS profile_reactions (
@@ -188,21 +191,19 @@ function seedInitialData(database: Database): void {
         age: 21,
         zone: 'Contenido +18 VIP',
         description: 'Modelo exclusiva y creadora de contenido VIP (+18). Acceso confidencial a galería privada, packs exclusivos y atención directa sin intermediarios ni reservas.',
-        rate_bs: 450,
+        rate_bs: 0,
         commission_bs: 0,
-        photos: [
-          'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
-          'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=800&q=80'
-        ],
+        photos: [],
         ephemeral_config: {},
+        media_descriptions: {},
         status: 'disponible',
         priority_order: 1
       }
     ];
 
     const stmt = database.prepare(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, media_descriptions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
     `);
 
     for (const p of sampleProfiles) {
@@ -219,7 +220,8 @@ function seedInitialData(database: Database): void {
         p.status!,
         now,
         now,
-        p.priority_order || 0
+        p.priority_order || 0,
+        JSON.stringify(p.media_descriptions || {})
       ]);
     }
     stmt.free();
@@ -289,6 +291,11 @@ export async function getAllProfiles(): Promise<Profile[]> {
     } catch {
       obj.ephemeral_config = {};
     }
+    try {
+      obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
+    } catch {
+      obj.media_descriptions = {};
+    }
     obj.reactions = parseReactions(obj.reactions);
     return obj as Profile;
   });
@@ -315,6 +322,11 @@ export async function getPublicProfiles(): Promise<Profile[]> {
     } catch {
       obj.ephemeral_config = {};
     }
+    try {
+      obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
+    } catch {
+      obj.media_descriptions = {};
+    }
     obj.reactions = parseReactions(obj.reactions);
     return obj as Profile;
   });
@@ -340,10 +352,17 @@ export async function getProfileById(id: string): Promise<Profile | null> {
     } catch {
       ephemeralParsed = {};
     }
+    let mediaDescParsed: any = {};
+    try {
+      mediaDescParsed = row.media_descriptions ? JSON.parse(row.media_descriptions) : {};
+    } catch {
+      mediaDescParsed = {};
+    }
     return {
       ...row,
       photos: photosParsed,
       ephemeral_config: ephemeralParsed,
+      media_descriptions: mediaDescParsed,
       reactions: parseReactions(row.reactions)
     } as unknown as Profile;
   }
@@ -378,10 +397,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedReactions = profile.reactions !== undefined
       ? JSON.stringify(profile.reactions)
       : (existing.reactions ? JSON.stringify(existing.reactions) : JSON.stringify({ likes: 0, hearts: 0, stars: 0, fires: 0 }));
+    const updatedMediaDesc = profile.media_descriptions !== undefined
+      ? JSON.stringify(profile.media_descriptions)
+      : (existing.media_descriptions ? JSON.stringify(existing.media_descriptions) : '{}');
 
     database.run(`
       UPDATE profiles
-      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?
+      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -397,13 +419,15 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedTgMsgId,
       updatedPriority,
       updatedReactions,
+      updatedMediaDesc,
       profile.id
     ]);
   } else {
     const initialReactions = JSON.stringify(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 });
+    const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -419,7 +443,8 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       now,
       profile.telegram_message_id || null,
       profile.priority_order || 0,
-      initialReactions
+      initialReactions,
+      initialMediaDesc
     ]);
   }
 

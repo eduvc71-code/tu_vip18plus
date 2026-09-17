@@ -117,16 +117,14 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   };
 
   const media = useMemo(() => {
-    if (!profile?.photos?.length) {
-      return ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
-    }
-    const filtered = profile.photos.filter(url => !seenEphemeralUrls.has(url));
-    return filtered.length > 0 ? filtered : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+    if (!profile?.photos?.length) return [];
+    return profile.photos.filter(url => !seenEphemeralUrls.has(url));
   }, [profile?.photos, seenEphemeralUrls]);
 
   if (!profile) return null;
 
-  const currentMediaUrl = media[activePhotoIdx] || media[0];
+  const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
+  const currentItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description;
   const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[currentMediaUrl]?.enabled);
   const currentDuration = profile.ephemeral_config?.[currentMediaUrl]?.duration_seconds || 5;
 
@@ -148,20 +146,28 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           
           {/* Photo Lightbox Section */}
           <div className="relative bg-zinc-950 min-h-[320px] md:min-h-[480px] flex items-center justify-center">
-            <EphemeralViewer
-              src={currentMediaUrl}
-              alt={`Contenido de ${modelName}`}
-              modelName={modelName}
-              className="w-full h-full object-cover max-h-[500px]"
-              isEphemeral={isCurrentEphemeral}
-              durationSeconds={currentDuration}
-              isSeen={seenEphemeralUrls.has(currentMediaUrl)}
-              onExpired={() => handleMediaExpired(currentMediaUrl)}
-              onRequestVip={() => {
-                onClose();
-                onRequestAvailability(profile);
-              }}
-            />
+            {media.length === 0 ? (
+              <div className="h-full w-full flex flex-col items-center justify-center p-8 text-center bg-zinc-950">
+                <ShieldCheck className="w-12 h-12 text-amber-400/60 mb-3" />
+                <p className="text-sm font-bold text-zinc-300">Contenido Próximamente</p>
+                <p className="text-xs text-zinc-500 mt-1 max-w-xs">El material exclusivo de esta sesión se publicará en breve.</p>
+              </div>
+            ) : (
+              <EphemeralViewer
+                src={currentMediaUrl}
+                alt={`Contenido de ${modelName}`}
+                modelName={modelName}
+                className="w-full h-full object-cover max-h-[500px]"
+                isEphemeral={isCurrentEphemeral}
+                durationSeconds={currentDuration}
+                isSeen={seenEphemeralUrls.has(currentMediaUrl)}
+                onExpired={() => handleMediaExpired(currentMediaUrl)}
+                onRequestVip={() => {
+                  onClose();
+                  onRequestAvailability(profile);
+                }}
+              />
+            )}
 
 
 
@@ -331,14 +337,14 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     Detalles del Contenido Exclusivo
                   </h3>
                   <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium">
-                    💎 VIP Pack
+                    {media.length > 0 ? `Archivo ${activePhotoIdx + 1} de ${media.length}` : '💎 VIP Pack'}
                   </span>
                 </div>
 
                 <div className="bg-gradient-to-b from-zinc-950/90 to-zinc-900/60 p-4 rounded-2xl border border-zinc-800/90 shadow-inner">
-                  {profile.description ? (
+                  {currentItemDescription ? (
                     <p className="text-xs text-zinc-200 leading-relaxed whitespace-pre-line font-normal">
-                      {profile.description}
+                      {currentItemDescription}
                     </p>
                   ) : (
                     <p className="text-xs text-zinc-400 italic">

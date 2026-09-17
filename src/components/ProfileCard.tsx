@@ -46,11 +46,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   };
 
   const allMedia = useMemo(() => {
-    const raw = profile.photos?.length
-      ? profile.photos
-      : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
-    const filtered = raw.filter(url => !seenEphemeralUrls.has(url));
-    return filtered.length > 0 ? filtered : ['https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80'];
+    const raw = profile.photos || [];
+    return raw.filter(url => !seenEphemeralUrls.has(url));
   }, [profile.photos, seenEphemeralUrls]);
 
   const images = useMemo(() => allMedia.filter(item => !isVideoUrl(item)), [allMedia]);
@@ -150,19 +147,27 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[260px] sm:max-h-[300px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
             title="Toca para ver en tamaño completo"
           >
-            <EphemeralViewer
-              src={selectedMedia}
-              alt={`Contenido de ${modelName}`}
-              modelName={modelName}
-              autoPlay={isVideoUrl(selectedMedia)}
-              showControls={false}
-              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-              isEphemeral={isCurrentEphemeral}
-              durationSeconds={currentDuration}
-              isSeen={seenEphemeralUrls.has(selectedMedia)}
-              onExpired={() => handleMediaExpired(selectedMedia)}
-              onRequestVip={() => onRequestAvailability(profile)}
-            />
+            {allMedia.length === 0 ? (
+              <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950/80 border border-dashed border-zinc-800 rounded-2xl">
+                <ShieldCheck className="w-10 h-10 text-amber-400/60 mb-2" />
+                <p className="text-xs font-bold text-zinc-300">Contenido Próximamente</p>
+                <p className="text-[11px] text-zinc-500 mt-1">El material exclusivo se publicará en breve.</p>
+              </div>
+            ) : (
+              <EphemeralViewer
+                src={selectedMedia}
+                alt={`Contenido de ${modelName}`}
+                modelName={modelName}
+                autoPlay={isVideoUrl(selectedMedia)}
+                showControls={false}
+                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                isEphemeral={isCurrentEphemeral}
+                durationSeconds={currentDuration}
+                isSeen={seenEphemeralUrls.has(selectedMedia)}
+                onExpired={() => handleMediaExpired(selectedMedia)}
+                onRequestVip={() => onRequestAvailability(profile)}
+              />
+            )}
 
             <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-950/80 text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-md">

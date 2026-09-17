@@ -30,6 +30,7 @@ export interface Profile {
   commission_bs: number; // 0 (sin comisión)
   photos: string[]; // URLs or paths to uploaded images and videos
   ephemeral_config?: EphemeralMediaConfig;
+  media_descriptions?: Record<string, string>;
   status: ProfileStatus;
   created_at: string;
   updated_at: string;

@@ -65,11 +65,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     age: 18,
     zone: 'Contenido +18 VIP',
     description: '',
-    rate_bs: 450,
-    commission_bs: 50,
+    rate_bs: 0,
+    commission_bs: 0,
     status: 'borrador' as const,
     priority_order: 0
   });
+
+  const [publishing, setPublishing] = useState(false);
+  const [editingDescForUrl, setEditingDescForUrl] = useState<string | null>(null);
+  const [tempDescText, setTempDescText] = useState<string>('');
 
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
@@ -283,9 +287,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             setSelectedPhotoFiles(null);
           } catch { /* Ignore photo error */ }
         }
-        setMessage({ type: 'success', text: `Perfil ${isEdit ? 'actualizado' : 'creado'} y contenido multimedia vinculado con éxito.` });
-        setEditingProfile(null);
-        setFormData({ name: '', age: 18, zone: 'Contenido +18 VIP', description: '', rate_bs: 450, commission_bs: 50, status: 'borrador', priority_order: 0 });
+        setMessage({ type: 'success', text: `Perfil ${isEdit ? 'actualizado' : 'creado'} y guardado con éxito.` });
+        if (data.profile) {
+          setEditingProfile(data.profile);
+          setFormData({
+            name: data.profile.name || '',
+            age: data.profile.age || 18,
+            zone: data.profile.zone || 'Contenido +18 VIP',
+            description: data.profile.description || '',
+            rate_bs: data.profile.rate_bs ?? 0,
+            commission_bs: 0,
+            status: data.profile.status || 'borrador',
+            priority_order: data.profile.priority_order || 0
+          });
+        }
         fetchData();
         setActiveTab('profiles');
       } else {
@@ -465,6 +480,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       setMessage({ type: 'error', text: 'Error al actualizar configuración efímera' });
+    }
+  };
+
+  const handlePublishToChannel = async (profileId?: string) => {
+    const targetId = profileId || editingProfile?.id || profiles[0]?.id;
+    if (!targetId) {
+      setMessage({ type: 'error', text: 'No hay perfil seleccionado para publicar en el canal.' });
+      return;
+    }
+    setPublishing(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${targetId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: `🚀 ¡Publicado con éxito en el canal de Telegram con botones de reacciones sincronizados! (ID mensaje: #${data.telegramMessageId || 'OK'})`
+        });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Error al sincronizar con el canal de Telegram' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al publicar en Telegram' });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: string) => {
+    if (!editingProfile) return;
+    const currentDesc = { ...(editingProfile.media_descriptions || {}) };
+    if (descriptionText.trim()) {
+      currentDesc[photoUrl] = descriptionText.trim();
+    } else {
+      delete currentDesc[photoUrl];
+    }
+    const updatedProfile = { ...editingProfile, media_descriptions: currentDesc };
+    setEditingProfile(updatedProfile);
+    try {
+      const res = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ media_descriptions: currentDesc })
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Descripción de este archivo guardada con éxito.' });
+        setEditingDescForUrl(null);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al guardar descripción del archivo' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al guardar descripción' });
     }
   };
 
@@ -665,6 +737,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {editingProfile ? `Configurar Perfil VIP: ${editingProfile.name}` : 'Crear Perfil VIP'}
                 </h3>
 
+                {/* BANNER DE PUBLICACIÓN EN CANAL */}
+                <div className="p-4 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-zinc-950 border-2 border-amber-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+                  <div className="space-y-0.5">
+                    <h4 className="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+                      <Send className="w-4 h-4" /> Publicar en Canal VIP Oficial
+                    </h4>
+                    <p className="text-[11px] text-zinc-300">
+                      Sincroniza y publica el contenido en Telegram con los botones de reacciones (❤️, ⭐, 🔥, 👍) en tiempo real.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handlePublishToChannel()}
+                    disabled={publishing || loading}
+                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs tracking-wide transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer shrink-0 disabled:opacity-50"
+                  >
+                    <Send className="w-4 h-4" />
+                    {publishing ? 'Publicando...' : '🚀 Publicar Ahora en Canal VIP'}
+                  </button>
+                </div>
+
                 <form onSubmit={handleSaveProfile} className="space-y-4 text-xs">
                   <div>
                     <label className="block text-zinc-400 mb-1 font-semibold">Nombre Público *</label>
@@ -762,13 +855,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </p>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs transition-all shadow-md cursor-pointer disabled:opacity-60"
-                  >
-                    {editingProfile ? 'Guardar Cambios' : 'Crear Perfil'}
-                  </button>
+                  <div className="flex flex-col sm:flex-row gap-2.5">
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs transition-all shadow-md cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      {editingProfile ? 'Guardar Cambios' : 'Crear Perfil'}
+                    </button>
+
+                    {editingProfile && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await handlePublishToChannel(editingProfile.id);
+                        }}
+                        disabled={publishing || loading}
+                        className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                      >
+                        <Send className="w-4 h-4" />
+                        {publishing ? 'Publicando...' : '🚀 Guardar y Publicar en Canal'}
+                      </button>
+                    )}
+                  </div>
                 </form>
 
                 {/* Media Gallery Manager */}
@@ -851,6 +961,55 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                           </div>
                                         </div>
                                       )}
+                                      {/* Per-File Description Controller */}
+                                      <div className="pt-1.5 border-t border-zinc-800/80 space-y-1">
+                                        {editingDescForUrl === photoUrl ? (
+                                          <div className="space-y-1.5">
+                                            <textarea
+                                              rows={2}
+                                              value={tempDescText}
+                                              onChange={(e) => setTempDescText(e.target.value)}
+                                              placeholder="Descripción para este archivo..."
+                                              className="w-full p-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-[10px] resize-none focus:outline-none focus:border-amber-500"
+                                            />
+                                            <div className="flex items-center gap-1 justify-end">
+                                              <button
+                                                type="button"
+                                                onClick={() => setEditingDescForUrl(null)}
+                                                className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[9px] font-bold cursor-pointer"
+                                              >
+                                                Cancelar
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleUpdateMediaDescription(photoUrl, tempDescText)}
+                                                className="px-2.5 py-0.5 rounded bg-amber-500 hover:bg-amber-600 text-zinc-950 text-[9px] font-bold cursor-pointer"
+                                              >
+                                                Guardar
+                                              </button>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-1">
+                                            {editingProfile.media_descriptions?.[photoUrl] && (
+                                              <p className="text-[10px] text-zinc-300 italic line-clamp-2 bg-zinc-900/60 p-1 rounded border border-zinc-800">
+                                                "{editingProfile.media_descriptions[photoUrl]}"
+                                              </p>
+                                            )}
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingDescForUrl(photoUrl);
+                                                setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
+                                              }}
+                                              className="w-full py-1 px-1.5 rounded-lg text-[9px] font-semibold bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/60 flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                                            >
+                                              <Edit className="w-3 h-3 text-amber-400" />
+                                              {editingProfile.media_descriptions?.[photoUrl] ? 'Editar Descripción' : '➕ Descripción'}
+                                            </button>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );

@@ -289,6 +289,9 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   const statusBadge = profile.status === 'disponible' ? '🟢 DISPONIBLE' : profile.status === 'ocupada' ? '🔴 OCUPADA' : '⏸️ PAUSADA';
 
   const { brandName } = getBotConfig();
+  const primaryPhoto = profile.photos && profile.photos.length > 0 ? profile.photos[0] : null;
+  const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || 'Contenido VIP Exclusivo';
+
   const caption = `
 ✨ *${brandName || 'IAM DANII VIP'}* ✨
 
@@ -298,7 +301,7 @@ export async function syncProfileToChannel(profileId: string, performer: string 
 📌 *Estado*: ${statusBadge}
 
 📝 *Descripción*:
-${profile.description}
+${activeDesc}
 
 ─────────────────────────
 ⚠️ *AVISO DE DISCRECIÓN Y SEGURIDAD*:
@@ -329,17 +332,22 @@ ${profile.description}
     ]
   };
 
-  const primaryPhoto = profile.photos && profile.photos.length > 0 ? profile.photos[0] : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
-
   // If already published, attempt edit first
   if (profile.telegram_message_id) {
-    const editRes = await callTelegramApi('editMessageCaption', {
+    const editMethod = primaryPhoto ? 'editMessageCaption' : 'editMessageText';
+    const editPayload: any = {
       chat_id: channelId,
       message_id: profile.telegram_message_id,
-      caption,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup
-    });
+    };
+    if (primaryPhoto) {
+      editPayload.caption = caption;
+    } else {
+      editPayload.text = caption;
+    }
+
+    const editRes = await callTelegramApi(editMethod, editPayload);
 
     if (editRes.ok) {
       await addAuditLog('SYNC_CHANNEL', performer, `Publicación de ${profile.name} actualizada en el canal`, profileId);
@@ -352,14 +360,24 @@ ${profile.description}
     }
   }
 
-  // Publish new photo message
-  const sendRes = await callTelegramApi('sendPhoto', {
-    chat_id: channelId,
-    photo: primaryPhoto,
-    caption,
-    parse_mode: 'Markdown',
-    reply_markup: replyMarkup
-  });
+  // Publish new message (photo or text)
+  let sendRes;
+  if (primaryPhoto) {
+    sendRes = await callTelegramApi('sendPhoto', {
+      chat_id: channelId,
+      photo: primaryPhoto,
+      caption,
+      parse_mode: 'Markdown',
+      reply_markup: replyMarkup
+    });
+  } else {
+    sendRes = await callTelegramApi('sendMessage', {
+      chat_id: channelId,
+      text: caption,
+      parse_mode: 'Markdown',
+      reply_markup: replyMarkup
+    });
+  }
 
   if (sendRes.ok && sendRes.result?.message_id) {
     const newMsgId = sendRes.result.message_id;
@@ -921,7 +939,7 @@ async function getTelegramFileUrl(fileId: string): Promise<string> {
     }
     return downloadUrl;
   }
-  return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=800&q=80';
+  return '';
 }
 
 async function sendBackupModeInstructions(chatId: string | number, userId: string) {
