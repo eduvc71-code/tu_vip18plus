@@ -526,18 +526,18 @@ export async function processTelegramUpdate(update: any) {
     const { baseUrl, username } = getBotConfig();
     const cleanUsername = username || process.env.BOT_USERNAME || 'vip_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
-    const msg = `💎 *TÚ VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
+    const msg = `💎 *IAM DANII VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Bienvenido al canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
       `📲 *ENLACE DE INVITACIÓN DIRECTA AL BOT:*\n` +
       `👉 \`${inviteLink}\`\n\n` +
-      `_Trato directo, discreto y 100% confidencial (+18). Pulsa el botón "Ver Catálogo VIP" en el menú inferior para abrir la galería._`;
+      `_Trato directo, discreto y 100% confidencial (+18). Pulsa el botón "Ver Canal VIP Free" en el menú inferior para abrir la galería._`;
 
     const res = await sendMessage(chatId, msg);
     if (res && res.result && res.result.message_id) {
       await pinChatMessage(chatId, res.result.message_id);
     }
     await updateBotMenuButton();
-    await sendMessage(chatId, `✅ *Mensaje anclado en Telegram y botón "Ver Catálogo" sincronizado con la web actual.*`);
+    await sendMessage(chatId, `✅ *Mensaje anclado en Telegram y botón "Ver Canal VIP Free" sincronizado con la web actual.*`);
     return;
   }
 
