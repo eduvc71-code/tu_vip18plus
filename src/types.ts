@@ -13,6 +13,13 @@ export interface EphemeralMediaConfig {
   };
 }
 
+export interface ProfileReactions {
+  likes: number;   // 👍 Likes
+  hearts: number;  // ❤️ Corazones
+  stars: number;   // ⭐ Estrellas
+  fires: number;   // 🔥 Fuego
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -28,6 +35,7 @@ export interface Profile {
   updated_at: string;
   telegram_message_id?: number | null;
   priority_order: number;
+  reactions?: ProfileReactions;
 }
 
 export type RequestStatus = 'pendiente' | 'qr_enviado' | 'auto_respondida' | 'confirmado' | 'rechazado' | 'completado' | 'fallida' | 'comision_pagada';

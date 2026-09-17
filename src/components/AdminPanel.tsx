@@ -25,6 +25,7 @@ import {
   Webhook,
   MessageSquare,
   Flame,
+  Sparkles,
   HardDrive,
   FileVideo,
   FileImage,
@@ -667,13 +668,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-zinc-400 mb-1 font-semibold">Descripción Pública</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-zinc-300 font-semibold flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        Descripción del Contenido VIP (Publicación y Bot)
+                      </label>
+                      <span className="text-[10px] text-amber-400/90 font-medium">
+                        Visible en visor al reaccionar
+                      </span>
+                    </div>
                     <textarea
                       rows={3}
                       value={formData.description}
+                      placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda... 💫 15 fotos + 2 videos HD. Esta descripción se publicará en Telegram con reacciones y se organizará de forma elegante al hacer click en la Mini App."
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:border-amber-500/50 resize-none transition-colors"
+                      className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 resize-none transition-colors text-xs leading-relaxed"
                     />
+                    <p className="mt-1 text-[10px] text-zinc-500">
+                      💡 <strong>Organización VIP:</strong> En la Mini App solo se mostrará cuando el usuario toque para ver detalles y reaccionar (❤️, ⭐, 🔥, 👍). En Telegram se publicará con los botones interactivos sincronizados.
+                    </p>
                   </div>
 
                   <div className="pt-3 border-t border-zinc-900 space-y-3">

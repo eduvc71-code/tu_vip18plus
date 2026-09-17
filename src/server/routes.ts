@@ -27,7 +27,9 @@ import {
   getSyncErrors,
   addAuditLog,
   getSystemSetting,
-  saveSystemSetting
+  saveSystemSetting,
+  toggleProfileReaction,
+  getUserReactions
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -36,7 +38,9 @@ import {
   getBotConfig,
   verifyTelegramWebAppData,
   sendMessage,
-  sendPhotoToUser
+  sendPhotoToUser,
+  updateTelegramMessageReactions,
+  onReactionUpdated
 } from './telegram.js';
 
 export const router = express.Router();
@@ -54,6 +58,12 @@ export function broadcastEvent(eventType: string, data: any) {
     }
   }
 }
+
+// Sincronización en vivo de reacciones hacia los clientes SSE de la Mini App
+onReactionUpdated(({ profileId, reactions }) => {
+  broadcastEvent('REACTION_UPDATED', { profileId, reactions });
+  broadcastEvent('PROFILE_UPDATED', { id: profileId, reactions });
+});
 
 // Multer storage configuration for photo uploads
 const uploadDir = path.join(process.cwd(), 'public', 'uploads');
@@ -196,6 +206,56 @@ router.get('/profiles/:id', async (req: Request, res: Response) => {
     res.json(profile);
   } catch (err: any) {
     res.status(500).json({ error: 'Error al consultar perfil' });
+  }
+});
+
+// POST Toggle Reaction for Profile (from Mini App)
+router.post('/profiles/:id/react', async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { type, user_id } = req.body;
+    if (!type || !['like', 'heart', 'star', 'fire'].includes(type)) {
+      res.status(400).json({ error: 'Tipo de reacción inválido (like, heart, star, fire)' });
+      return;
+    }
+
+    const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'client_anon';
+    const effectiveUserId = user_id ? String(user_id) : `web_${clientIp.replace(/[^a-zA-Z0-9]/g, '_').slice(-16)}`;
+
+    const { profile, userReacted } = await toggleProfileReaction(profileId, effectiveUserId, type as any);
+
+    // Sync to Telegram channel message reply markup
+    void updateTelegramMessageReactions(profileId);
+
+    // Broadcast live update to all connected Mini App clients
+    broadcastEvent('REACTION_UPDATED', { profileId, reactions: profile.reactions });
+    broadcastEvent('PROFILE_UPDATED', profile);
+
+    res.json({ success: true, reactions: profile.reactions, userReacted });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar reacción', details: err?.message });
+  }
+});
+
+// GET Reactions for Profile
+router.get('/profiles/:id/reactions', async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const userId = typeof req.query.user_id === 'string' ? req.query.user_id : '';
+    const userReactions = userId ? await getUserReactions(profileId, userId) : [];
+
+    res.json({
+      reactions: profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 },
+      user_reactions: userReactions
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al consultar reacciones' });
   }
 });
 

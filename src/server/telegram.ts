@@ -24,6 +24,7 @@ import {
   addAuditLog,
   addSyncError,
   getSystemSetting,
+  toggleProfileReaction,
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
 import { uploadBufferToB2, isB2Configured } from './b2Storage.js';
@@ -308,8 +309,17 @@ ${profile.description}
   const webUrl = `${baseUrl}/#profile-${profile.id}`;
   const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
 
+  const reactions = profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 };
+  const reactionRow = [
+    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
+    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
+    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
+    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` }
+  ];
+
   const replyMarkup = {
     inline_keyboard: [
+      reactionRow,
       [
         { text: '📱 Solicitar Disponibilidad', url: reqUrl }
       ],
@@ -360,6 +370,65 @@ ${profile.description}
     const errorMsg = sendRes.description || 'Error al publicar foto en canal Telegram';
     await addSyncError(profileId, 'SEND_PHOTO_CHANNEL', errorMsg);
     return { success: false, message: `Error en Telegram: ${errorMsg}` };
+  }
+}
+
+type ReactionListener = (event: { profileId: string; reactions: any }) => void;
+const reactionListeners: Set<ReactionListener> = new Set();
+
+export function onReactionUpdated(listener: ReactionListener) {
+  reactionListeners.add(listener);
+  return () => reactionListeners.delete(listener);
+}
+
+export function notifyReactionListeners(data: { profileId: string; reactions: any }) {
+  for (const listener of reactionListeners) {
+    try {
+      listener(data);
+    } catch (e) {
+      console.error('Error notifying reaction listener:', e);
+    }
+  }
+}
+
+export async function updateTelegramMessageReactions(profileId: string): Promise<boolean> {
+  const { channelId, username, baseUrl } = getBotConfig();
+  const profile = await getProfileById(profileId);
+  if (!profile || !profile.telegram_message_id) return false;
+
+  const reactions = profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 };
+  const webUrl = `${baseUrl}/#profile-${profile.id}`;
+  const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
+
+  const reactionRow = [
+    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
+    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
+    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
+    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` }
+  ];
+
+  const replyMarkup = {
+    inline_keyboard: [
+      reactionRow,
+      [
+        { text: '📱 Solicitar Disponibilidad', url: reqUrl }
+      ],
+      [
+        { text: '🌐 Ver en Catálogo Web', url: webUrl }
+      ]
+    ]
+  };
+
+  try {
+    const res = await callTelegramApi('editMessageReplyMarkup', {
+      chat_id: channelId,
+      message_id: profile.telegram_message_id,
+      reply_markup: replyMarkup
+    });
+    return Boolean(res.ok);
+  } catch (err) {
+    console.warn('[Telegram Reactions Sync Error]:', err);
+    return false;
   }
 }
 
@@ -1118,6 +1187,31 @@ async function handleCallbackQuery(cb: any) {
       await sendClientAyuda(chatId);
     } else if (data === 'client_cmd_menu') {
       await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
+    }
+    return;
+  }
+
+  // 1.1. Reactions Callbacks (accessible to all users in channel and bot)
+  if (data.startsWith('react_')) {
+    const parts = data.split('_');
+    const reactionType = parts[1] as 'like' | 'heart' | 'star' | 'fire';
+    const profileId = parts.slice(2).join('_');
+
+    try {
+      const { profile: updated, userReacted } = await toggleProfileReaction(profileId, userIdStr, reactionType);
+      await updateTelegramMessageReactions(profileId);
+
+      const emoji = reactionType === 'heart' ? '❤️' : reactionType === 'star' ? '⭐' : reactionType === 'fire' ? '🔥' : '👍';
+      await callTelegramApi('answerCallbackQuery', {
+        callback_query_id: cb.id,
+        text: userReacted ? `¡Reaccionaste con ${emoji}!` : `Reacción ${emoji} retirada.`
+      });
+
+      // Notify Mini App in real-time
+      notifyReactionListeners({ profileId, reactions: updated.reactions });
+    } catch (err) {
+      console.error('[Reaction Callback Error]:', err);
+      await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     }
     return;
   }

@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Profile } from '../types';
-import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link, Flame } from 'lucide-react';
+import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link, Flame, Sparkles, Heart } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -23,6 +23,72 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 }) => {
   // ✅ Todos los hooks ANTES de cualquier return condicional (regla de hooks de React)
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
+
+  const [reactions, setReactions] = useState(
+    profile?.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 }
+  );
+
+  const [userReactions, setUserReactions] = useState<Set<string>>(() => {
+    const set = new Set<string>();
+    if (typeof window !== 'undefined' && profile?.id) {
+      try {
+        const stored = localStorage.getItem(`danii_reactions_${profile.id}`);
+        if (stored) {
+          JSON.parse(stored).forEach((t: string) => set.add(t));
+        }
+      } catch {}
+    }
+    return set;
+  });
+
+  useEffect(() => {
+    if (profile?.reactions) {
+      setReactions(profile.reactions);
+    }
+  }, [profile?.reactions]);
+
+  const handleToggleReaction = async (type: 'heart' | 'star' | 'fire' | 'like') => {
+    if (!profile) return;
+    const key = type === 'like' ? 'likes' : type === 'heart' ? 'hearts' : type === 'star' ? 'stars' : 'fires';
+    const isCurrentlyActive = userReactions.has(type);
+
+    // Optimistic UI update
+    setReactions(prev => ({
+      ...prev,
+      [key]: Math.max(0, (prev[key] || 0) + (isCurrentlyActive ? -1 : 1))
+    }));
+
+    const nextUserReactions = new Set(userReactions);
+    if (isCurrentlyActive) {
+      nextUserReactions.delete(type);
+    } else {
+      nextUserReactions.add(type);
+    }
+    setUserReactions(nextUserReactions);
+    try {
+      localStorage.setItem(`danii_reactions_${profile.id}`, JSON.stringify(Array.from(nextUserReactions)));
+    } catch {}
+
+    // API call
+    try {
+      const clientId = localStorage.getItem('danii_client_id') || `client_${Math.random().toString(36).slice(2, 10)}`;
+      localStorage.setItem('danii_client_id', clientId);
+
+      const res = await fetch(`/api/profiles/${profile.id}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, user_id: clientId })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.reactions) {
+          setReactions(data.reactions);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not sync reaction:', err);
+    }
+  };
 
   const [seenEphemeralUrls, setSeenEphemeralUrls] = useState<Set<string>>(() => {
     const seen = new Set<string>();
@@ -178,14 +244,117 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 </a>
               )}
 
-              {/* Bio Description */}
+              {/* Sincronización de Reacciones en Tiempo Real (Mini App + Bot Telegram) */}
+              <div className="mb-5 p-3.5 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 rounded-2xl border border-zinc-800/90 shadow-md">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[11px] font-bold text-amber-300/90 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Interacciones VIP en Vivo
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-medium">
+                    Sincronizado con Telegram
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReaction('heart')}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                      userReactions.has('heart')
+                        ? 'bg-rose-500/20 border-rose-500/60 text-rose-300 shadow-sm shadow-rose-500/20'
+                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-rose-400 hover:border-zinc-700 hover:bg-zinc-800/40'
+                    }`}
+                    title="Enviar Corazón"
+                  >
+                    <span className="text-xl mb-0.5">❤️</span>
+                    <span className="text-xs font-bold font-mono">
+                      {reactions.hearts || 0}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReaction('star')}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                      userReactions.has('star')
+                        ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-sm shadow-amber-500/20'
+                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-amber-400 hover:border-zinc-700 hover:bg-zinc-800/40'
+                    }`}
+                    title="Enviar Estrella"
+                  >
+                    <span className="text-xl mb-0.5">⭐</span>
+                    <span className="text-xs font-bold font-mono">
+                      {reactions.stars || 0}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReaction('fire')}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                      userReactions.has('fire')
+                        ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 shadow-sm shadow-orange-500/20'
+                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-orange-400 hover:border-zinc-700 hover:bg-zinc-800/40'
+                    }`}
+                    title="Enviar Fuego"
+                  >
+                    <span className="text-xl mb-0.5">🔥</span>
+                    <span className="text-xs font-bold font-mono">
+                      {reactions.fires || 0}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleReaction('like')}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-200 active:scale-95 cursor-pointer ${
+                      userReactions.has('like')
+                        ? 'bg-blue-500/20 border-blue-500/60 text-blue-300 shadow-sm shadow-blue-500/20'
+                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-blue-400 hover:border-zinc-700 hover:bg-zinc-800/40'
+                    }`}
+                    title="Enviar Me Gusta"
+                  >
+                    <span className="text-xl mb-0.5">👍</span>
+                    <span className="text-xs font-bold font-mono">
+                      {reactions.likes || 0}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Descripción VIP Organizada (Solo visible al hacer click para ver y reaccionar) */}
               <div className="mb-6">
-                <h3 className="text-xs uppercase font-semibold text-zinc-400 tracking-wider mb-2">
-                  Descripción Pública:
-                </h3>
-                <p className="text-xs text-zinc-300 leading-relaxed bg-zinc-950/50 p-3 rounded-xl border border-zinc-800/50 whitespace-pre-line">
-                  {profile.description}
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Detalles del Contenido Exclusivo
+                  </h3>
+                  <span className="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium">
+                    💎 VIP Pack
+                  </span>
+                </div>
+
+                <div className="bg-gradient-to-b from-zinc-950/90 to-zinc-900/60 p-4 rounded-2xl border border-zinc-800/90 shadow-inner">
+                  {profile.description ? (
+                    <p className="text-xs text-zinc-200 leading-relaxed whitespace-pre-line font-normal">
+                      {profile.description}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-zinc-400 italic">
+                      Sesión fotográfica y videoclips exclusivos para miembros VIP. Desbloquea la experiencia privada completa.
+                    </p>
+                  )}
+
+                  <div className="mt-3 pt-3 border-t border-zinc-800/60 flex flex-wrap items-center gap-2 text-[10px] text-zinc-400">
+                    <span className="bg-zinc-800/80 px-2 py-0.5 rounded-md text-zinc-300">
+                      🔒 Contenido 100% Protegido
+                    </span>
+                    <span className="bg-zinc-800/80 px-2 py-0.5 rounded-md text-zinc-300">
+                      ⚡ Acceso Inmediato
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Discretion Note */}

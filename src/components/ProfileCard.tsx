@@ -196,9 +196,32 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               <ShieldCheck className="h-5 w-5 text-amber-400" aria-label="Contenido protegido" />
             </div>
 
-            <p className="text-sm leading-6 text-zinc-300">{profile.description}</p>
+            {/* Quick Interactions Bar (Synchronized with Bot & Channel) */}
+            <div
+              onClick={() => onSelectProfile(profile)}
+              className="my-3 flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-300 hover:border-amber-500/40 cursor-pointer transition-colors"
+              title="Toca para ver detalles y reaccionar"
+            >
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center gap-1 hover:text-rose-400 transition-colors">
+                  ❤️ <span className="font-mono font-bold text-zinc-200">{profile.reactions?.hearts || 0}</span>
+                </span>
+                <span className="flex items-center gap-1 hover:text-amber-300 transition-colors">
+                  ⭐ <span className="font-mono font-bold text-zinc-200">{profile.reactions?.stars || 0}</span>
+                </span>
+                <span className="flex items-center gap-1 hover:text-orange-400 transition-colors">
+                  🔥 <span className="font-mono font-bold text-zinc-200">{profile.reactions?.fires || 0}</span>
+                </span>
+                <span className="flex items-center gap-1 hover:text-blue-400 transition-colors">
+                  👍 <span className="font-mono font-bold text-zinc-200">{profile.reactions?.likes || 0}</span>
+                </span>
+              </div>
+              <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
+                Reaccionar
+              </span>
+            </div>
 
-            <div className="my-6 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4">
+            <div className="my-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4">
               <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200/70">Precio suscripción VIP</span>
               <div className="mt-1 flex items-end gap-2">
                 <strong className="text-3xl font-black text-amber-400">Bs. {profile.rate_bs}</strong>

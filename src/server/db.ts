@@ -81,6 +81,19 @@ function initTables(database: Database): void {
   if (!existingProfileCols.has('ephemeral_config')) {
     database.run(`ALTER TABLE profiles ADD COLUMN ephemeral_config TEXT`);
   }
+  if (!existingProfileCols.has('reactions')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN reactions TEXT`);
+  }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS profile_reactions (
+      profile_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      reaction_type TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (profile_id, user_id, reaction_type)
+    );
+  `);
 
   database.run(`
     CREATE TABLE IF NOT EXISTS customer_requests (
@@ -239,6 +252,22 @@ function normalizePhotoUrls(photos: any): string[] {
 }
 
 // Data Access Methods
+function parseReactions(raw: any) {
+  if (!raw) return { likes: 0, hearts: 0, stars: 0, fires: 0 };
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return {
+      likes: Number(parsed.likes) || 0,
+      hearts: Number(parsed.hearts) || 0,
+      stars: Number(parsed.stars) || 0,
+      fires: Number(parsed.fires) || 0,
+    };
+  } catch {
+    return { likes: 0, hearts: 0, stars: 0, fires: 0 };
+  }
+}
+
+// Data Access Methods
 export async function getAllProfiles(): Promise<Profile[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
@@ -260,6 +289,7 @@ export async function getAllProfiles(): Promise<Profile[]> {
     } catch {
       obj.ephemeral_config = {};
     }
+    obj.reactions = parseReactions(obj.reactions);
     return obj as Profile;
   });
 }
@@ -285,6 +315,7 @@ export async function getPublicProfiles(): Promise<Profile[]> {
     } catch {
       obj.ephemeral_config = {};
     }
+    obj.reactions = parseReactions(obj.reactions);
     return obj as Profile;
   });
 }
@@ -309,7 +340,12 @@ export async function getProfileById(id: string): Promise<Profile | null> {
     } catch {
       ephemeralParsed = {};
     }
-    return { ...row, photos: photosParsed, ephemeral_config: ephemeralParsed } as unknown as Profile;
+    return {
+      ...row,
+      photos: photosParsed,
+      ephemeral_config: ephemeralParsed,
+      reactions: parseReactions(row.reactions)
+    } as unknown as Profile;
   }
   stmt.free();
   return null;
@@ -339,10 +375,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedStatus = profile.status ?? existing.status;
     const updatedTgMsgId = profile.telegram_message_id !== undefined ? profile.telegram_message_id : existing.telegram_message_id;
     const updatedPriority = profile.priority_order ?? existing.priority_order;
+    const updatedReactions = profile.reactions !== undefined
+      ? JSON.stringify(profile.reactions)
+      : (existing.reactions ? JSON.stringify(existing.reactions) : JSON.stringify({ likes: 0, hearts: 0, stars: 0, fires: 0 }));
 
     database.run(`
       UPDATE profiles
-      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?
+      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -357,12 +396,14 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       now,
       updatedTgMsgId,
       updatedPriority,
+      updatedReactions,
       profile.id
     ]);
   } else {
+    const initialReactions = JSON.stringify(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 });
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -377,12 +418,70 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       now,
       now,
       profile.telegram_message_id || null,
-      profile.priority_order || 0
+      profile.priority_order || 0,
+      initialReactions
     ]);
   }
 
   saveDb();
   return (await getProfileById(profile.id))!;
+}
+
+export async function toggleProfileReaction(
+  profileId: string,
+  userId: string,
+  reactionType: 'like' | 'heart' | 'star' | 'fire'
+): Promise<{ profile: Profile; userReacted: boolean }> {
+  const database = await getDb();
+  const profile = await getProfileById(profileId);
+  if (!profile) {
+    throw new Error('Perfil no encontrado');
+  }
+
+  const key = reactionType === 'like' ? 'likes' : reactionType === 'heart' ? 'hearts' : reactionType === 'star' ? 'stars' : 'fires';
+  const reactions = { ...(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 }) };
+
+  // Check if user already reacted with this type
+  const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?");
+  stmt.bind([profileId, userId, reactionType]);
+  const hasReacted = stmt.step();
+  stmt.free();
+
+  let userReacted = false;
+  if (hasReacted) {
+    database.run("DELETE FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?", [profileId, userId, reactionType]);
+    reactions[key] = Math.max(0, (reactions[key] || 1) - 1);
+    userReacted = false;
+  } else {
+    database.run("INSERT OR REPLACE INTO profile_reactions (profile_id, user_id, reaction_type, created_at) VALUES (?, ?, ?, ?)", [
+      profileId,
+      userId,
+      reactionType,
+      new Date().toISOString()
+    ]);
+    reactions[key] = (reactions[key] || 0) + 1;
+    userReacted = true;
+  }
+
+  const updated = await saveProfile({
+    id: profileId,
+    reactions
+  });
+
+  return { profile: updated, userReacted };
+}
+
+export async function getUserReactions(profileId: string, userId: string): Promise<string[]> {
+  const database = await getDb();
+  const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ?");
+  stmt.bind([profileId, userId]);
+  const list: string[] = [];
+  while (stmt.step()) {
+    const row = stmt.getAsObject() as { reaction_type: string };
+    if (row.reaction_type) list.push(row.reaction_type);
+  }
+  stmt.free();
+  return list;
 }
 
 export async function deleteProfile(id: string): Promise<boolean> {

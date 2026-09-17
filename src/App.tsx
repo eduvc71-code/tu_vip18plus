@@ -143,6 +143,23 @@ export default function App() {
     eventSource.addEventListener('PROFILE_UPDATED', () => fetchProfiles());
     eventSource.addEventListener('PROFILE_DELETED', () => fetchProfiles());
     eventSource.addEventListener('TELEGRAM_UPDATE', () => fetchProfiles());
+    eventSource.addEventListener('REACTION_UPDATED', (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data?.profileId && data?.reactions) {
+          setProfiles((prev) =>
+            prev.map((p) => (p.id === data.profileId ? { ...p, reactions: data.reactions } : p))
+          );
+          setSelectedProfile((prev) =>
+            prev && prev.id === data.profileId ? { ...prev, reactions: data.reactions } : prev
+          );
+        } else {
+          fetchProfiles();
+        }
+      } catch {
+        fetchProfiles();
+      }
+    });
 
     return () => {
       eventSource.close();
