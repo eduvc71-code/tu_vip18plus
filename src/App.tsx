@@ -20,7 +20,7 @@ export default function App() {
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
-  const [botUsername, setBotUsername] = useState('Danii_OficialVIP_bot');
+  const [botUsername, setBotUsername] = useState('Danii_Oficial_VIP_SCZ_bot');
   const [channelId, setChannelId] = useState('-1004356066811');
   const [modelDisplayName, setModelDisplayName] = useState('IAM Danii');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -114,8 +114,8 @@ export default function App() {
       if (resInfo.ok) {
         const info = await resInfo.json();
         if (info.bot_username) {
-          const safeBot = (!info.bot_username || /ruti|flavia|iam_danii/i.test(info.bot_username))
-            ? 'Danii_OficialVIP_bot'
+          const safeBot = (!info.bot_username || /ruti|flavia|iam_danii|danii_oficial/i.test(info.bot_username))
+            ? 'Danii_Oficial_VIP_SCZ_bot'
             : info.bot_username.replace(/^@/, '').trim();
           setBotUsername(safeBot);
         }
