@@ -14,10 +14,41 @@ export interface EphemeralMediaConfig {
 }
 
 export interface ProfileReactions {
-  likes: number;   // 👍 Likes
-  hearts: number;  // ❤️ Corazones
-  stars: number;   // ⭐ Estrellas
-  fires: number;   // 🔥 Fuego
+  likes?: number;       // 👍 Likes
+  hearts?: number;      // ❤️ Corazones
+  stars?: number;       // ⭐ Estrellas
+  fires?: number;       // 🔥 Fuego
+  in_love?: number;     // 🥰 Enamorado
+  kiss?: number;        // 💋 Beso
+  heart_eyes?: number;  // 😍 Ojos corazón
+  clap?: number;        // 👏 Aplausos
+  party?: number;       // 🎉 Fiesta
+  star_struck?: number; // 🤩 Emocionado
+  [key: string]: number | undefined;
+}
+
+export interface CustomButton {
+  id: string;
+  label: string;
+  url: string;
+  visible_channel: boolean;
+  visible_miniapp: boolean;
+  is_active: boolean;
+  priority_order: number;
+  created_at: string;
+}
+
+export interface DynamicPoll {
+  id: string;
+  question: string;
+  options: string[];
+  votes: Record<number, number>;
+  telegram_poll_id?: string;
+  telegram_message_id?: number;
+  visible_channel: boolean;
+  visible_miniapp: boolean;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface Profile {

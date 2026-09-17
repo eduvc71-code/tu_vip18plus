@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Profile } from './types';
+import { Profile, CustomButton, DynamicPoll } from './types';
 import { Header } from './components/Header';
 import { ProfileCard } from './components/ProfileCard';
 import { ProfileDetailModal } from './components/ProfileDetailModal';
@@ -7,10 +7,13 @@ import { RequestModal, TelegramUserContext } from './components/RequestModal';
 import { AgeModal } from './components/AgeModal';
 import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
-import { Heart, Send, Sparkles, UserCheck, X } from 'lucide-react';
+import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
+  const [activePolls, setActivePolls] = useState<DynamicPoll[]>([]);
+  const [userVotedPolls, setUserVotedPolls] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -110,22 +113,28 @@ export default function App() {
   const fetchProfiles = async () => {
     setLoading(true);
     try {
-      const [resProfiles, resInfo] = await Promise.all([
+      const [resProfiles, resInfo, resButtons, resPolls] = await Promise.all([
         fetch('/api/profiles'),
-        fetch('/api/info')
+        fetch('/api/info'),
+        fetch('/api/buttons/public?target=miniapp'),
+        fetch('/api/polls/active')
       ]);
 
       if (resProfiles.ok) {
         const data = await resProfiles.json();
         setProfiles(data);
       }
+      if (resButtons.ok) {
+        setCustomButtons(await resButtons.json());
+      }
+      if (resPolls.ok) {
+        setActivePolls(await resPolls.json());
+      }
       if (resInfo.ok) {
         const info = await resInfo.json();
         if (info.bot_username) {
-          const safeBot = (!info.bot_username || /ruti|flavia|iam_danii|danii_oficial/i.test(info.bot_username))
-            ? 'Danii_Catalogo_SCZ_bot'
-            : info.bot_username.replace(/^@/, '').trim();
-          setBotUsername(safeBot);
+          const safeBot = info.bot_username.replace(/^@/, '').trim();
+          setBotUsername(safeBot || 'Danii_Catalogo_SCZ_bot');
         }
         if (info.channel_id) setChannelId(info.channel_id);
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);
@@ -137,6 +146,32 @@ export default function App() {
       setError('Error al cargar la lista de perfiles');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVotePoll = async (pollId: string, optionIndex: number) => {
+    try {
+      const voterId = tgUser?.id || (typeof window !== 'undefined' ? (localStorage.getItem('danii_voter_id') || (() => {
+        const gen = 'guest_' + Math.random().toString(36).substring(2, 9);
+        localStorage.setItem('danii_voter_id', gen);
+        return gen;
+      })()) : 'user');
+
+      const res = await fetch(`/api/polls/${pollId}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          option_index: optionIndex,
+          user_id: voterId
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.poll) {
+        setActivePolls(prev => prev.map(p => p.id === pollId ? data.poll : p));
+        setUserVotedPolls(prev => ({ ...prev, [pollId]: optionIndex }));
+      }
+    } catch {
+      // safe fallback
     }
   };
 
@@ -291,6 +326,25 @@ export default function App() {
           </div>
         )}
 
+        {/* Custom Interactive Buttons */}
+        {customButtons.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2.5 my-3">
+            {customButtons.map(btn => (
+              <a
+                key={btn.id}
+                href={btn.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>{btn.label}</span>
+                <ExternalLink className="w-3 h-3 opacity-60" />
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* Profile Section */}
         <section className="space-y-5">
 
@@ -323,6 +377,80 @@ export default function App() {
             </div>
           )}
         </section>
+
+        {/* Dynamic Polls Section */}
+        {activePolls.length > 0 && (
+          <div className="space-y-4 my-6">
+            {activePolls.map(poll => {
+              const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
+              const userVoted = userVotedPolls[poll.id] !== undefined;
+              return (
+                <div key={poll.id} className="p-5 rounded-3xl bg-zinc-900/90 border border-amber-500/30 shadow-xl space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-xl bg-amber-500/20 text-amber-400">
+                      <BarChart2 className="w-4 h-4" />
+                    </span>
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400">
+                      Encuesta Exclusiva
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    {poll.question}
+                  </h3>
+
+                  <div className="space-y-2">
+                    {poll.options.map((opt, idx) => {
+                      const votes = (poll.votes?.[idx] ?? (poll.votes as any)?.[opt]) || 0;
+                      const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                      const isSelected = userVotedPolls[poll.id] === idx;
+
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => !userVoted && handleVotePoll(poll.id, idx)}
+                          disabled={userVoted}
+                          className={`w-full text-left p-3 rounded-2xl border transition-all relative overflow-hidden group cursor-pointer ${
+                            isSelected
+                              ? 'border-amber-500 bg-amber-500/15 text-white shadow-md shadow-amber-500/10'
+                              : userVoted
+                              ? 'border-zinc-800 bg-zinc-950/60 text-zinc-300'
+                              : 'border-zinc-800 bg-zinc-950/80 hover:border-amber-500/60 hover:bg-zinc-900 text-zinc-200 active:scale-[0.99]'
+                          }`}
+                        >
+                          {userVoted && (
+                            <div
+                              className={`absolute inset-y-0 left-0 transition-all duration-500 ${isSelected ? 'bg-amber-500/25' : 'bg-zinc-800/40'}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          )}
+
+                          <div className="relative z-10 flex items-center justify-between gap-3 text-xs">
+                            <span className="font-semibold flex items-center gap-2">
+                              {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
+                              {opt}
+                            </span>
+                            {userVoted && (
+                              <span className="font-mono text-[11px] font-bold text-amber-400 shrink-0">
+                                {votes} ({pct}%)
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1">
+                    <span>{totalVotes} {totalVotes === 1 ? 'voto' : 'votos'}</span>
+                    <span>{userVoted ? '✓ Ya participaste en esta encuesta' : 'Toca una opción para votar'}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
       </main>
 

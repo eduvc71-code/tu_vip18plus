@@ -1,12 +1,14 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, ProfileStatus } from '../types.js';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, ProfileStatus, CustomButton, DynamicPoll } from '../types.js';
+import { backupDatabaseToB2, downloadDatabaseFromB2 } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'catalogo.sqlite');
 
 let db: Database | null = null;
+let b2SyncTimer: NodeJS.Timeout | null = null;
 
 export async function getDb(): Promise<Database> {
   if (db) return db;
@@ -17,15 +19,35 @@ export async function getDb(): Promise<Database> {
 
   const SQL = await initSqlJs();
 
-  if (fs.existsSync(DB_FILE)) {
-    const filebuffer = fs.readFileSync(DB_FILE);
-    db = new SQL.Database(filebuffer);
-  } else {
-    db = new SQL.Database();
+  let loadedFromB2 = false;
+  // If local file is missing or empty, restore automatically from Backblaze B2
+  if (!fs.existsSync(DB_FILE) || fs.statSync(DB_FILE).size === 0) {
+    try {
+      const b2Buf = await downloadDatabaseFromB2();
+      if (b2Buf && b2Buf.length > 0) {
+        fs.writeFileSync(DB_FILE, b2Buf);
+        db = new SQL.Database(b2Buf);
+        loadedFromB2 = true;
+        console.log('[Database] Restaurada exitosamente desde Backblaze B2');
+      }
+    } catch (err: any) {
+      console.warn('[Database] No se pudo restaurar desde B2, iniciando base local:', err?.message || err);
+    }
+  }
+
+  if (!db) {
+    if (fs.existsSync(DB_FILE)) {
+      const filebuffer = fs.readFileSync(DB_FILE);
+      db = new SQL.Database(filebuffer);
+    } else {
+      db = new SQL.Database();
+    }
   }
 
   initTables(db);
-  seedInitialData(db);
+  if (!loadedFromB2) {
+    seedInitialData(db);
+  }
   ensureDefaultSettings(db);
   saveDb();
 
@@ -38,8 +60,6 @@ function ensureDefaultSettings(database: Database): void {
   const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_vip_link', '')`);
-  database.run(`UPDATE system_settings SET value = ? WHERE key = 'model_display_name' AND value IN ('Modelo VIP', 'Flavia', 'Tú', 'TU_VIP')`, [defaultModelName]);
-  database.run(`UPDATE profiles SET name = ? WHERE lower(trim(name)) IN ('flavia', 'ruti', 'tú', 'tu_vip', 'modelo vip')`, [defaultModelName]);
   database.run(`UPDATE system_settings SET value = 'Danii_Catalogo_SCZ_bot' WHERE key = 'bot_username'`);
 }
 
@@ -49,9 +69,28 @@ export function saveDb(): void {
     const data = db.export();
     const buffer = Buffer.from(data);
     fs.writeFileSync(DB_FILE, buffer);
+
+    // Debounced automatic background sync to B2 (persists data across Render restarts)
+    if (b2SyncTimer) clearTimeout(b2SyncTimer);
+    b2SyncTimer = setTimeout(async () => {
+      try {
+        await backupDatabaseToB2(buffer);
+        console.log('[Database] Snapshot sincronizado exitosamente con Backblaze B2');
+      } catch (err: any) {
+        console.warn('[Database] Advertencia al sincronizar snapshot con B2:', err?.message);
+      }
+    }, 2000);
   } catch (err) {
     console.error('Error saving database file:', err);
   }
+}
+
+export async function syncDbToB2Now(): Promise<string> {
+  const database = await getDb();
+  const data = database.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_FILE, buffer);
+  return await backupDatabaseToB2(buffer);
 }
 
 function initTables(database: Database): void {
@@ -173,6 +212,44 @@ function initTables(database: Database): void {
       used_at TEXT
     );
   `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS custom_buttons (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      url TEXT NOT NULL,
+      visible_channel INTEGER DEFAULT 1,
+      visible_miniapp INTEGER DEFAULT 1,
+      is_active INTEGER DEFAULT 1,
+      priority_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS dynamic_polls (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      options TEXT NOT NULL,
+      votes TEXT NOT NULL,
+      telegram_poll_id TEXT,
+      telegram_message_id INTEGER,
+      visible_channel INTEGER DEFAULT 1,
+      visible_miniapp INTEGER DEFAULT 1,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS poll_user_votes (
+      poll_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      option_index INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (poll_id, user_id)
+    );
+  `);
 }
 
 function seedInitialData(database: Database): void {
@@ -255,7 +332,19 @@ function normalizePhotoUrls(photos: any): string[] {
 
 // Data Access Methods
 function parseReactions(raw: any) {
-  if (!raw) return { likes: 0, hearts: 0, stars: 0, fires: 0 };
+  const defaults = {
+    likes: 0,
+    hearts: 0,
+    stars: 0,
+    fires: 0,
+    in_love: 0,
+    kiss: 0,
+    heart_eyes: 0,
+    clap: 0,
+    party: 0,
+    star_struck: 0
+  };
+  if (!raw) return defaults;
   try {
     const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
     return {
@@ -263,9 +352,15 @@ function parseReactions(raw: any) {
       hearts: Number(parsed.hearts) || 0,
       stars: Number(parsed.stars) || 0,
       fires: Number(parsed.fires) || 0,
+      in_love: Number(parsed.in_love) || 0,
+      kiss: Number(parsed.kiss) || 0,
+      heart_eyes: Number(parsed.heart_eyes) || 0,
+      clap: Number(parsed.clap) || 0,
+      party: Number(parsed.party) || 0,
+      star_struck: Number(parsed.star_struck) || 0,
     };
   } catch {
-    return { likes: 0, hearts: 0, stars: 0, fires: 0 };
+    return defaults;
   }
 }
 
@@ -455,7 +550,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
 export async function toggleProfileReaction(
   profileId: string,
   userId: string,
-  reactionType: 'like' | 'heart' | 'star' | 'fire'
+  reactionType: string
 ): Promise<{ profile: Profile; userReacted: boolean }> {
   const database = await getDb();
   const profile = await getProfileById(profileId);
@@ -463,8 +558,20 @@ export async function toggleProfileReaction(
     throw new Error('Perfil no encontrado');
   }
 
-  const key = reactionType === 'like' ? 'likes' : reactionType === 'heart' ? 'hearts' : reactionType === 'star' ? 'stars' : 'fires';
-  const reactions = { ...(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 }) };
+  const reactionKeyMap: Record<string, string> = {
+    like: 'likes',
+    heart: 'hearts',
+    star: 'stars',
+    fire: 'fires',
+    in_love: 'in_love',
+    kiss: 'kiss',
+    heart_eyes: 'heart_eyes',
+    clap: 'clap',
+    party: 'party',
+    star_struck: 'star_struck'
+  };
+  const key = reactionKeyMap[reactionType] || reactionType;
+  const reactions: Record<string, number> = { ...(profile.reactions || {}) };
 
   // Check if user already reacted with this type
   const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?");
@@ -788,4 +895,162 @@ export async function verifyInvitationCode(code: string): Promise<boolean> {
   }
   
   return isValid;
+}
+
+// ==========================================
+// Custom Buttons Management
+// ==========================================
+export async function getAllCustomButtons(): Promise<CustomButton[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM custom_buttons ORDER BY priority_order ASC, created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      label: String(obj.label || ''),
+      url: String(obj.url || ''),
+      visible_channel: Boolean(obj.visible_channel),
+      visible_miniapp: Boolean(obj.visible_miniapp),
+      is_active: Boolean(obj.is_active),
+      priority_order: Number(obj.priority_order || 0),
+      created_at: String(obj.created_at || '')
+    };
+  });
+}
+
+export async function getPublicCustomButtons(target: 'channel' | 'miniapp'): Promise<CustomButton[]> {
+  const all = await getAllCustomButtons();
+  return all.filter(btn => btn.is_active && (target === 'channel' ? btn.visible_channel : btn.visible_miniapp));
+}
+
+export async function saveCustomButton(btn: Partial<CustomButton> & { label: string; url: string }): Promise<CustomButton> {
+  const database = await getDb();
+  const id = btn.id || `btn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+  const visibleChannel = btn.visible_channel !== undefined ? (btn.visible_channel ? 1 : 0) : 1;
+  const visibleMiniapp = btn.visible_miniapp !== undefined ? (btn.visible_miniapp ? 1 : 0) : 1;
+  const isActive = btn.is_active !== undefined ? (btn.is_active ? 1 : 0) : 1;
+  const priorityOrder = btn.priority_order ?? 0;
+
+  database.run(`
+    INSERT OR REPLACE INTO custom_buttons (id, label, url, visible_channel, visible_miniapp, is_active, priority_order, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, btn.label, btn.url, visibleChannel, visibleMiniapp, isActive, priorityOrder, btn.created_at || now]);
+
+  saveDb();
+  const buttons = await getAllCustomButtons();
+  return buttons.find(b => b.id === id)!;
+}
+
+export async function deleteCustomButton(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM custom_buttons WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+// ==========================================
+// Dynamic Polls Management
+// ==========================================
+export async function getAllPolls(): Promise<DynamicPoll[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM dynamic_polls ORDER BY created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+    let options: string[] = [];
+    let votes: Record<number, number> = {};
+    try { options = JSON.parse(obj.options || '[]'); } catch { options = []; }
+    try { votes = JSON.parse(obj.votes || '{}'); } catch { votes = {}; }
+    return {
+      id: String(obj.id),
+      question: String(obj.question || ''),
+      options,
+      votes,
+      telegram_poll_id: obj.telegram_poll_id ? String(obj.telegram_poll_id) : undefined,
+      telegram_message_id: obj.telegram_message_id ? Number(obj.telegram_message_id) : undefined,
+      visible_channel: Boolean(obj.visible_channel),
+      visible_miniapp: Boolean(obj.visible_miniapp),
+      is_active: Boolean(obj.is_active),
+      created_at: String(obj.created_at || '')
+    };
+  });
+}
+
+export async function getActivePolls(): Promise<DynamicPoll[]> {
+  const all = await getAllPolls();
+  return all.filter(p => p.is_active && p.visible_miniapp);
+}
+
+export async function getPollById(id: string): Promise<DynamicPoll | null> {
+  const all = await getAllPolls();
+  return all.find(p => p.id === id) || null;
+}
+
+export async function savePoll(poll: Partial<DynamicPoll> & { question: string; options: string[] }): Promise<DynamicPoll> {
+  const database = await getDb();
+  const id = poll.id || `poll_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+  const existing = await getPollById(id);
+
+  const optionsJson = JSON.stringify(poll.options);
+  const votesJson = JSON.stringify(poll.votes || (existing ? existing.votes : {}));
+  const visibleChannel = poll.visible_channel !== undefined ? (poll.visible_channel ? 1 : 0) : 1;
+  const visibleMiniapp = poll.visible_miniapp !== undefined ? (poll.visible_miniapp ? 1 : 0) : 1;
+  const isActive = poll.is_active !== undefined ? (poll.is_active ? 1 : 0) : 1;
+  const tgPollId = poll.telegram_poll_id ?? existing?.telegram_poll_id ?? null;
+  const tgMsgId = poll.telegram_message_id ?? existing?.telegram_message_id ?? null;
+
+  database.run(`
+    INSERT OR REPLACE INTO dynamic_polls (id, question, options, votes, telegram_poll_id, telegram_message_id, visible_channel, visible_miniapp, is_active, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, poll.question, optionsJson, votesJson, tgPollId, tgMsgId, visibleChannel, visibleMiniapp, isActive, existing?.created_at || now]);
+
+  saveDb();
+  return (await getPollById(id))!;
+}
+
+export async function votePoll(pollId: string, userId: string, optionIndex: number): Promise<{ poll: DynamicPoll; alreadyVoted: boolean }> {
+  const database = await getDb();
+  const poll = await getPollById(pollId);
+  if (!poll) throw new Error('Encuesta no encontrada');
+
+  const stmt = database.prepare("SELECT option_index FROM poll_user_votes WHERE poll_id = ? AND user_id = ?");
+  stmt.bind([pollId, userId]);
+  const hasVoted = stmt.step();
+  stmt.free();
+
+  if (hasVoted) {
+    return { poll, alreadyVoted: true };
+  }
+
+  database.run("INSERT INTO poll_user_votes (poll_id, user_id, option_index, created_at) VALUES (?, ?, ?, ?)", [
+    pollId,
+    userId,
+    optionIndex,
+    new Date().toISOString()
+  ]);
+
+  const votes: Record<number, number> = { ...(poll.votes || {}) };
+  votes[optionIndex] = (votes[optionIndex] || 0) + 1;
+
+  const updated = await savePoll({
+    ...poll,
+    votes
+  });
+
+  return { poll: updated, alreadyVoted: false };
+}
+
+export async function deletePoll(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM dynamic_polls WHERE id = ?", [id]);
+  database.run("DELETE FROM poll_user_votes WHERE poll_id = ?", [id]);
+  saveDb();
+  return true;
 }

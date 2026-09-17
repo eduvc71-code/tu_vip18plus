@@ -29,7 +29,18 @@ import {
   getSystemSetting,
   saveSystemSetting,
   toggleProfileReaction,
-  getUserReactions
+  getUserReactions,
+  getAllCustomButtons,
+  getPublicCustomButtons,
+  saveCustomButton,
+  deleteCustomButton,
+  getAllPolls,
+  getActivePolls,
+  getPollById,
+  savePoll,
+  votePoll,
+  deletePoll,
+  syncDbToB2Now
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -43,7 +54,8 @@ import {
   sendPhotoToUser,
   updateTelegramMessageReactions,
   onReactionUpdated,
-  verifyChannel
+  verifyChannel,
+  sendChannelPoll
 } from './telegram.js';
 
 export const router = express.Router();
@@ -569,11 +581,14 @@ router.put('/admin/profiles/:id', requireAdminAuth, async (req: Request, res: Re
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_PROFILE', adminId, `Perfil ${updated.name} actualizado`, profileId);
 
-    // Auto-sync channel and web
-    const syncRes = await syncProfileToChannel(profileId, adminId);
+    let syncMessage = 'Perfil actualizado en base de datos';
+    if (req.body.publish_to_channel === true) {
+      const syncRes = await syncProfileToChannel(profileId, adminId);
+      syncMessage = syncRes.message;
+    }
 
     broadcastEvent('PROFILE_UPDATED', updated);
-    res.json({ success: true, profile: updated, sync_message: syncRes.message });
+    res.json({ success: true, profile: updated, sync_message: syncMessage });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Error al actualizar perfil' });
   }
@@ -602,7 +617,7 @@ router.delete('/admin/profiles/:id', requireAdminAuth, async (req: Request, res:
   }
 });
 
-// POST Trigger Channel Sync
+// POST Trigger Channel Sync (Explicitly publishes to Telegram VIP Channel)
 router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
@@ -615,7 +630,7 @@ router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request
   }
 });
 
-// POST Upload gallery media (images and videos)
+// POST Upload gallery media (images and videos) - Saves to B2 and local DB without auto-publishing
 router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos', 8), async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
@@ -642,14 +657,42 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
 
     // The latest upload is always the cover/first item and pushes older media back.
     const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
-    const updated = await saveProfile({ id: profileId, photos: updatedPhotos });
+
+    // Merge media descriptions if provided
+    let mediaDescriptions = { ...(profile.media_descriptions || {}) };
+    const comment = req.body.description || req.body.comment;
+    if (comment && uploadedUrls.length > 0) {
+      for (const url of uploadedUrls) {
+        mediaDescriptions[url] = String(comment).trim();
+      }
+    }
+    if (req.body.descriptions) {
+      try {
+        const parsed = typeof req.body.descriptions === 'string' ? JSON.parse(req.body.descriptions) : req.body.descriptions;
+        mediaDescriptions = { ...mediaDescriptions, ...parsed };
+      } catch {}
+    }
+
+    // Merge ephemeral config if provided
+    let ephemeralConfig = { ...(profile.ephemeral_config || {}) };
+    if (req.body.is_ephemeral === 'true' || req.body.is_ephemeral === true) {
+      const dur = Number(req.body.ephemeral_duration) || 10;
+      for (const url of uploadedUrls) {
+        ephemeralConfig[url] = { enabled: true, duration: dur, duration_seconds: dur };
+      }
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      media_descriptions: mediaDescriptions,
+      ephemeral_config: ephemeralConfig
+    });
 
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia agregados a ${profile.name}`, profileId);
+    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name}`, profileId);
 
-    // Auto sync
-    await syncProfileToChannel(profileId, adminId);
-
+    // No auto-sync to channel: Content is stored safely in B2 as draft until admin clicks publish
     broadcastEvent('PROFILE_UPDATED', updated);
     res.json({ success: true, profile: updated, new_media: uploadedUrls });
   } catch (err: any) {
@@ -959,5 +1002,178 @@ router.post('/admin/settings/pinned', requireAdminAuth, async (req: Request, res
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar mensaje fijado' });
+  }
+});
+
+// ==========================================
+// CUSTOM BUTTONS ENDPOINTS
+// ==========================================
+
+// GET All custom buttons (admin)
+router.get('/admin/buttons', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const buttons = await getAllCustomButtons();
+    res.json(buttons);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener botones personalizados' });
+  }
+});
+
+// POST Create or update custom button (admin)
+router.post('/admin/buttons', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id, label, url, visible_channel, visible_miniapp, is_active, priority_order } = req.body;
+    if (!label || !url) {
+      res.status(400).json({ error: 'La etiqueta y la URL son requeridas' });
+      return;
+    }
+    const saved = await saveCustomButton({
+      id,
+      label: String(label).trim(),
+      url: String(url).trim(),
+      visible_channel: visible_channel !== undefined ? Boolean(visible_channel) : true,
+      visible_miniapp: visible_miniapp !== undefined ? Boolean(visible_miniapp) : true,
+      is_active: is_active !== undefined ? Boolean(is_active) : true,
+      priority_order: priority_order !== undefined ? Number(priority_order) : 0
+    });
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CUSTOM_BUTTON', adminId, `Botón personalizado guardado: "${saved.label}"`);
+    broadcastEvent('BUTTONS_UPDATED', saved);
+    res.json({ success: true, button: saved });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar botón personalizado', details: err?.message });
+  }
+});
+
+// DELETE Custom button (admin)
+router.delete('/admin/buttons/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await deleteCustomButton(id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CUSTOM_BUTTON_DELETE', adminId, `Botón personalizado eliminado: ${id}`);
+    broadcastEvent('BUTTONS_UPDATED', { deleted: id });
+    res.json({ success: true, message: 'Botón eliminado correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar botón personalizado' });
+  }
+});
+
+// GET Public buttons (Mini App / Channel)
+router.get('/buttons/public', async (req: Request, res: Response) => {
+  try {
+    const target = req.query.target === 'channel' ? 'channel' : 'miniapp';
+    const buttons = await getPublicCustomButtons(target);
+    res.json(buttons);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cargar botones públicos' });
+  }
+});
+
+// ==========================================
+// DYNAMIC POLLS ENDPOINTS
+// ==========================================
+
+// GET All polls (admin)
+router.get('/admin/polls', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const polls = await getAllPolls();
+    res.json(polls);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener encuestas' });
+  }
+});
+
+// POST Create or update poll (admin)
+router.post('/admin/polls', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id, question, options, visible_channel, visible_miniapp, is_active, publish_telegram } = req.body;
+    if (!question || !Array.isArray(options) || options.length < 2) {
+      res.status(400).json({ error: 'La encuesta requiere una pregunta y al menos 2 opciones' });
+      return;
+    }
+
+    let tgPollId: string | undefined;
+    let tgMsgId: number | undefined;
+
+    if (publish_telegram) {
+      const tgRes = await sendChannelPoll(question, options);
+      if (tgRes.ok && tgRes.result) {
+        tgPollId = tgRes.result.poll?.id;
+        tgMsgId = tgRes.result.message_id;
+      }
+    }
+
+    const saved = await savePoll({
+      id,
+      question: String(question).trim(),
+      options: options.map((o: any) => String(o).trim()).filter(Boolean),
+      visible_channel: visible_channel !== undefined ? Boolean(visible_channel) : true,
+      visible_miniapp: visible_miniapp !== undefined ? Boolean(visible_miniapp) : true,
+      is_active: is_active !== undefined ? Boolean(is_active) : true,
+      telegram_poll_id: tgPollId,
+      telegram_message_id: tgMsgId
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CREATE_POLL', adminId, `Encuesta/Dinámica creada: "${saved.question}"`);
+    broadcastEvent('POLLS_UPDATED', saved);
+    res.json({ success: true, poll: saved, telegram_published: Boolean(tgPollId) });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar encuesta', details: err?.message });
+  }
+});
+
+// DELETE Poll (admin)
+router.delete('/admin/polls/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await deletePoll(id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_POLL', adminId, `Encuesta eliminada: ${id}`);
+    broadcastEvent('POLLS_UPDATED', { deleted: id });
+    res.json({ success: true, message: 'Encuesta eliminada correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar encuesta' });
+  }
+});
+
+// GET Active polls (Mini App)
+router.get('/polls/active', async (req: Request, res: Response) => {
+  try {
+    const polls = await getActivePolls();
+    res.json(polls);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cargar encuestas activas' });
+  }
+});
+
+// POST Vote on poll (Mini App)
+router.post('/polls/:id/vote', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { user_id, option_index } = req.body;
+    if (option_index === undefined || Number.isNaN(Number(option_index))) {
+      res.status(400).json({ error: 'Debe seleccionar una opción válida' });
+      return;
+    }
+    const voterId = String(user_id || req.ip || 'anon');
+    const result = await votePoll(id, voterId, Number(option_index));
+    broadcastEvent('POLL_VOTED', result.poll);
+    res.json({ success: true, poll: result.poll, already_voted: result.alreadyVoted });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al registrar voto' });
+  }
+});
+
+// POST Force Sync Database Snapshot to Backblaze B2 (admin)
+router.post('/admin/sync-db', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const objectKey = await syncDbToB2Now();
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('SYNC_DB_B2', adminId, 'Base de datos SQLite respaldada en Backblaze B2');
+    res.json({ success: true, message: 'Base de datos respaldada exitosamente en Backblaze B2', key: objectKey });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al respaldar base de datos en B2', details: err?.message });
   }
 });

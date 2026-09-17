@@ -26,6 +26,9 @@ import {
   getSystemSetting,
   addAdminTelegramId,
   toggleProfileReaction,
+  getPublicCustomButtons,
+  getAllCustomButtons,
+  getAllPolls,
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
 import { uploadBufferToB2, isB2Configured } from './b2Storage.js';
@@ -44,10 +47,7 @@ export function getBotConfig() {
   }
   const storedUsername = getSystemSetting('bot_username');
   let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Catalogo_SCZ_bot';
-  if (/ruti|flavia|catalogovip|iam_danii|danii_oficial/i.test(rawUsername)) {
-    rawUsername = 'Danii_Catalogo_SCZ_bot';
-  }
-  let username = rawUsername.replace(/^@/, '').trim();
+  let username = rawUsername.replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
@@ -223,6 +223,66 @@ export async function pinChatMessage(chatId: string | number, messageId: number)
   });
 }
 
+export function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
+  return {
+    keyboard: [
+      [
+        { text: '👑 Abrir Panel Web', web_app: { url: adminLink } },
+        { text: '💎 Ver Catálogo VIP', web_app: { url: baseUrl } }
+      ],
+      [
+        { text: '📢 Canal VIP' },
+        { text: '💾 Respaldo B2' }
+      ],
+      [
+        { text: '🔘 Botones' },
+        { text: '📊 Dinámicas / Encuestas' }
+      ],
+      [
+        { text: '📋 Listar Contenido' },
+        { text: '➕ Nuevo Perfil' }
+      ],
+      [
+        { text: '❓ Ayuda Admin' },
+        { text: '❌ Cancelar' }
+      ]
+    ],
+    resize_keyboard: true,
+    is_persistent: true
+  };
+}
+
+export async function sendChannelPoll(
+  question: string,
+  options: string[],
+  isAnonymous: boolean = true
+): Promise<{ ok: boolean; result?: any; error?: string }> {
+  const { channelId } = getBotConfig();
+  if (!channelId) {
+    return { ok: false, error: 'Canal no configurado en el sistema.' };
+  }
+
+  const trimmedQuestion = question.trim().slice(0, 300);
+  const trimmedOptions = options.map(o => o.trim().slice(0, 100)).filter(Boolean);
+
+  if (trimmedOptions.length < 2) {
+    return { ok: false, error: 'La encuesta debe tener al menos 2 opciones.' };
+  }
+
+  const payload = {
+    chat_id: channelId,
+    question: trimmedQuestion,
+    options: JSON.stringify(trimmedOptions),
+    is_anonymous: isAnonymous
+  };
+
+  const res = await callTelegramApi('sendPoll', payload);
+  if (!res.ok) {
+    return { ok: false, error: res.description || 'Error enviando encuesta a Telegram' };
+  }
+  return { ok: true, result: res.result };
+}
+
 export async function updateBotMenuButton() {
   const { baseUrl } = getBotConfig();
   return await callTelegramApi('setChatMenuButton', {
@@ -384,51 +444,11 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     return { success: true, message: `Perfil ${profile.status}: removido del canal público.` };
   }
 
-  const statusBadge = profile.status === 'disponible' ? '🟢 DISPONIBLE' : profile.status === 'ocupada' ? '🔴 OCUPADA' : '⏸️ PAUSADA';
-
-  const { brandName } = getBotConfig();
   const primaryPhoto = profile.photos && profile.photos.length > 0 ? profile.photos[0] : null;
-  const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || 'Contenido VIP Exclusivo';
+  const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || '';
+  const caption = activeDesc.trim() || 'Contenido VIP Exclusivo';
 
-  const caption = `
-✨ *${brandName || 'IAM DANII VIP'}* ✨
-
-👤 *Nombre*: ${profile.name}
-🔞 *Edad*: ${profile.age} años (Verificada +18)
-💰 *PRECIO SUSCRIPCIÓN VIP*: Bs. ${profile.rate_bs}
-📌 *Estado*: ${statusBadge}
-
-📝 *Descripción*:
-${activeDesc}
-
-─────────────────────────
-⚠️ *AVISO DE DISCRECIÓN Y SEGURIDAD*:
-• Galería y contenido privado exclusivo para mayores de 18 años.
-• Coordinación y acceso confidencial directamente por privado.
-`;
-
-  const webUrl = `${baseUrl}/#profile-${profile.id}`;
-  const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
-
-  const reactions = profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 };
-  const reactionRow = [
-    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
-    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
-    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
-    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` }
-  ];
-
-  const replyMarkup = {
-    inline_keyboard: [
-      reactionRow,
-      [
-        { text: '📱 Solicitar Disponibilidad', url: reqUrl }
-      ],
-      [
-        { text: '🌐 Ver en Catálogo Web', url: webUrl }
-      ]
-    ]
-  };
+  const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
 
   // If already published, attempt edit first
   if (profile.telegram_message_id) {
@@ -510,33 +530,55 @@ export function notifyReactionListeners(data: { profileId: string; reactions: an
   }
 }
 
-export async function updateTelegramMessageReactions(profileId: string): Promise<boolean> {
-  const { channelId, username, baseUrl } = getBotConfig();
-  const profile = await getProfileById(profileId);
-  if (!profile || !profile.telegram_message_id) return false;
+export async function buildChannelPostMarkup(profile: Profile, baseUrl: string, username: string) {
+  const reactions: any = profile.reactions || {};
+  const reactionRow1 = [
+    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
+    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
+    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` },
+    { text: `🥰 ${reactions.in_love || 0}`, callback_data: `react_in_love_${profile.id}` },
+    { text: `💋 ${reactions.kiss || 0}`, callback_data: `react_kiss_${profile.id}` }
+  ];
+  const reactionRow2 = [
+    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
+    { text: `😍 ${reactions.heart_eyes || 0}`, callback_data: `react_heart_eyes_${profile.id}` },
+    { text: `👏 ${reactions.clap || 0}`, callback_data: `react_clap_${profile.id}` },
+    { text: `🎉 ${reactions.party || 0}`, callback_data: `react_party_${profile.id}` },
+    { text: `🤩 ${reactions.star_struck || 0}`, callback_data: `react_star_struck_${profile.id}` }
+  ];
 
-  const reactions = profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 };
   const webUrl = `${baseUrl}/#profile-${profile.id}`;
   const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
 
-  const reactionRow = [
-    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
-    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
-    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
-    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` }
-  ];
+  let customButtonRows: any[] = [];
+  try {
+    const customButtons = await getPublicCustomButtons('channel');
+    customButtonRows = customButtons.map(btn => [{ text: btn.label, url: btn.url }]);
+  } catch (err) {
+    console.warn('[Telegram] Could not load custom buttons for channel:', err);
+  }
 
-  const replyMarkup = {
+  return {
     inline_keyboard: [
-      reactionRow,
+      reactionRow1,
+      reactionRow2,
       [
         { text: '📱 Solicitar Disponibilidad', url: reqUrl }
       ],
       [
         { text: '🌐 Ver en Catálogo Web', url: webUrl }
-      ]
+      ],
+      ...customButtonRows
     ]
   };
+}
+
+export async function updateTelegramMessageReactions(profileId: string): Promise<boolean> {
+  const { channelId, username, baseUrl } = getBotConfig();
+  const profile = await getProfileById(profileId);
+  if (!profile || !profile.telegram_message_id) return false;
+
+  const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
 
   try {
     const res = await callTelegramApi('editMessageReplyMarkup', {
@@ -840,6 +882,88 @@ export async function processTelegramUpdate(update: any) {
           ]
         ]
       }
+    });
+    return;
+  }
+
+  const adminText = text.trim();
+  const { baseUrl } = getBotConfig();
+  const adminToken = generateAdminMagicToken(String(fromId));
+  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+
+  if (adminText === '📢 Canal VIP') {
+    const { channelId, username } = getBotConfig();
+    const storedTitle = getSystemSetting('channel_title');
+    await sendMessage(chatId, `📢 *Canal VIP Configurado:*\n\n• Canal: *${storedTitle || channelId}*\n• ID: \`${channelId}\`\n• Bot Administrador: @${username}\n\n_Para cambiar de canal reenvía cualquier post de tu canal o usa \`/setcanal @TuCanal\`._`);
+    return;
+  }
+
+  if (adminText === '💾 Respaldo B2') {
+    await setConversationState(userIdStr, 'BACKUP_MODE', {});
+    await sendBackupModeInstructions(chatId, userIdStr);
+    return;
+  }
+
+  if (adminText === '🔘 Botones' || adminText === '🔘 Botones Personalizados') {
+    const buttons = await getAllCustomButtons();
+    let msg = '🔘 *Botones Personalizados Registrados:*\n\n';
+    if (buttons.length === 0) {
+      msg += 'No tienes botones personalizados creados aún.\nPuedes crearlos desde el Panel Web en la pestaña *"Botones"*.';
+    } else {
+      buttons.forEach((b, idx) => {
+        msg += `${idx + 1}. *${b.label}*\n   🔗 ${b.url}\n   Canal: ${b.visible_channel ? '✅' : '❌'} | Mini App: ${b.visible_miniapp ? '✅' : '❌'} | Estado: ${b.is_active ? '🟢 Activo' : '⚪ Inactivo'}\n\n`;
+      });
+    }
+    await sendMessage(chatId, msg, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '👑 Gestionar Botones en Panel Web', web_app: { url: adminLink } }]
+        ]
+      }
+    });
+    return;
+  }
+
+  if (adminText === '📊 Dinámicas / Encuestas') {
+    const polls = await getAllPolls();
+    let msg = '📊 *Dinámicas / Encuestas Registradas:*\n\n';
+    if (polls.length === 0) {
+      msg += 'No tienes encuestas creadas aún.\nPuedes redactar encuestas para tu Canal o Mini App desde el Panel Web en la pestaña *"Dinámicas"*.';
+    } else {
+      polls.forEach((p, idx) => {
+        msg += `${idx + 1}. *${p.question}*\n   Opciones: ${p.options.join(', ')}\n   Estado: ${p.is_active ? '🟢 Activa' : '⚪ Finalizada'}\n\n`;
+      });
+    }
+    await sendMessage(chatId, msg, {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '👑 Crear Dinámica en Panel Web', web_app: { url: adminLink } }]
+        ]
+      }
+    });
+    return;
+  }
+
+  if (adminText === '📋 Listar Contenido') {
+    await handleListProfiles(chatId);
+    return;
+  }
+
+  if (adminText === '➕ Nuevo Perfil') {
+    await setConversationState(userIdStr, 'NEW_NAME', {});
+    await sendMessage(chatId, '➕ *Crear Nuevo Perfil (Paso 1/5)*\n\nPor favor, escribe el *Nombre Público*:');
+    return;
+  }
+
+  if (adminText === '❓ Ayuda Admin') {
+    await sendAdminHelp(chatId);
+    return;
+  }
+
+  if (adminText === '❌ Cancelar') {
+    await clearConversationState(userIdStr);
+    await sendMessage(chatId, '❌ *Operación cancelada*. Has regresado al menú principal.', {
+      reply_markup: getAdminReplyKeyboard(adminLink, baseUrl)
     });
     return;
   }
@@ -1457,15 +1581,52 @@ async function handleCallbackQuery(cb: any) {
 
   // 1.1. Reactions Callbacks (accessible to all users in channel and bot)
   if (data.startsWith('react_')) {
-    const parts = data.split('_');
-    const reactionType = parts[1] as 'like' | 'heart' | 'star' | 'fire';
-    const profileId = parts.slice(2).join('_');
+    const raw = data.slice('react_'.length);
+    const knownTypes = [
+      'heart_eyes',
+      'star_struck',
+      'in_love',
+      'heart',
+      'fire',
+      'like',
+      'kiss',
+      'star',
+      'clap',
+      'party'
+    ];
+    let reactionType = '';
+    let profileId = '';
+    for (const t of knownTypes) {
+      if (raw.startsWith(t + '_')) {
+        reactionType = t;
+        profileId = raw.slice(t.length + 1);
+        break;
+      }
+    }
+    if (!reactionType) {
+      const parts = raw.split('_');
+      reactionType = parts[0];
+      profileId = parts.slice(1).join('_');
+    }
+
+    const emojiMap: Record<string, string> = {
+      heart: '❤️',
+      fire: '🔥',
+      like: '👍',
+      in_love: '🥰',
+      kiss: '💋',
+      star: '⭐',
+      heart_eyes: '😍',
+      clap: '👏',
+      party: '🎉',
+      star_struck: '🤩'
+    };
 
     try {
       const { profile: updated, userReacted } = await toggleProfileReaction(profileId, userIdStr, reactionType);
       await updateTelegramMessageReactions(profileId);
 
-      const emoji = reactionType === 'heart' ? '❤️' : reactionType === 'star' ? '⭐' : reactionType === 'fire' ? '🔥' : '👍';
+      const emoji = emojiMap[reactionType] || '❤️';
       await callTelegramApi('answerCallbackQuery', {
         callback_query_id: cb.id,
         text: userReacted ? `¡Reaccionaste con ${emoji}!` : `Reacción ${emoji} retirada.`
@@ -1668,6 +1829,11 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
         ]
       ]
     }
+  });
+
+  // Activate the persistent keyboard menu so the admin always has buttons on their phone
+  await sendMessage(chatId, '👇 *Menú de Teclado Activado:* Puedes pulsar los botones inferiores en cualquier momento sin comandos.', {
+    reply_markup: getAdminReplyKeyboard(adminLink, baseUrl)
   });
 }
 

@@ -172,3 +172,69 @@ export async function streamB2Object(req: Request, res: Response) {
     }
   }
 }
+
+async function streamToBuffer(streamOrBody: any): Promise<Buffer> {
+  if (streamOrBody instanceof Buffer) return streamOrBody;
+  if (typeof streamOrBody?.transformToByteArray === 'function') {
+    const bytes = await streamOrBody.transformToByteArray();
+    return Buffer.from(bytes);
+  }
+  return new Promise((resolve, reject) => {
+    const chunks: any[] = [];
+    streamOrBody.on('data', (chunk: any) => chunks.push(chunk));
+    streamOrBody.on('error', reject);
+    streamOrBody.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+export async function backupDatabaseToB2(buffer: Buffer): Promise<string> {
+  const connection = getB2Connection();
+  if (!connection) throw new Error(`Backblaze B2 no configurado: ${missingB2Variables().join(', ')}`);
+
+  const objectKey = 'tu-vip/db/catalogo.sqlite';
+  await connection.client.send(new PutObjectCommand({
+    Bucket: connection.bucket,
+    Key: objectKey,
+    Body: buffer,
+    ContentType: 'application/x-sqlite3',
+    CacheControl: 'private, no-store'
+  }));
+
+  // Timestamped snapshot in tu-vip/backups/
+  const timestampKey = `tu-vip/backups/db_backup_${Date.now()}.sqlite`;
+  try {
+    await connection.client.send(new PutObjectCommand({
+      Bucket: connection.bucket,
+      Key: timestampKey,
+      Body: buffer,
+      ContentType: 'application/x-sqlite3',
+      CacheControl: 'private, no-store'
+    }));
+  } catch (e) {
+    console.warn('[B2] Snapshot adicional falló:', e);
+  }
+
+  return objectKey;
+}
+
+export async function downloadDatabaseFromB2(): Promise<Buffer | null> {
+  const connection = getB2Connection();
+  if (!connection) return null;
+
+  try {
+    const objectKey = 'tu-vip/db/catalogo.sqlite';
+    const object = await connection.client.send(new GetObjectCommand({
+      Bucket: connection.bucket,
+      Key: objectKey
+    }));
+
+    if (!object.Body) return null;
+    return await streamToBuffer(object.Body);
+  } catch (err: any) {
+    if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey') {
+      return null;
+    }
+    console.warn('[B2] Error descargando base de datos desde B2:', err?.message || err);
+    return null;
+  }
+}

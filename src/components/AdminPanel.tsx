@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll } from '../types';
 import { isVideoUrl } from './ProtectedMedia';
 import {
   X,
@@ -31,7 +31,9 @@ import {
   FileImage,
   ChevronLeft,
   ChevronRight,
-  Maximize2
+  Maximize2,
+  BarChart2,
+  ExternalLink
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -41,7 +43,7 @@ interface AdminPanelProps {
   channelId: string;
 }
 
-type AdminTab = 'profiles' | 'requests' | 'backups' | 'telegram' | 'audit';
+type AdminTab = 'profiles' | 'requests' | 'buttons' | 'polls' | 'backups' | 'telegram' | 'audit';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
@@ -107,6 +109,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [channelTitle, setChannelTitle] = useState<string>('');
   const [verifyingChannel, setVerifyingChannel] = useState(false);
   const [enlargedMediaUrl, setEnlargedMediaUrl] = useState<string | null>(null);
+
+  // Upload workflow state (comment and ephemeral before upload)
+  const [uploadComment, setUploadComment] = useState('');
+  const [uploadSugestiva, setUploadSugestiva] = useState(false);
+  const [uploadDuration, setUploadDuration] = useState(10);
+
+  // Custom buttons state
+  const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
+  const [editingButton, setEditingButton] = useState<Partial<CustomButton> | null>(null);
+  const [buttonFormData, setButtonFormData] = useState({
+    label: '',
+    url: '',
+    visible_channel: true,
+    visible_miniapp: true,
+    is_active: true
+  });
+  const [savingButton, setSavingButton] = useState(false);
+
+  // Dynamic polls state
+  const [dynamicPolls, setDynamicPolls] = useState<DynamicPoll[]>([]);
+  const [editingPoll, setEditingPoll] = useState<Partial<DynamicPoll> | null>(null);
+  const [pollFormData, setPollFormData] = useState({
+    question: '',
+    options: ['', ''],
+    visible_channel: true,
+    visible_miniapp: true,
+    publish_telegram: true
+  });
+  const [savingPoll, setSavingPoll] = useState(false);
+  const [syncingDb, setSyncingDb] = useState(false);
 
   useEffect(() => {
     setNewBotUsername(botUsername || '');
@@ -188,11 +220,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${tok}` };
-      const [resP, resR, resL, resI] = await Promise.all([
+      const [resP, resR, resL, resI, resB, resPolls] = await Promise.all([
         fetch('/api/admin/profiles', { headers }),
         fetch('/api/admin/requests', { headers }),
         fetch('/api/admin/logs', { headers }),
-        fetch('/api/info')
+        fetch('/api/info'),
+        fetch('/api/admin/buttons', { headers }),
+        fetch('/api/admin/polls', { headers })
       ]);
 
       if (resP.ok) {
@@ -215,6 +249,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setAuditLogs(logsData.audit_logs || []);
         setSyncErrors(logsData.sync_errors || []);
       }
+      if (resB.ok) setCustomButtons(await resB.json());
+      if (resPolls.ok) setDynamicPolls(await resPolls.json());
       if (resI.ok) {
         const infoData = await resI.json();
         if (infoData.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(infoData.auto_reply_delay_minutes));
@@ -388,6 +424,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       for (let i = 0; i < selectedPhotoFiles.length; i++) {
         body.append('photos', selectedPhotoFiles[i]);
       }
+      if (uploadComment.trim()) {
+        body.append('description', uploadComment.trim());
+      }
+      if (uploadSugestiva) {
+        body.append('is_ephemeral', 'true');
+        body.append('ephemeral_duration', String(uploadDuration || 10));
+      }
       const res = await fetch(`/api/admin/profiles/${profileId}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -395,8 +438,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'Imágenes y videos integrados al perfil.' });
+        setMessage({
+          type: 'success',
+          text: '✅ Guardado en Backblaze B2 exitosamente (Borrador). Puedes seguir seleccionando fotos para colocar comentarios o pulsar "Publicar en Canal VIP" cuando termines.'
+        });
         setSelectedPhotoFiles(null);
+        setUploadComment('');
+        setUploadSugestiva(false);
         if (editingProfile && data.profile) setEditingProfile(data.profile);
         fetchData();
       } else {
@@ -406,6 +454,140 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de red al subir imágenes' });
     } finally {
       setUploadingPhotos(false);
+    }
+  };
+
+  // Custom Buttons Handlers
+  const handleSaveButton = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!buttonFormData.label.trim() || !buttonFormData.url.trim()) {
+      setMessage({ type: 'error', text: 'La etiqueta y el enlace URL son obligatorios' });
+      return;
+    }
+    setSavingButton(true);
+    try {
+      const res = await fetch('/api/admin/buttons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: editingButton?.id,
+          ...buttonFormData
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: `Botón "${data.button.label}" guardado correctamente.` });
+        setEditingButton(null);
+        setButtonFormData({ label: '', url: '', visible_channel: true, visible_miniapp: true, is_active: true });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar botón' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al guardar botón' });
+    } finally {
+      setSavingButton(false);
+    }
+  };
+
+  const handleDeleteButton = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este botón?')) return;
+    try {
+      const res = await fetch(`/api/admin/buttons/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Botón eliminado correctamente' });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al eliminar botón' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar botón' });
+    }
+  };
+
+  // Dynamic Polls Handlers
+  const handleSavePoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const validOptions = pollFormData.options.map(o => o.trim()).filter(Boolean);
+    if (!pollFormData.question.trim() || validOptions.length < 2) {
+      setMessage({ type: 'error', text: 'Debes ingresar una pregunta y al menos 2 opciones' });
+      return;
+    }
+    setSavingPoll(true);
+    try {
+      const res = await fetch('/api/admin/polls', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: editingPoll?.id,
+          question: pollFormData.question.trim(),
+          options: validOptions,
+          visible_channel: pollFormData.visible_channel,
+          visible_miniapp: pollFormData.visible_miniapp,
+          publish_telegram: pollFormData.publish_telegram,
+          is_active: true
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: data.telegram_published
+            ? '🎉 ¡Encuesta creada y enviada al Canal VIP de Telegram y a la Mini App!'
+            : '✅ Encuesta guardada para la Mini App exitosamente.'
+        });
+        setEditingPoll(null);
+        setPollFormData({ question: '', options: ['', ''], visible_channel: true, visible_miniapp: true, publish_telegram: true });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al crear encuesta' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al crear encuesta' });
+    } finally {
+      setSavingPoll(false);
+    }
+  };
+
+  const handleDeletePoll = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar esta encuesta?')) return;
+    try {
+      const res = await fetch(`/api/admin/polls/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: 'Encuesta eliminada correctamente' });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al eliminar encuesta' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar encuesta' });
+    }
+  };
+
+  // Sync Database SQLite to B2
+  const handleSyncDbToB2 = async () => {
+    setSyncingDb(true);
+    try {
+      const res = await fetch('/api/admin/sync-db', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: '💾 Base de datos SQLite respaldada en Backblaze B2 exitosamente.' });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al respaldar DB en B2' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al respaldar base de datos' });
+    } finally {
+      setSyncingDb(false);
     }
   };
 
@@ -845,6 +1027,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const tabs: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
     { id: 'profiles', icon: <Users className="w-4 h-4" />, label: 'Mi Perfil' },
     { id: 'requests', icon: <Inbox className="w-4 h-4" />, label: 'Solicitudes', badge: requests.length },
+    { id: 'buttons', icon: <Sparkles className="w-4 h-4" />, label: 'Botones', badge: customButtons.length },
+    { id: 'polls', icon: <BarChart2 className="w-4 h-4" />, label: 'Encuestas', badge: dynamicPolls.length },
     { id: 'backups', icon: <HardDrive className="w-4 h-4" />, label: 'Backup Server', badge: backups.length },
     { id: 'telegram', icon: <QrCode className="w-4 h-4" />, label: 'Telegram' },
     { id: 'audit', icon: <Activity className="w-4 h-4" />, label: 'Auditoría' },
@@ -1028,8 +1212,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   <div className="pt-3 border-t border-zinc-900 space-y-3">
                     <label className="block text-zinc-300 font-bold text-xs flex items-center gap-1.5">
-                      <Upload className="w-4 h-4 text-amber-400" /> Seleccionar imágenes o videos:
+                      <Upload className="w-4 h-4 text-amber-400" /> Seleccionar imágenes o videos para subir:
                     </label>
+
+                    {/* Comentario y sugestivo para los archivos a subir */}
+                    <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2.5">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-zinc-400 mb-1 flex items-center gap-1">
+                          <MessageSquare className="w-3.5 h-3.5 text-amber-400" /> Comentario / Descripción de este material:
+                        </label>
+                        <input
+                          type="text"
+                          value={uploadComment}
+                          onChange={(e) => setUploadComment(e.target.value)}
+                          placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda..."
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
+                        />
+                        <p className="text-[10px] text-zinc-500 mt-1">
+                          Este comentario se publicará en el canal de Telegram con las 10 reacciones interactivas.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-900">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={uploadSugestiva}
+                            onChange={(e) => setUploadSugestiva(e.target.checked)}
+                            className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                            <Flame className={`w-3.5 h-3.5 ${uploadSugestiva ? 'text-rose-400' : 'text-zinc-500'}`} />
+                            Marcar como Sugestiva / Efímera
+                          </span>
+                        </label>
+
+                        {uploadSugestiva && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-zinc-400 font-semibold">Revelar por:</span>
+                            {[5, 10, 15, 30].map((sec) => (
+                              <button
+                                key={sec}
+                                type="button"
+                                onClick={() => setUploadDuration(sec)}
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
+                                  uploadDuration === sec
+                                    ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
+                                    : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                }`}
+                              >
+                                {sec}s
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
                       <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-800 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
@@ -1055,15 +1293,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           disabled={uploadingPhotos}
                           className="py-3 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-xs cursor-pointer shrink-0 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60"
                         >
-                          <Upload className="w-4 h-4" />
-                          {uploadingPhotos ? 'Subiendo...' : 'Subir contenido ahora'}
+                          <HardDrive className="w-4 h-4" />
+                          {uploadingPhotos ? 'Guardando en B2...' : '💾 Guardar en B2 (Borrador)'}
                         </button>
                       )}
                     </div>
                     <p className="text-[11px] text-zinc-500">
-                      {editingProfile
-                        ? 'Selecciona imágenes o videos (máx. 50 MB por archivo) y presiona “Subir contenido ahora” o “Guardar cambios”.'
-                        : 'Selecciona imágenes o videos; se vincularán al crear el perfil.'}
+                      Guarda el contenido en Backblaze B2 sin publicarlo al canal. Cuando estés lista/o, pulsa "🚀 Publicar en Canal VIP".
                     </p>
                   </div>
 
@@ -1080,12 +1316,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingProfile && (
                       <button
                         type="button"
-                        onClick={handleSaveAndPublish}
+                        onClick={() => handlePublishToChannel(editingProfile.id)}
                         disabled={publishing || loading}
                         className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
                       >
                         <Send className="w-4 h-4" />
-                        {publishing ? 'Publicando...' : '🚀 Guardar y Publicar en Canal'}
+                        {publishing ? 'Publicando...' : '🚀 Publicar en Canal VIP'}
                       </button>
                     )}
                   </div>
@@ -1920,6 +2156,364 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
             )}
 
+            {/* TAB: BOTONES PERSONALIZADOS */}
+            {activeTab === 'buttons' && (
+              <div className="space-y-5 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-400" /> Botones Interactivos
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Crea botones con enlaces personalizados (Canal Free, OnlyFans, Promociones VIP).
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => fetchData()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+                  </button>
+                </div>
+
+                {/* Formulario Crear / Editar Botón */}
+                <form onSubmit={handleSaveButton} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                    {editingButton ? <Edit className="w-3.5 h-3.5 text-amber-400" /> : <Plus className="w-3.5 h-3.5 text-amber-400" />}
+                    {editingButton ? 'Editar Botón Personalizado' : 'Crear Nuevo Botón'}
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-zinc-400 mb-1 font-semibold">Texto / Etiqueta del Botón *</label>
+                      <input
+                        type="text"
+                        required
+                        value={buttonFormData.label}
+                        onChange={e => setButtonFormData({ ...buttonFormData, label: e.target.value })}
+                        placeholder="Ej: 🎁 Promoción 50% VIP o 💋 Canal Free"
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 mb-1 font-semibold">Enlace Destino (URL o Telegram) *</label>
+                      <input
+                        type="url"
+                        required
+                        value={buttonFormData.url}
+                        onChange={e => setButtonFormData({ ...buttonFormData, url: e.target.value })}
+                        placeholder="https://t.me/... o https://..."
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={buttonFormData.visible_channel}
+                        onChange={e => setButtonFormData({ ...buttonFormData, visible_channel: e.target.checked })}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-zinc-300 font-medium">📢 Mostrar en Canal Telegram</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={buttonFormData.visible_miniapp}
+                        onChange={e => setButtonFormData({ ...buttonFormData, visible_miniapp: e.target.checked })}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-zinc-300 font-medium">📱 Mostrar en Mini App</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={buttonFormData.is_active}
+                        onChange={e => setButtonFormData({ ...buttonFormData, is_active: e.target.checked })}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-zinc-300 font-medium">🟢 Activo</span>
+                    </label>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      type="submit"
+                      disabled={savingButton}
+                      className="py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      {savingButton ? 'Guardando...' : editingButton ? 'Guardar Cambios' : 'Crear Botón'}
+                    </button>
+                    {editingButton && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingButton(null);
+                          setButtonFormData({ label: '', url: '', visible_channel: true, visible_miniapp: true, is_active: true });
+                        }}
+                        className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </form>
+
+                {/* Lista de Botones */}
+                <div className="space-y-2">
+                  <h4 className="font-bold text-zinc-300">Botones Registrados ({customButtons.length})</h4>
+                  {customButtons.length === 0 ? (
+                    <div className="p-6 text-center bg-zinc-950/60 border border-zinc-800 rounded-2xl text-zinc-400">
+                      No hay botones configurados todavía. Agrega el primero arriba.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {customButtons.map(btn => (
+                        <div key={btn.id} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-white text-xs">{btn.label}</span>
+                              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${btn.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                                {btn.is_active ? 'ACTIVO' : 'INACTIVO'}
+                              </span>
+                              {btn.visible_channel && (
+                                <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 text-[9px] font-semibold">
+                                  📢 Canal
+                                </span>
+                              )}
+                              {btn.visible_miniapp && (
+                                <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 text-[9px] font-semibold">
+                                  📱 Mini App
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-zinc-400 font-mono truncate">{btn.url}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <a
+                              href={btn.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors"
+                              title="Probar enlace"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingButton(btn);
+                                setButtonFormData({
+                                  label: btn.label,
+                                  url: btn.url,
+                                  visible_channel: Boolean(btn.visible_channel),
+                                  visible_miniapp: Boolean(btn.visible_miniapp),
+                                  is_active: Boolean(btn.is_active)
+                                });
+                              }}
+                              className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 transition-colors"
+                              title="Editar"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteButton(btn.id)}
+                              className="p-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white transition-colors"
+                              title="Eliminar"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: DINÁMICAS Y ENCUESTAS */}
+            {activeTab === 'polls' && (
+              <div className="space-y-5 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <BarChart2 className="w-4 h-4 text-amber-400" /> Dinámicas y Encuestas
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Lanza votaciones en el Canal de Telegram y en la Mini App para interactuar con tus seguidores.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => fetchData()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+                  </button>
+                </div>
+
+                {/* Formulario Crear Encuesta */}
+                <form onSubmit={handleSavePoll} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                  <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                    <Plus className="w-3.5 h-3.5 text-amber-400" /> Nueva Encuesta / Dinámica
+                  </h4>
+
+                  <div>
+                    <label className="block text-zinc-400 mb-1 font-semibold">Pregunta de la Encuesta *</label>
+                    <input
+                      type="text"
+                      required
+                      value={pollFormData.question}
+                      onChange={e => setPollFormData({ ...pollFormData, question: e.target.value })}
+                      placeholder="Ej: ¿Qué color de lencería prefieren para este viernes?"
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-zinc-400 font-semibold">Opciones de Votación (Mínimo 2) *</label>
+                    {pollFormData.options.map((opt, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <span className="w-5 text-zinc-500 text-right font-mono text-[11px]">{idx + 1}.</span>
+                        <input
+                          type="text"
+                          required
+                          value={opt}
+                          onChange={e => {
+                            const updated = [...pollFormData.options];
+                            updated[idx] = e.target.value;
+                            setPollFormData({ ...pollFormData, options: updated });
+                          }}
+                          placeholder={`Opción ${idx + 1}`}
+                          className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500"
+                        />
+                        {pollFormData.options.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = pollFormData.options.filter((_, i) => i !== idx);
+                              setPollFormData({ ...pollFormData, options: updated });
+                            }}
+                            className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {pollFormData.options.length < 10 && (
+                      <button
+                        type="button"
+                        onClick={() => setPollFormData({ ...pollFormData, options: [...pollFormData.options, ''] })}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1 mt-1 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Añadir otra opción
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-3 bg-zinc-900/60 rounded-xl space-y-2 border border-zinc-800">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pollFormData.publish_telegram}
+                        onChange={e => setPollFormData({ ...pollFormData, publish_telegram: e.target.checked })}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-zinc-200 font-bold">📢 Enviar directamente al Canal de Telegram como Encuesta Nativa</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={pollFormData.visible_miniapp}
+                        onChange={e => setPollFormData({ ...pollFormData, visible_miniapp: e.target.checked })}
+                        className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                      />
+                      <span className="text-zinc-300 font-medium">📱 Habilitar votación en la Mini App</span>
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={savingPoll}
+                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {savingPoll ? 'Creando Encuesta...' : '🚀 Lanzar Encuesta'}
+                  </button>
+                </form>
+
+                {/* Lista de Encuestas */}
+                <div className="space-y-3">
+                  <h4 className="font-bold text-zinc-300">Encuestas Activas ({dynamicPolls.length})</h4>
+                  {dynamicPolls.length === 0 ? (
+                    <div className="p-6 text-center bg-zinc-950/60 border border-zinc-800 rounded-2xl text-zinc-400">
+                      No hay encuestas creadas aún.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dynamicPolls.map(poll => {
+                        const totalVotes = Object.values(poll.votes || {}).reduce((a, b) => a + b, 0);
+                        return (
+                          <div key={poll.id} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h5 className="font-bold text-white text-xs sm:text-sm">{poll.question}</h5>
+                                <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-1">
+                                  <span>{totalVotes} votos registrados</span>
+                                  <span>•</span>
+                                  <span>{new Date(poll.created_at).toLocaleDateString('es-BO')}</span>
+                                  {poll.telegram_poll_id && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-sky-400 font-semibold">En Telegram Poll</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePoll(poll.id)}
+                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors cursor-pointer"
+                                title="Eliminar encuesta"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="space-y-1.5 pt-1">
+                              {poll.options.map((opt, optIdx) => {
+                                const votes = (poll.votes?.[optIdx] ?? (poll.votes as any)?.[opt]) || 0;
+                                const pct = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
+                                return (
+                                  <div key={opt} className="space-y-1">
+                                    <div className="flex justify-between text-[11px]">
+                                      <span className="text-zinc-300 font-medium">{opt}</span>
+                                      <span className="text-zinc-400 font-mono">{votes} ({pct}%)</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                      <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* TAB: BACKUP SERVER MINI APP */}
             {activeTab === 'backups' && (
               <div className="space-y-4 text-xs">
@@ -1982,6 +2576,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </button>
                   </div>
                 </form>
+
+                {/* Respaldo Base de Datos SQLite a B2 */}
+                <div className="p-4 bg-zinc-950 border border-amber-500/30 rounded-2xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-white flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-amber-400" /> Respaldo Permanente de Base de Datos SQLite
+                    </span>
+                    <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md font-mono">
+                      Anti-pérdida en Render
+                    </span>
+                  </div>
+                  <p className="text-zinc-400 text-[11px]">
+                    Guarda una copia instantánea del catálogo completo, votos y configuraciones en <code className="text-amber-300">tu-vip/db/catalogo.sqlite</code> en Backblaze B2 para que nunca se pierda al reiniciar el servidor.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleSyncDbToB2}
+                    disabled={syncingDb}
+                    className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {syncingDb ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                        Guardando en B2...
+                      </>
+                    ) : (
+                      <>
+                        <HardDrive className="w-3.5 h-3.5" /> 💾 Sincronizar Base de Datos a B2 Ahora
+                      </>
+                    )}
+                  </button>
+                </div>
 
                 {/* Lista de Respaldos */}
                 <div className="space-y-2">
