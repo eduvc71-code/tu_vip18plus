@@ -735,6 +735,18 @@ export function saveSystemSetting(key: string, value: string): void {
   saveDb();
 }
 
+export function addAdminTelegramId(telegramUserId: string | number): void {
+  const current = (getSystemSetting('admin_telegram_ids') || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+  const strId = String(telegramUserId).trim();
+  if (!current.includes(strId)) {
+    current.push(strId);
+    saveSystemSetting('admin_telegram_ids', current.join(','));
+  }
+}
+
 // Invitation Codes Management
 export interface InvitationCode {
   code: string;
