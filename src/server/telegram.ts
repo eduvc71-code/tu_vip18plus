@@ -522,7 +522,7 @@ export async function processTelegramUpdate(update: any) {
       return;
     }
     if (isAdminUser(fromId)) {
-      await clearConversationState(userIdStr);
+      await setConversationState(userIdStr, 'BACKUP_MODE', {});
       await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
       return;
     }
@@ -588,7 +588,7 @@ export async function processTelegramUpdate(update: any) {
 
   // Command switch
   if (text === '/start') {
-    await clearConversationState(userIdStr);
+    await setConversationState(userIdStr, 'BACKUP_MODE', {});
     await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
     return;
   }
@@ -712,6 +712,12 @@ export async function processTelegramUpdate(update: any) {
   const state = await getConversationState(userIdStr);
   if (state) {
     await handleConversationStep(chatId, userIdStr, message, state);
+    return;
+  }
+
+  // Si una administradora envía fotos, videos o archivos directamente, respaldar automáticamente a B2
+  if (message.photo || message.video || message.document) {
+    await handleBackupUploadFromTelegram(chatId, userIdStr, message);
     return;
   }
 
@@ -1378,9 +1384,9 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
 
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
-    `👇 *Acciones Rápidas con Botones:*\n` +
-    `Pulsa un botón para gestionar o escribe los comandos manuales:\n\n` +
-    `💾 *[ 💾 Backup Server Mini APP ]* ⬅️ _(Click para Activar Servidor seguro B2)_`;
+    `💾 *[ 💾 Backup Server Mini APP — ACTIVADO AUTOMÁTICAMENTE ]*\n` +
+    `✅ *Servidor Seguro B2 Listo:* Como Administradora, el modo de respaldo ya está activo. Puedes enviar o reenviar fotos y videos (≤ 20 MB) directamente a este chat y se guardarán de inmediato en tu carpeta privada de Backblaze B2 (sin publicarse en el catálogo público).\n\n` +
+    `👇 *Acciones Rápidas con Botones:*`;
 
   await sendMessage(chatId, msg, {
     reply_markup: {
@@ -1389,7 +1395,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
           { text: '🔐 Abrir Panel Web Administrativo', url: adminLink }
         ],
         [
-          { text: '💾 Backup Server Mini APP', callback_data: 'admin_btn_backup' }
+          { text: '💾 Backup Server Mini APP (Activo ✅)', callback_data: 'admin_btn_backup' }
         ],
         [
           { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
