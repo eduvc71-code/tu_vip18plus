@@ -3,9 +3,10 @@ import { Lock, Send, ShieldAlert } from 'lucide-react';
 
 interface TelegramGateProps {
   botUsername: string;
+  onContinue?: () => void;
 }
 
-export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
+export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onContinue }) => {
   const isLegacy = !botUsername || /ruti|flavia|iam_danii|danii_oficial/i.test(botUsername);
   const cleanUsername = isLegacy ? 'Danii_Catalogo_SCZ_bot' : botUsername.replace(/^@/, '').trim();
   const botUrl = `https://t.me/${cleanUsername}`;
@@ -20,26 +21,29 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername }) => {
         <div className="space-y-2">
           <span className="inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-widest text-amber-400">Contenido Exclusivo +18</span>
           <h2 className="font-serif text-2xl font-bold tracking-tight text-white">Canal VIP Free (+18)</h2>
-          <p className="mx-auto max-w-xs text-xs leading-relaxed text-zinc-400">Esta Mini App se abre exclusivamente desde el bot oficial de Telegram.</p>
+          <p className="mx-auto max-w-xs text-xs leading-relaxed text-zinc-400">Esta Mini App se abre desde Telegram o enlace autorizado.</p>
         </div>
 
-        <div className="space-y-2 rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 text-left text-xs">
-          <div className="flex items-center gap-2 font-bold text-amber-300">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400" />
-            <span>ACCESO MEDIANTE TELEGRAM</span>
-          </div>
-          <p className="text-[11px] leading-normal text-zinc-400">Abre el bot y utiliza el botón “Ver Canal VIP Free”. Los enlaces de invitación también dirigen primero al bot.</p>
-        </div>
+        <div className="space-y-3 pt-2">
+          {onContinue && (
+            <button
+              onClick={onContinue}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+            >
+              <span>🔞 Continuar al Catálogo (+18)</span>
+            </button>
+          )}
 
-        <a
-          href={botUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-4 text-xs font-extrabold uppercase tracking-wider text-white shadow-lg shadow-sky-600/20 transition-colors hover:from-sky-500 hover:to-blue-500"
-        >
-          <Send className="h-4 w-4" />
-          Abrir bot oficial (@{cleanUsername})
-        </a>
+          <a
+            href={botUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800 px-4 text-xs font-bold text-zinc-300 transition-colors"
+          >
+            <Send className="h-4 w-4 text-sky-400" />
+            Abrir Bot Oficial (@{cleanUsername})
+          </a>
+        </div>
       </div>
     </div>
   );

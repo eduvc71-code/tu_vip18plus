@@ -8,7 +8,7 @@ interface AgeModalProps {
 
 export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [accepted, setAccepted] = useState(false);
+  const [accepted, setAccepted] = useState(true);
 
   useEffect(() => {
     // Si ya es suscriptor o usuario verificado previamente, no volver a abrir el splash
@@ -19,7 +19,6 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
   }, []);
 
   const handleAccept = () => {
-    if (!accepted) return;
     localStorage.setItem('danii_vip_age_verified', 'true');
     setIsOpen(false);
     onConfirm();
@@ -43,10 +42,10 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
           {modelName ? modelName.toUpperCase() : 'CANAL VIP FREE'}
         </h2>
         <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold text-center mb-4">
-          Galería Privada y Confidencial
+          Galería Privada y Confidencial (+18)
         </p>
 
-        <label className="flex items-center gap-3 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl cursor-pointer mb-4 hover:bg-amber-500/15 transition-colors">
+        <label className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl cursor-pointer mb-4 hover:bg-amber-500/15 transition-colors">
           <input
             type="checkbox"
             checked={accepted}
@@ -54,20 +53,15 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
             className="w-5 h-5 rounded border-amber-500/50 bg-zinc-900 text-amber-500 focus:ring-amber-500 focus:ring-offset-0 cursor-pointer shrink-0"
           />
           <span className="text-xs text-amber-200 font-medium select-none">
-            Soy mayor de 18+ y acepto ingresar.
+            Confirmo que soy mayor de 18 años.
           </span>
         </label>
 
         <div className="flex gap-2">
           <button
             onClick={handleAccept}
-            disabled={!accepted}
             id="btn-accept-age"
-            className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              accepted
-                ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20'
-                : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
-            }`}
+            className="flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 active:scale-95"
           >
             <CheckCircle2 className="w-4 h-4" />
             ENTRAR AL CANAL VIP FREE

@@ -96,6 +96,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [uploadingBackups, setUploadingBackups] = useState(false);
   const [backupFiles, setBackupFiles] = useState<FileList | null>(null);
+  const [pinInput, setPinInput] = useState('');
+  const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
     setNewBotUsername(botUsername || '');
@@ -104,8 +106,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   useEffect(() => {
     if (isOpen) {
       const magicToken = new URLSearchParams(window.location.search).get('admin_token') || '';
-      if (magicToken) {
-        void verifyAndAuthenticate(magicToken);
+      const savedToken = localStorage.getItem('danii_admin_token') || '';
+      const tokenToTry = magicToken || savedToken;
+
+      if (tokenToTry) {
+        void verifyAndAuthenticate(tokenToTry);
       } else {
         setIsAuthenticated(false);
         setAuthChecked(true);
@@ -125,14 +130,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.valid) {
         setToken(tok);
         setIsAuthenticated(true);
+        try { localStorage.setItem('danii_admin_token', tok); } catch {}
         await fetchData(tok);
       } else {
         setIsAuthenticated(false);
+        try { localStorage.removeItem('danii_admin_token'); } catch {}
       }
     } catch {
       setIsAuthenticated(false);
     } finally {
       setAuthChecked(true);
+      setLoading(false);
+    }
+  };
+
+  const handleLoginWithPin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!pinInput.trim()) return;
+    setLoading(true);
+    setLoginError('');
+    try {
+      const res = await fetch('/api/admin/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.valid && data.token) {
+        setToken(data.token);
+        setIsAuthenticated(true);
+        try { localStorage.setItem('danii_admin_token', data.token); } catch {}
+        await fetchData(data.token);
+      } else {
+        setLoginError(data.error || 'Credenciales incorrectas');
+      }
+    } catch {
+      setLoginError('Error de conexión con el servidor');
+    } finally {
       setLoading(false);
     }
   };
@@ -608,22 +642,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   if (!authChecked || !isAuthenticated) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-        <div className="w-full max-w-sm rounded-3xl border border-zinc-800 bg-zinc-900 p-6 text-center shadow-2xl">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
-            <Lock className="h-6 w-6" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-md overflow-y-auto">
+        <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-zinc-900 p-6 text-center shadow-2xl space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+            <Lock className="h-7 w-7" />
           </div>
-          <h2 className="mt-4 font-serif text-lg font-bold text-white">
-            {!authChecked ? 'Validando acceso…' : 'Enlace administrativo inválido'}
-          </h2>
-          <p className="mt-2 text-xs leading-5 text-zinc-400">
-            {!authChecked ? 'Comprobando el enlace seguro enviado por Telegram.' : 'Solicita un enlace nuevo escribiendo /admin en el chat privado del bot.'}
-          </p>
-          {authChecked && (
-            <a href={`https://t.me/${botUsername}`} className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-amber-500 px-4 text-xs font-bold text-zinc-950">
-              Abrir bot oficial
+          
+          <div>
+            <h2 className="font-serif text-xl font-bold text-white">
+              Panel Administrativo VIP
+            </h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              Ingresa con tu PIN o Telegram ID autorizado
+            </p>
+          </div>
+
+          <form onSubmit={handleLoginWithPin} className="space-y-3 pt-2 text-left">
+            <div>
+              <label className="block text-[11px] font-bold uppercase text-zinc-300 mb-1">
+                PIN de Acceso o ID Administrador
+              </label>
+              <input
+                type="password"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="Ingresa tu PIN o ID Telegram"
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
+                autoFocus
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-xs text-rose-400 font-medium">{loginError}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !pinInput.trim()}
+              className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              <span>Entrar al Panel Admin</span>
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-zinc-800 space-y-2">
+            <a
+              href={`https://t.me/${botUsername}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-xs text-sky-400 hover:text-sky-300 font-medium"
+            >
+              👉 O pide un enlace directo enviando /admin en el Bot
             </a>
-          )}
+            <button
+              onClick={onClose}
+              type="button"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              Ir al Catálogo Público
+            </button>
+          </div>
         </div>
       </div>
     );
