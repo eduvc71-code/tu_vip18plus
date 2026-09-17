@@ -55,7 +55,7 @@ export function getBotConfig() {
     process.env.RENDER_EXTERNAL_URL ||
     process.env.APP_BASE_URL ||
     process.env.APP_URL ||
-    'http://localhost:3000'
+    'https://catalogo-vip-scz.onrender.com'
   ).replace(/\/+$/, '');
 
   return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl };
@@ -209,7 +209,7 @@ export async function updateBotMenuButton() {
   return await callTelegramApi('setChatMenuButton', {
     menu_button: {
       type: 'web_app',
-      text: 'Ver Canal VIP Free',
+      text: '✨ Abrir Catálogo VIP ✨',
       web_app: {
         url: baseUrl
       }
@@ -592,7 +592,7 @@ export async function processTelegramUpdate(update: any) {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🔐 Ingresar al Panel Web', url: adminLink }
+            { text: '👑 Abrir Panel Web Administrativo', web_app: { url: adminLink } }
           ],
           [
             { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
@@ -1410,7 +1410,10 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🔐 Abrir Panel Web Administrativo', url: adminLink }
+          { text: '👑 Abrir Panel Admin (Web App)', web_app: { url: adminLink } }
+        ],
+        [
+          { text: '💎 Ver Catálogo VIP (Mini App Cliente)', web_app: { url: baseUrl } }
         ],
         [
           { text: '💾 Backup Server Mini APP (Activo ✅)', callback_data: 'admin_btn_backup' }
