@@ -32,7 +32,7 @@ import {
   getAllPolls,
 } from './db.js';
 import { Profile, ProfileStatus } from '../types.js';
-import { uploadBufferToB2, isB2Configured } from './b2Storage.js';
+import { uploadBufferToB2, isB2Configured, mediaUrl } from './b2Storage.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -233,18 +233,17 @@ export function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
       ],
       [
         { text: '📢 Canal VIP' },
-        { text: '💾 Respaldo B2' }
+        { text: '📋 Listar Contenido' }
       ],
       [
-        { text: '🔘 Botones' },
-        { text: '📊 Dinámicas / Encuestas' }
+        { text: '➕ Nuevo Perfil' },
+        { text: '🔘 Botones' }
       ],
       [
-        { text: '📋 Listar Contenido' },
-        { text: '➕ Nuevo Perfil' }
+        { text: '📊 Dinámicas / Encuestas' },
+        { text: '❓ Ayuda Admin' }
       ],
       [
-        { text: '❓ Ayuda Admin' },
         { text: '❌ Cancelar' }
       ]
     ],
@@ -307,8 +306,7 @@ export async function registerBotCommands() {
       { command: 'info', description: 'Información y discreción' },
       { command: 'id', description: 'Ver mi Telegram ID y estado del bot' },
       { command: 'ayuda', description: 'Soporte y dudas frecuentes' },
-      { command: 'admin', description: 'Panel Web (Solo Administradora)' },
-      { command: 'respaldo', description: 'Backup Server Mini APP (Servidor Seguro)' }
+      { command: 'admin', description: 'Panel Web (Solo Administradora)' }
     ]
   });
 }
@@ -749,7 +747,6 @@ export async function processTelegramUpdate(update: any) {
       return;
     }
     if (isAdminUser(fromId)) {
-      await setConversationState(userIdStr, 'BACKUP_MODE', {});
       await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
       return;
     }
@@ -832,14 +829,11 @@ export async function processTelegramUpdate(update: any) {
       const { baseUrl, brandName } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
       const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
-      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente al menú de Administradora y Respaldo B2.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
+      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y catálogo.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
         reply_markup: {
           inline_keyboard: [
             [
               { text: '👑 Abrir Panel Web Administrativo', web_app: { url: adminLink } }
-            ],
-            [
-              { text: '💾 Backup Server Mini APP (Activo ✅)', callback_data: 'admin_btn_backup' }
             ]
           ]
         }
@@ -899,11 +893,6 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  if (adminText === '💾 Respaldo B2') {
-    await setConversationState(userIdStr, 'BACKUP_MODE', {});
-    await sendBackupModeInstructions(chatId, userIdStr);
-    return;
-  }
 
   if (adminText === '🔘 Botones' || adminText === '🔘 Botones Personalizados') {
     const buttons = await getAllCustomButtons();
@@ -971,7 +960,6 @@ export async function processTelegramUpdate(update: any) {
 
   // Command switch
   if (text === '/start') {
-    await setConversationState(userIdStr, 'BACKUP_MODE', {});
     await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
     return;
   }
@@ -997,19 +985,6 @@ export async function processTelegramUpdate(update: any) {
     }
     await updateBotMenuButton();
     await sendMessage(chatId, `✅ *Mensaje anclado en Telegram y botón "Ver Canal VIP Free" sincronizado con la web actual.*`);
-    return;
-  }
-
-  const caption = (message.caption || '').toLowerCase();
-  const isBackupCaption = caption.includes('#respaldo') || caption.includes('#backup') || caption.includes('/respaldo') || caption.includes('/backup');
-  if (isBackupCaption && (message.photo || message.video || message.document)) {
-    await handleBackupUploadFromTelegram(chatId, userIdStr, message);
-    return;
-  }
-
-  if (text === '/respaldo' || text === '/backup' || text === '/respaldar') {
-    await setConversationState(userIdStr, 'BACKUP_MODE', {});
-    await sendBackupModeInstructions(chatId, userIdStr);
     return;
   }
 
@@ -1098,9 +1073,9 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // Si una administradora envía fotos, videos o archivos directamente, respaldar automáticamente a B2
+  // Si una administradora envía fotos, videos o archivos directamente, guardar en la galería del perfil
   if (message.photo || message.video || message.document) {
-    await handleBackupUploadFromTelegram(chatId, userIdStr, message);
+    await handleProfileMediaUploadFromTelegram(chatId, userIdStr, message);
     return;
   }
 
@@ -1115,15 +1090,6 @@ async function handleConversationStep(chatId: string | number, userId: string, m
   const text = message.text ? message.text.trim() : '';
 
   switch (state.step) {
-    case 'BACKUP_MODE': {
-      if (text === '/fin' || text === '/salir' || text === '/cancelar') {
-        await clearConversationState(userId);
-        await sendMessage(chatId, '✅ *Modo Respaldo Finalizado*. Has regresado al menú principal.');
-        return;
-      }
-      await handleBackupUploadFromTelegram(chatId, userId, message);
-      break;
-    }
 
     case 'NEW_NAME': {
       if (!text) {
@@ -1307,32 +1273,8 @@ async function getTelegramFileUrl(fileId: string): Promise<string> {
   return '';
 }
 
-async function sendBackupModeInstructions(chatId: string | number, userId: string) {
-  const backupIntro = `💾 *BACKUP SERVER MINI APP — SERVIDOR SEGURO B2* 💾\n\n` +
-    `🔒 *Modo Servidor Seguro Activado (Backblaze B2)*\n\n` +
-    `Puedes enviarme directamente en este chat:\n` +
-    `📸 *Fotografías* (JPG, PNG, WEBP)\n` +
-    `🎥 *Videos* (MP4, MOV, WEBM)\n` +
-    `📁 *Documentos o Archivos Multimedia*\n\n` +
-    `⚠️ *Condiciones del Servidor Seguro*:\n` +
-    `• Tamaño: *Igual o menor a 20 MB* por archivo (Límite oficial Telegram Bot API).\n` +
-    `• Destino: Carpeta privada segura \`tu-vip/backups/admin_${userId}/\`.\n` +
-    `• 🚫 *Aislamiento Total*: NINGÚN archivo de respaldo se publicará en el canal ni se agregará al catálogo público de la Mini App.\n\n` +
-    `👉 *Envía tus fotos o videos ahora*, o pulsa el botón abajo para salir:`;
-
-  await sendMessage(chatId, backupIntro, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }
-        ]
-      ]
-    }
-  });
-}
-
-async function handleBackupUploadFromTelegram(chatId: string | number, userId: string, message: any) {
-  const { token } = getBotConfig();
+async function handleProfileMediaUploadFromTelegram(chatId: string | number, userId: string, message: any) {
+  const { token, baseUrl } = getBotConfig();
 
   let fileId = '';
   let fileName = '';
@@ -1358,24 +1300,29 @@ async function handleBackupUploadFromTelegram(chatId: string | number, userId: s
   }
 
   if (!fileId) {
-    await sendMessage(chatId, '⚠️ Por favor envía una foto o video válido para respaldar, o pulsa abajo para salir.', {
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }]
-        ]
-      }
-    });
+    await sendMessage(chatId, '⚠️ Por favor envía una foto o video válido para agregar a la galería.');
     return;
   }
 
   const maxBytes = 20 * 1024 * 1024; // 20 MB Telegram Bot API limit
   if (fileSize > maxBytes) {
     const sizeMb = (fileSize / (1024 * 1024)).toFixed(1);
-    await sendMessage(chatId, `⚠️ *Archivo demasiado grande para Telegram Bot API*\n\nPeso: *${sizeMb} MB* (Límite: 20 MB).\n\n💡 Telegram no permite que bots descarguen archivos mayores a 20 MB.\n👉 Para videos pesados de más de 20 MB, por favor súbelos directamente desde la pestaña *"Backup Server"* en el Panel Web Administrativo.`);
+    await sendMessage(chatId, `⚠️ *Archivo demasiado grande para Telegram Bot API*\n\nPeso: *${sizeMb} MB* (Límite: 20 MB).\n\n💡 Telegram no permite que bots descarguen archivos mayores a 20 MB.\n👉 Para videos de más de 20 MB, por favor súbelos directamente desde el Panel Web Administrativo.`);
     return;
   }
 
-  await sendMessage(chatId, `⏳ *Descargando y respaldando en Servidor Seguro B2...*\nArchivo: \`${fileName}\``);
+  const profiles = await getAllProfiles();
+  if (profiles.length === 0) {
+    await sendMessage(chatId, '⚠️ *No hay perfiles registrados en el catálogo*.\n\nCrea primero un perfil con `/nuevo` o desde el Panel Web para poder vincularle fotografías y videos.');
+    return;
+  }
+
+  // Check if admin has a selected profile in conversation state, otherwise default to first profile
+  const convState = await getConversationState(userId);
+  const activeProfileId = convState?.active_profile_id;
+  const targetProfile = (activeProfileId ? profiles.find(p => p.id === activeProfileId) : null) || profiles[0];
+
+  await sendMessage(chatId, `⏳ *Subiendo contenido al perfil de ${targetProfile.name}...*\nArchivo: \`${fileName}\``);
 
   try {
     const fileData = await callTelegramApi('getFile', { file_id: fileId });
@@ -1392,33 +1339,52 @@ async function handleBackupUploadFromTelegram(chatId: string | number, userId: s
     const arrayBuf = await res.arrayBuffer();
     const buffer = Buffer.from(arrayBuf);
 
-    // Upload to Backblaze B2 under tu-vip/backups/admin_{userId}/
-    const subfolder = `backups/admin_${userId}`;
-    const objectKey = await uploadBufferToB2(buffer, fileName, mimeType, subfolder);
+    let finalMediaUrl = '';
+    if (isB2Configured()) {
+      const objectKey = await uploadBufferToB2(buffer, fileName, mimeType, 'profiles');
+      finalMediaUrl = mediaUrl(baseUrl, objectKey);
+    } else {
+      const localFileName = `tg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}_${fileName}`;
+      const localPath = path.join(UPLOADS_DIR, localFileName);
+      fs.writeFileSync(localPath, buffer);
+      finalMediaUrl = `${baseUrl}/uploads/${localFileName}`;
+    }
+
+    // Add media to profile's photos (as cover / first item)
+    const updatedPhotos = [finalMediaUrl, ...(targetProfile.photos || []).filter(p => p !== finalMediaUrl)];
+    await saveProfile({
+      id: targetProfile.id,
+      photos: updatedPhotos
+    });
 
     const sizeFormatted = fileSize < 1024 * 1024
       ? `${(fileSize / 1024).toFixed(1)} KB`
       : `${(fileSize / (1024 * 1024)).toFixed(2)} MB`;
 
-    await addAuditLog('BACKUP_MEDIA_TELEGRAM', userId, `Archivo respaldado en B2: ${fileName} (${sizeFormatted})`);
+    await addAuditLog('UPLOAD_MEDIA_TELEGRAM', userId, `Foto/video agregada al perfil ${targetProfile.name}: ${fileName} (${sizeFormatted})`, targetProfile.id);
 
-    const reply = `✅ *¡Archivo Respaldado con Éxito en Servidor Seguro B2!* 💾\n\n` +
-      `📁 *Archivo*: \`${fileName}\`\n` +
-      `📦 *Tamaño*: \`${sizeFormatted}\`\n` +
-      `🔒 *Ubicación Privada*: \`${objectKey}\`\n` +
-      `🚫 *Aislamiento*: Privado (No publicado en catálogo)\n\n` +
-      `_Envía otro archivo para seguir respaldando o pulsa abajo para finalizar._`;
+    const adminToken = generateAdminMagicToken(String(userId));
+    const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+
+    const reply = `✅ *¡Contenido Agregado con Éxito al Catálogo!* 📸\n\n` +
+      `👤 *Perfil*: *${targetProfile.name}*\n` +
+      `📁 *Archivo*: \`${fileName}\` (${sizeFormatted})\n` +
+      `🖼️ *Total Fotos / Videos*: *${updatedPhotos.length}*\n\n` +
+      `_El contenido ya está guardado en tu galería. Para gestionarlo abre el Panel Web o usa /publicar ${targetProfile.id}._`;
 
     await sendMessage(chatId, reply, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '❌ Finalizar Backup', callback_data: 'admin_btn_exit_backup' }]
+          [
+            { text: '👑 Ver en Panel Web', web_app: { url: adminLink } },
+            { text: '💎 Ver Catálogo VIP', web_app: { url: baseUrl } }
+          ]
         ]
       }
     });
   } catch (error: any) {
-    console.error('[Telegram Backup Error]:', error);
-    await sendMessage(chatId, `❌ *Error al respaldar archivo*: ${error.message || 'Error desconocido'}`);
+    console.error('[Telegram Profile Media Upload Error]:', error);
+    await sendMessage(chatId, `❌ *Error al agregar contenido*: ${error.message || 'Error desconocido'}`);
   }
 }
 
@@ -1656,18 +1622,6 @@ async function handleCallbackQuery(cb: any) {
   await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
 
   // Admin action button callbacks
-  if (data === 'admin_btn_backup') {
-    await setConversationState(userIdStr, 'BACKUP_MODE', {});
-    await sendBackupModeInstructions(chatId, userIdStr);
-    return;
-  }
-
-  if (data === 'admin_btn_exit_backup') {
-    await clearConversationState(userIdStr);
-    await sendMessage(chatId, '✅ *Modo Respaldo Finalizado*. Has regresado al menú administrativo.');
-    return;
-  }
-
   if (data === 'admin_btn_new') {
     await setConversationState(userIdStr, 'NEW_NAME', {});
     await sendMessage(chatId, '➕ *Crear Nuevo Perfil (Paso 1/5)*\n\nPor favor, escribe el *Nombre Público*:');
@@ -1804,8 +1758,8 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
 
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
-    `💾 *[ 💾 Backup Server Mini APP — ACTIVADO AUTOMÁTICAMENTE ]*\n` +
-    `✅ *Servidor Seguro B2 Listo:* Como Administradora, el modo de respaldo ya está activo. Puedes enviar o reenviar fotos y videos (≤ 20 MB) directamente a este chat y se guardarán de inmediato en tu carpeta privada de Backblaze B2 (sin publicarse en el catálogo público).\n\n` +
+    `📸 *Carga Directa de Contenido:*\n` +
+    `Como Administradora, puedes enviar o reenviar fotografías y videos directamente a este chat y se agregarán de inmediato a la galería de tu catálogo.\n\n` +
     `👇 *Acciones Rápidas con Botones:*`;
 
   await sendMessage(chatId, msg, {
@@ -1816,9 +1770,6 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
         ],
         [
           { text: '💎 Ver Catálogo VIP (Mini App Cliente)', web_app: { url: baseUrl } }
-        ],
-        [
-          { text: '💾 Backup Server Mini APP (Activo ✅)', callback_data: 'admin_btn_backup' }
         ],
         [
           { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },

@@ -3,9 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import {
-  deleteB2Backup,
   isB2Configured,
-  listB2Backups,
   mediaUrl,
   streamB2Object,
   uploadBufferToB2,
@@ -101,22 +99,6 @@ const upload = multer({
       cb(null, true);
     } else {
       cb(new Error('Solo se permiten imágenes o videos (MP4, WebM, MOV)'));
-    }
-  }
-});
-
-const backupUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 100 * 1024 * 1024 }, // hasta 100 MB para respaldos
-  fileFilter: (req, file, cb) => {
-    if (
-      file.mimetype.startsWith('image/') ||
-      file.mimetype.startsWith('video/') ||
-      file.mimetype === 'application/octet-stream'
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error('Solo se permiten imágenes o videos'));
     }
   }
 });
@@ -697,70 +679,6 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
     res.json({ success: true, profile: updated, new_media: uploadedUrls });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al subir imágenes o videos', details: err?.message });
-  }
-});
-
-// BACKUP SERVER ENDPOINTS (PROTECTED FOR ADMINS)
-
-// GET List all backups from Backblaze B2
-router.get('/admin/backups', requireAdminAuth, async (req: Request, res: Response) => {
-  try {
-    if (!isB2Configured()) {
-      res.status(503).json({ error: 'Backblaze B2 no está configurado en el servidor' });
-      return;
-    }
-    const backups = await listB2Backups(100);
-    const config = getBotConfig();
-    const token = (req.headers.authorization || '').replace(/^Bearer\s+/, '');
-    const items = backups.map(b => ({
-      ...b,
-      url: `${mediaUrl(config.baseUrl, b.key)}&token=${encodeURIComponent(token)}`
-    }));
-    res.json({ backups: items });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error al obtener lista de respaldos', details: err?.message });
-  }
-});
-
-// POST Upload backups from Web Admin Panel
-router.post('/admin/backups/upload', requireAdminAuth, backupUpload.array('files', 15), async (req: Request, res: Response) => {
-  try {
-    if (!isB2Configured()) {
-      res.status(503).json({ error: 'Backblaze B2 no está configurado en el servidor' });
-      return;
-    }
-    const files = req.files as Express.Multer.File[];
-    if (!files || files.length === 0) {
-      res.status(400).json({ error: 'No se enviaron archivos para respaldar' });
-      return;
-    }
-    const adminId = (req as any).adminUserId || 'Admin Web';
-    const uploadedKeys: string[] = [];
-    for (const file of files) {
-      const key = await uploadBufferToB2(file.buffer, file.originalname, file.mimetype, `backups/admin_${adminId}`);
-      uploadedKeys.push(key);
-    }
-    await addAuditLog('BACKUP_MEDIA_WEB', adminId, `${files.length} archivo(s) respaldados en Servidor Seguro B2`);
-    res.json({ success: true, count: uploadedKeys.length, keys: uploadedKeys });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error al subir respaldo a B2', details: err?.message });
-  }
-});
-
-// DELETE Backup file from B2
-router.delete('/admin/backups', requireAdminAuth, async (req: Request, res: Response) => {
-  try {
-    const key = typeof req.query.key === 'string' ? req.query.key : '';
-    if (!key) {
-      res.status(400).json({ error: 'Clave de archivo requerida' });
-      return;
-    }
-    await deleteB2Backup(key);
-    const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('DELETE_BACKUP_MEDIA', adminId, `Archivo de respaldo eliminado: ${key}`);
-    res.json({ success: true, message: 'Archivo de respaldo eliminado de B2' });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Error al eliminar respaldo', details: err?.message });
   }
 });
 
