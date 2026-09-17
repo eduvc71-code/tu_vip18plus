@@ -42,7 +42,8 @@ import {
   sendMessage,
   sendPhotoToUser,
   updateTelegramMessageReactions,
-  onReactionUpdated
+  onReactionUpdated,
+  verifyChannel
 } from './telegram.js';
 
 export const router = express.Router();
@@ -166,6 +167,7 @@ router.get('/info', (req: Request, res: Response) => {
     bot_username: config.username,
     bot_configured: Boolean(config.token),
     channel_id: config.channelId,
+    channel_title: getSystemSetting('channel_title') || '',
     telegram_only_access: telegramOnly,
     auto_reply_delay_minutes: autoReplyDelay,
     qr_image_url: getSystemSetting('qr_image_url') || '',
@@ -822,10 +824,14 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (req: Request, res: 
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
+    }
+    if (channel_id !== undefined) {
+      const cleanChannel = String(channel_id).trim();
+      saveSystemSetting('channel_id', cleanChannel);
     }
     if (telegram_only_access !== undefined) {
       saveSystemSetting('telegram_only_access', telegram_only_access ? 'true' : 'false');
@@ -852,6 +858,8 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     res.json({
       success: true,
       bot_username: updatedConfig.username,
+      channel_id: updatedConfig.channelId,
+      channel_title: getSystemSetting('channel_title') || '',
       telegram_only_access: isTelegramOnly,
       auto_reply_delay_minutes: autoReplyDelay,
       qr_image_url: getSystemSetting('qr_image_url') || '',
@@ -860,6 +868,63 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar configuración' });
+  }
+});
+
+// GET Status of configured Telegram Channel
+router.get('/admin/settings/channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { channelId, username } = getBotConfig();
+    const storedTitle = getSystemSetting('channel_title') || '';
+    const verify = await verifyChannel(channelId);
+    res.json({
+      channel_id: channelId,
+      verified: verify.ok,
+      title: verify.title || storedTitle,
+      username: verify.username,
+      error: verify.error,
+      bot_username: username
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al consultar estado del canal' });
+  }
+});
+
+// POST Save & Verify Telegram Channel
+router.post('/admin/settings/channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { channel_id } = req.body;
+    if (!channel_id || typeof channel_id !== 'string') {
+      res.status(400).json({ error: 'Debes proporcionar un ID numérico (-100...) o @usuario del canal.' });
+      return;
+    }
+    const cleanChannel = channel_id.trim();
+    const verify = await verifyChannel(cleanChannel);
+    if (!verify.ok) {
+      res.status(400).json({
+        error: verify.error,
+        details: 'Asegúrate de agregar al bot como Administrador en tu canal con permiso para publicar mensajes.'
+      });
+      return;
+    }
+
+    const savedId = String(verify.id || cleanChannel);
+    saveSystemSetting('channel_id', savedId);
+    if (verify.title) saveSystemSetting('channel_title', verify.title);
+    if (verify.username) saveSystemSetting('channel_username', verify.username);
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_CHANNEL', adminId, `Canal vinculado: "${verify.title || cleanChannel}" (${savedId})`);
+
+    res.json({
+      success: true,
+      channel_id: savedId,
+      channel_title: verify.title,
+      channel_username: verify.username,
+      message: `¡Canal "${verify.title || savedId}" verificado y vinculado exitosamente!`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al verificar canal', details: err?.message });
   }
 });
 

@@ -49,7 +49,11 @@ export function getBotConfig() {
   }
   let username = rawUsername.replace(/^@/, '').trim();
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
-  const channelId = process.env.CHANNEL_ID || '-1004356066811';
+  const storedChannel = getSystemSetting('channel_id');
+  let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
+  if (!channelId.startsWith('@') && !channelId.startsWith('-') && /^\d+$/.test(channelId)) {
+    channelId = `-100${channelId}`;
+  }
   const envAdminIds = (process.env.ADMIN_TELEGRAM_IDS || '')
     .split(',')
     .map(id => id.trim())
@@ -237,8 +241,10 @@ export async function registerBotCommands() {
     commands: [
       { command: 'start', description: 'Abrir Catálogo VIP Free' },
       { command: 'canal', description: 'Enlace al Canal Free oficial' },
+      { command: 'setcanal', description: 'Vincular canal Telegram (Admin)' },
       { command: 'precios', description: 'Tarifas y suscripciones VIP' },
       { command: 'info', description: 'Información y discreción' },
+      { command: 'id', description: 'Ver mi Telegram ID y estado del bot' },
       { command: 'ayuda', description: 'Soporte y dudas frecuentes' },
       { command: 'admin', description: 'Panel Web (Solo Administradora)' },
       { command: 'respaldo', description: 'Backup Server Mini APP (Servidor Seguro)' }
@@ -256,7 +262,7 @@ export async function registerBotWebhook() {
   const webhookUrl = `${baseUrl}/api/telegram/webhook`;
   const payload: any = {
     url: webhookUrl,
-    allowed_updates: ['message', 'callback_query']
+    allowed_updates: ['message', 'callback_query', 'my_chat_member', 'channel_post']
   };
   if (secret) {
     payload.secret_token = secret;
@@ -266,6 +272,83 @@ export async function registerBotWebhook() {
   await registerBotCommands().catch(err => console.error('Error registrando comandos:', err));
   await updateBotMenuButton().catch(err => console.error('Error actualizando menu button:', err));
   return res;
+}
+
+// Channel Verification & Diagnostic Helper
+export async function verifyChannel(targetChannelId: string): Promise<{
+  ok: boolean;
+  title?: string;
+  username?: string;
+  id?: string | number;
+  error?: string;
+}> {
+  if (!targetChannelId || !targetChannelId.trim()) {
+    return { ok: false, error: 'No se especificó un ID o @usuario de canal.' };
+  }
+
+  const { token, username: botUsername } = getBotConfig();
+  if (!token) {
+    return { ok: false, error: 'BOT_TOKEN no configurado en el servidor.' };
+  }
+
+  let formattedChatId = targetChannelId.trim();
+  if (!formattedChatId.startsWith('@') && !formattedChatId.startsWith('-') && /^\d+$/.test(formattedChatId)) {
+    formattedChatId = `-100${formattedChatId}`;
+  }
+
+  const chatRes = await callTelegramApi('getChat', { chat_id: formattedChatId });
+  if (!chatRes.ok) {
+    const desc = chatRes.description || '';
+    if (desc.includes('chat not found')) {
+      return {
+        ok: false,
+        error: `Canal (${formattedChatId}) no encontrado por Telegram. Verifica que el ID o nombre sea exacto y que @${botUsername} haya sido agregado al canal como Administrador.`
+      };
+    }
+    return { ok: false, error: desc || 'Canal no encontrado en Telegram.' };
+  }
+
+  const chat = chatRes.result;
+
+  // Verify bot's admin status and posting permissions
+  const meRes = await callTelegramApi('getMe', {});
+  if (meRes.ok && meRes.result?.id) {
+    const botId = meRes.result.id;
+    const memberRes = await callTelegramApi('getChatMember', {
+      chat_id: formattedChatId,
+      user_id: botId
+    });
+
+    if (memberRes.ok) {
+      const member = memberRes.result;
+      const status = member.status;
+      if (status !== 'administrator' && status !== 'creator') {
+        return {
+          ok: false,
+          title: chat.title,
+          username: chat.username,
+          id: chat.id,
+          error: `El bot está en el canal pero su rol actual es "${status}". Debe ser Administrador con permisos de publicación.`
+        };
+      }
+      if (status === 'administrator' && member.can_post_messages === false) {
+        return {
+          ok: false,
+          title: chat.title,
+          username: chat.username,
+          id: chat.id,
+          error: 'El bot es Administrador pero tiene desactivado el permiso para "Publicar mensajes" (Post messages).'
+        };
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    title: chat.title,
+    username: chat.username,
+    id: chat.id
+  };
 }
 
 // Telegram Channel Sync Function
@@ -400,7 +483,10 @@ ${activeDesc}
     await addAuditLog('SYNC_CHANNEL', performer, `Publicado mensaje #${newMsgId} para ${profile.name} en el canal`, profileId);
     return { success: true, message: 'Publicado exitosamente en el canal', telegramMessageId: newMsgId };
   } else {
-    const errorMsg = sendRes.description || 'Error al publicar foto en canal Telegram';
+    let errorMsg = sendRes.description || 'Error al publicar en canal Telegram';
+    if (errorMsg.toLowerCase().includes('chat not found')) {
+      errorMsg = `Canal (${channelId}) no encontrado por Telegram. Abre tu canal, añade a @${username} como Administrador con permisos de publicación, o vincula tu canal en la pestaña 'Telegram' del Panel Web.`;
+    }
     await addSyncError(profileId, 'SEND_PHOTO_CHANNEL', errorMsg);
     return { success: false, message: `Error en Telegram: ${errorMsg}` };
   }
@@ -503,6 +589,42 @@ export function verifyAdminToken(token: string): { valid: boolean; userId?: stri
 export async function processTelegramUpdate(update: any) {
   if (!update) return;
 
+  // 0.1. Handle bot being added as admin to channel or group
+  if (update.my_chat_member) {
+    const mcm = update.my_chat_member;
+    const chat = mcm.chat;
+    const newStatus = mcm.new_chat_member?.status;
+    if (chat && (chat.type === 'channel' || chat.type === 'supergroup')) {
+      if (newStatus === 'administrator') {
+        const channelIdStr = String(chat.id);
+        saveSystemSetting('channel_id', channelIdStr);
+        if (chat.title) saveSystemSetting('channel_title', chat.title);
+        if (chat.username) saveSystemSetting('channel_username', chat.username);
+        await addAuditLog('AUTO_LINK_CHANNEL', 'Telegram Webhook', `Canal vinculado automáticamente: "${chat.title || channelIdStr}" (${channelIdStr})`);
+        console.log(`[Telegram Auto-Link] Bot añadido como admin al canal: ${chat.title} (${channelIdStr})`);
+
+        const adminFromId = mcm.from?.id;
+        if (adminFromId) {
+          await sendMessage(adminFromId, `🎉 *¡Canal VIP Vinculado con Éxito!*\n\n📢 *Canal*: ${chat.title || 'Canal VIP'}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes presionar *"Guardar y Publicar"* en el Catálogo!`);
+        }
+      }
+    }
+    return;
+  }
+
+  // 0.2. Handle channel posts (detect channel ID from channel activity)
+  if (update.channel_post) {
+    const chat = update.channel_post.chat;
+    if (chat && chat.id) {
+      const channelIdStr = String(chat.id);
+      saveSystemSetting('channel_id', channelIdStr);
+      if (chat.title) saveSystemSetting('channel_title', chat.title);
+      if (chat.username) saveSystemSetting('channel_username', chat.username);
+      console.log(`[Telegram Auto-Link] Post de canal detectado: ${chat.title} (${channelIdStr})`);
+    }
+    return;
+  }
+
   // Handle Callback Queries (Buttons)
   if (update.callback_query) {
     await handleCallbackQuery(update.callback_query);
@@ -516,6 +638,33 @@ export async function processTelegramUpdate(update: any) {
   const fromId = message.from?.id;
   const userIdStr = String(fromId || '');
   const text = message.text ? message.text.trim() : '';
+
+  // 0.3. Detect forwarded post from a channel
+  const fChat = (message.forward_origin && message.forward_origin.type === 'channel' && message.forward_origin.chat)
+    ? message.forward_origin.chat
+    : (message.forward_from_chat && (message.forward_from_chat.type === 'channel' || String(message.forward_from_chat.id).startsWith('-100')) ? message.forward_from_chat : null);
+
+  if (fChat && fChat.id) {
+    if (isAdminUser(fromId)) {
+      const channelIdStr = String(fChat.id);
+      const channelTitle = fChat.title || fChat.username || 'Canal VIP';
+      saveSystemSetting('channel_id', channelIdStr);
+      if (fChat.title) saveSystemSetting('channel_title', fChat.title);
+      if (fChat.username) saveSystemSetting('channel_username', fChat.username);
+      await addAuditLog('AUTO_LINK_CHANNEL', `Admin (${fromId})`, `Canal vinculado por reenvío: "${channelTitle}" (${channelIdStr})`);
+
+      const verify = await verifyChannel(channelIdStr);
+      if (verify.ok) {
+        await sendMessage(chatId, `🎉 *¡Canal Detectado y Vinculado con Éxito!*\n\n📢 *Nombre*: ${channelTitle}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador activo con permisos.\n\n✅ *¡Listo!* Ya puedes usar el botón *"Guardar y Publicar"* en el Catálogo Web.`);
+      } else {
+        await sendMessage(chatId, `⚠️ *Canal Detectado e ID Guardado:*\n\n📢 *Nombre*: ${channelTitle}\n🆔 *ID Guardado*: \`${channelIdStr}\`\n\n⚠️ *Aviso de Telegram*: ${verify.error}\n\n👉 *Paso necesario*: Abre tu canal en Telegram ➡️ Ajustes ➡️ Administradores ➡️ Añade a *@${getBotConfig().username}* como Administrador con permiso de publicar mensajes.`);
+      }
+      return;
+    } else {
+      await sendMessage(chatId, `ℹ️ Mensaje reenviado de: *${fChat.title || 'Canal'}* (\`${fChat.id}\`).\nPara configurar el bot, primero actívate como Administradora con \`/admin 2024\`.`);
+      return;
+    }
+  }
 
   if (text === '/mi_id' || text === '/registrar_admin') {
     if (!isPrivateChat(message.chat)) {
@@ -590,7 +739,41 @@ export async function processTelegramUpdate(update: any) {
   }
 
   if (normText === '/id' || normText === '/myid') {
-    await sendMessage(chatId, `🆔 *Tu Telegram ID es:* \`${fromId}\`\n\n_Para activarte como Administradora escribe en este chat:_\n👉 \`/admin 2024\``);
+    const { channelId, username } = getBotConfig();
+    const isAdm = isAdminUser(fromId);
+    let msg = `🆔 *Tu Telegram ID:* \`${fromId}\`\n🤖 *Bot:* @${username}\n📢 *Canal Configurado:* \`${channelId}\`\n`;
+    if (isAdm) {
+      msg += `👑 *Rol:* Administradora Autorizada ✅\n\n*Vincular Canal VIP:*\n👉 Reenvía cualquier post de tu canal a este chat.\n👉 O escribe: \`/setcanal @NombreDeTuCanal\``;
+    } else {
+      msg += `\n_Para activarte como Administradora escribe en este chat:_\n👉 \`/admin 2024\``;
+    }
+    await sendMessage(chatId, msg);
+    return;
+  }
+
+  if (normText.startsWith('/setcanal') || normText.startsWith('/canal_id')) {
+    if (!isAdminUser(fromId)) {
+      await sendMessage(chatId, '🔒 Solo administradoras autorizadas pueden vincular el canal. Primero envía `/admin 2024`.');
+      return;
+    }
+    const parts = text.trim().split(/\s+/);
+    if (parts.length < 2) {
+      const current = getBotConfig().channelId;
+      await sendMessage(chatId, `📢 *Canal Configurado Actualmente:* \`${current}\`\n\n*Para cambiarlo:*\n👉 Escribe: \`/setcanal @NombreCanal\` o \`/setcanal -1001234567890\`\n👉 O simplemente *reenvía un post de tu canal* a este chat privado.`);
+      return;
+    }
+    const target = parts[1].trim();
+    const verify = await verifyChannel(target);
+    if (verify.ok) {
+      const savedId = String(verify.id || target);
+      saveSystemSetting('channel_id', savedId);
+      if (verify.title) saveSystemSetting('channel_title', verify.title);
+      if (verify.username) saveSystemSetting('channel_username', verify.username);
+      await sendMessage(chatId, `🎉 *¡Canal Vinculado Exitosamente!*\n\n📢 *Canal*: ${verify.title || target}\n🆔 *ID*: \`${savedId}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes pulsar *"Guardar y Publicar"* en tu Catálogo!`);
+    } else {
+      saveSystemSetting('channel_id', target);
+      await sendMessage(chatId, `⚠️ *ID de Canal Guardado:* \`${target}\`\n\n⚠️ *Aviso de Telegram*: ${verify.error}\n\n👉 *Paso importante*: Abre tu canal en Telegram ➡️ Ajustes ➡️ Administradores ➡️ Añade a *@${getBotConfig().username}* como Administrador con permiso de publicar mensajes.`);
+    }
     return;
   }
 

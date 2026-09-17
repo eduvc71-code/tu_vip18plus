@@ -99,9 +99,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [pinInput, setPinInput] = useState('');
   const [loginError, setLoginError] = useState('');
 
+  const [channelIdInput, setChannelIdInput] = useState(channelId || '');
+  const [channelVerified, setChannelVerified] = useState<boolean | null>(null);
+  const [channelTitle, setChannelTitle] = useState<string>('');
+  const [verifyingChannel, setVerifyingChannel] = useState(false);
+
   useEffect(() => {
     setNewBotUsername(botUsername || '');
   }, [botUsername]);
+
+  useEffect(() => {
+    if (channelId) setChannelIdInput(channelId);
+  }, [channelId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -208,6 +217,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.qr_image_url !== undefined) setQrImageUrl(infoData.qr_image_url);
         if (infoData.pinned_message_text !== undefined) setPinnedMessageText(infoData.pinned_message_text);
         if (infoData.pinned_message_active !== undefined) setPinnedMessageActive(Boolean(infoData.pinned_message_active));
+        if (infoData.channel_id) setChannelIdInput(infoData.channel_id);
+        if (infoData.channel_title) setChannelTitle(infoData.channel_title);
         if (infoData.model_display_name !== undefined) setModelDisplayName(infoData.model_display_name || '');
         if (infoData.model_vip_link !== undefined) setModelVipLink(infoData.model_vip_link || '');
       }
@@ -217,6 +228,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } finally {
       setLoading(false);
       void fetchBackups(tok);
+      void fetchChannelStatus(tok);
+    }
+  };
+
+  const fetchChannelStatus = async (authToken = token) => {
+    if (!authToken) return;
+    try {
+      const res = await fetch('/api/admin/settings/channel', {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.channel_id) setChannelIdInput(data.channel_id);
+        setChannelVerified(data.verified);
+        setChannelTitle(data.title || '');
+      }
+    } catch {
+      // ignore
     }
   };
 
@@ -599,6 +628,105 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleSaveAndPublish = async () => {
+    const targetId = editingProfile?.id || profiles[0]?.id;
+    if (!targetId) {
+      setMessage({ type: 'error', text: 'No hay perfil seleccionado para publicar en el canal.' });
+      return;
+    }
+    setPublishing(true);
+    setMessage(null);
+    try {
+      // 1. Save profile updates first if editing
+      if (editingProfile) {
+        const resSave = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(formData)
+        });
+        const dataSave = await resSave.json();
+        if (!resSave.ok) {
+          setMessage({ type: 'error', text: dataSave.error || 'Error al guardar los datos del perfil.' });
+          setPublishing(false);
+          return;
+        }
+
+        // 2. Upload any queued photos
+        if (selectedPhotoFiles && selectedPhotoFiles.length > 0) {
+          const body = new FormData();
+          for (let i = 0; i < selectedPhotoFiles.length; i++) {
+            body.append('photos', selectedPhotoFiles[i]);
+          }
+          await fetch(`/api/admin/profiles/${editingProfile.id}/photos`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body
+          });
+          setSelectedPhotoFiles(null);
+        }
+      }
+
+      // 3. Publish to Telegram Channel
+      const resPub = await fetch(`/api/admin/profiles/${targetId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const dataPub = await resPub.json();
+      if (resPub.ok && dataPub.success) {
+        setMessage({
+          type: 'success',
+          text: `🚀 ¡Perfil guardado y publicado con éxito en el Canal VIP! (Mensaje #${dataPub.telegramMessageId || 'OK'})`
+        });
+        fetchData();
+      } else {
+        const errorMsg = dataPub.message || 'Error al publicar en el canal de Telegram';
+        setMessage({ type: 'error', text: errorMsg });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al guardar y publicar en Telegram.' });
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  const handleSaveAndTestChannel = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!channelIdInput.trim()) {
+      setMessage({ type: 'error', text: 'Por favor ingresa un ID numérico (-100...) o @usuario del canal.' });
+      return;
+    }
+    setVerifyingChannel(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/admin/settings/channel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ channel_id: channelIdInput.trim() })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setChannelVerified(true);
+        setChannelTitle(data.channel_title || '');
+        setChannelIdInput(data.channel_id);
+        setMessage({
+          type: 'success',
+          text: `🎉 ¡Canal "${data.channel_title || data.channel_id}" verificado y vinculado exitosamente! Ahora el bot puede publicar fotos y novedades en él.`
+        });
+        fetchData();
+      } else {
+        setChannelVerified(false);
+        setMessage({
+          type: 'error',
+          text: data.error || 'No se pudo conectar con el canal. Asegúrate de que el bot sea Administrador con permiso de publicar mensajes.'
+        });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error al conectar con el servidor.' });
+    } finally {
+      setVerifyingChannel(false);
+    }
+  };
+
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
@@ -608,6 +736,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           bot_username: newBotUsername,
+          channel_id: channelIdInput,
           telegram_only_access: true,
           auto_reply_delay_minutes: autoReplyDelay,
           model_display_name: modelDisplayName,
@@ -947,9 +1076,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingProfile && (
                       <button
                         type="button"
-                        onClick={async () => {
-                          await handlePublishToChannel(editingProfile.id);
-                        }}
+                        onClick={handleSaveAndPublish}
                         disabled={publishing || loading}
                         className="flex-1 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-extrabold text-xs transition-all shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
                       >
@@ -1335,13 +1462,77 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </form>
 
+                {/* VINCULACIÓN DE CANAL TELEGRAM */}
+                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Send className="w-4 h-4 text-amber-400" />
+                        Canal VIP Oficial de Telegram (Publicación y Novedades)
+                      </h4>
+                      <p className="text-zinc-400 text-xs mt-0.5">
+                        El bot publicará aquí tus publicaciones y fotos con botones interactivos de reacciones (❤️ ⭐ 🔥 👍).
+                      </p>
+                    </div>
+                    {channelVerified === true && (
+                      <span className="shrink-0 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Conectado {channelTitle ? `(${channelTitle})` : ''}
+                      </span>
+                    )}
+                    {channelVerified === false && (
+                      <span className="shrink-0 px-3 py-1 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-1.5 self-start sm:self-auto">
+                        <AlertTriangle className="w-3.5 h-3.5" /> No Conectado
+                      </span>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSaveAndTestChannel} className="space-y-3">
+                    <label className="block text-zinc-300 font-semibold text-xs">
+                      ID Numérico (-100...) o @Usuario de tu Canal
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={channelIdInput}
+                        onChange={(e) => setChannelIdInput(e.target.value)}
+                        placeholder="Ej: @MiCanalVIP o -1001234567890"
+                        className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                      <button
+                        type="submit"
+                        disabled={verifyingChannel || loading}
+                        className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-all cursor-pointer shrink-0 disabled:opacity-60 flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {verifyingChannel ? 'Verificando...' : 'Vincular y Probar Canal'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Guía rápida para el administrador */}
+                  <div className="p-3 bg-zinc-900/80 rounded-xl border border-zinc-800/80 space-y-2 text-[11px] text-zinc-400">
+                    <p className="font-bold text-zinc-300 text-xs">💡 ¿Cómo vincular tu canal fácilmente?</p>
+                    <ol className="list-decimal list-inside space-y-1.5 text-zinc-400">
+                      <li>
+                        Abre tu canal en Telegram ➡️ Ajustes del canal ➡️ <strong className="text-zinc-200">Administradores</strong> ➡️ <strong className="text-zinc-200">Añadir Administrador</strong>.
+                      </li>
+                      <li>
+                        Busca a <code className="text-amber-400 font-bold bg-zinc-950 px-1.5 py-0.5 rounded">@{newBotUsername || 'Danii_Catalogo_SCZ_bot'}</code> y dale permiso para <strong className="text-zinc-200">Publicar mensajes</strong>.
+                      </li>
+                      <li>
+                        <strong className="text-amber-400">Detección Automática:</strong> Al añadir el bot como admin en el canal, ¡se vinculará automáticamente! También puedes escribir arriba el nombre (@MiCanal) o reenviar cualquier post del canal al bot por privado.
+                      </li>
+                    </ol>
+                  </div>
+                </div>
+
                 {/* WEBHOOK */}
                 <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Webhook className="w-4 h-4 text-blue-400" /> Configuración de Webhook
                   </h4>
                   <p className="text-zinc-400">
-                    El bot sincroniza automáticamente con el canal <code className="text-amber-400">{channelId}</code>.
+                    El bot sincroniza automáticamente con el canal <code className="text-amber-400">{channelIdInput || channelId}</code>.
                   </p>
                   <button
                     type="button"
