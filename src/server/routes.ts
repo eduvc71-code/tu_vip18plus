@@ -171,6 +171,7 @@ router.get('/info', (req: Request, res: Response) => {
     model_vip_link: getSystemSetting('model_vip_link') || '',
     welcome_media_url: getSystemSetting('welcome_media_url') || '',
     welcome_media_type: getSystemSetting('welcome_media_type') || '',
+    operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
 });
@@ -787,7 +788,7 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (req: Request, res: 
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
@@ -795,6 +796,10 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     if (channel_id !== undefined) {
       const cleanChannel = String(channel_id).trim();
       saveSystemSetting('channel_id', cleanChannel);
+    }
+    if (operating_mode !== undefined) {
+      const cleanMode = operating_mode === 'bot_and_channel' ? 'bot_and_channel' : 'solo_bot';
+      saveSystemSetting('operating_mode', cleanMode);
     }
     if (telegram_only_access !== undefined) {
       saveSystemSetting('telegram_only_access', telegram_only_access ? 'true' : 'false');
@@ -814,7 +819,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       saveSystemSetting('model_vip_link', String(model_vip_link).trim());
     }
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración del bot de Telegram actualizada');
+    await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración de modo y parámetros actualizada');
     const updatedConfig = getBotConfig();
     const isTelegramOnly = getSystemSetting('telegram_only_access') === 'true';
     const autoReplyDelay = getSystemSetting('auto_reply_delay_minutes') || '10';
@@ -823,6 +828,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       bot_username: updatedConfig.username,
       channel_id: updatedConfig.channelId,
       channel_title: getSystemSetting('channel_title') || '',
+      operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
       telegram_only_access: isTelegramOnly,
       auto_reply_delay_minutes: autoReplyDelay,
       qr_image_url: getSystemSetting('qr_image_url') || '',

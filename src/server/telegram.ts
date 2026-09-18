@@ -276,7 +276,7 @@ export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) 
     keyboard: [
       [
         { text: '👑 Abrir Panel Web', web_app: { url: adminLink } },
-        { text: '💎 Ver Catálogo VIP', web_app: { url: baseUrl } }
+        { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
       ],
       [
         { text: btnCanal },
@@ -335,7 +335,7 @@ export async function updateBotMenuButton() {
   return await callTelegramApi('setChatMenuButton', {
     menu_button: {
       type: 'web_app',
-      text: '✨ Abrir Catálogo VIP ✨',
+      text: '✨ Canal VIP Free ✨',
       web_app: {
         url: baseUrl
       }
@@ -448,6 +448,13 @@ export async function syncProfileToChannel(profileId: string, performer: string 
 
   if (!profile) {
     return { success: false, message: 'Perfil no encontrado en la base de datos' };
+  }
+
+  // Check Operating Mode (Modo A: Solo Bot / Modo B: Híbrido Bot + Canal)
+  const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+  if (operatingMode === 'solo_bot') {
+    await addAuditLog('SYNC_PROFILE', performer, `Perfil ${profile.name} publicado en Mini App (Modo Solo Bot)`, profileId);
+    return { success: true, message: 'Publicado exitosamente en el Canal VIP Free (Modo Solo Bot: guardado sin publicar en canal público).' };
   }
 
   // Safety constraint: strictly >= 18
@@ -577,8 +584,8 @@ export async function buildChannelPostMarkup(profile: Profile, baseUrl: string, 
     { text: `🤩 ${reactions.star_struck || 0}`, callback_data: `react_star_struck_${profile.id}` }
   ];
 
-  const webUrl = `${baseUrl}/#profile-${profile.id}`;
   const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
+  const botAppUrl = `https://t.me/${username}?start=ver_${profile.id}`;
 
   let customButtonRows: any[] = [];
   try {
@@ -596,7 +603,7 @@ export async function buildChannelPostMarkup(profile: Profile, baseUrl: string, 
         { text: '📱 Solicitar Disponibilidad', url: reqUrl }
       ],
       [
-        { text: '🌐 Ver en Catálogo Web', url: webUrl }
+        { text: '💎 Abrir en Canal VIP Free', url: botAppUrl }
       ],
       ...customButtonRows
     ]
@@ -677,7 +684,7 @@ export async function processTelegramUpdate(update: any) {
 
         const adminFromId = mcm.from?.id;
         if (adminFromId) {
-          await sendMessage(adminFromId, `🎉 *¡Canal VIP Vinculado con Éxito!*\n\n📢 *Canal*: ${chat.title || 'Canal VIP'}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes presionar *"Guardar y Publicar"* en el Catálogo!`);
+          await sendMessage(adminFromId, `🎉 *¡Canal VIP Vinculado con Éxito!*\n\n📢 *Canal*: ${chat.title || 'Canal VIP'}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes presionar *"Guardar y Publicar"* en el Canal VIP Free!`);
         }
       }
     }
@@ -727,7 +734,7 @@ export async function processTelegramUpdate(update: any) {
 
       const verify = await verifyChannel(channelIdStr);
       if (verify.ok) {
-        await sendMessage(chatId, `🎉 *¡Canal Detectado y Vinculado con Éxito!*\n\n📢 *Nombre*: ${channelTitle}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador activo con permisos.\n\n✅ *¡Listo!* Ya puedes usar el botón *"Guardar y Publicar"* en el Catálogo Web.`);
+        await sendMessage(chatId, `🎉 *¡Canal Detectado y Vinculado con Éxito!*\n\n📢 *Nombre*: ${channelTitle}\n🆔 *ID*: \`${channelIdStr}\`\n🤖 *Estado del Bot*: Administrador activo con permisos.\n\n✅ *¡Listo!* Ya puedes usar el botón *"Guardar y Publicar"* en el Canal VIP Free.`);
       } else {
         await sendMessage(chatId, `⚠️ *Canal Detectado e ID Guardado:*\n\n📢 *Nombre*: ${channelTitle}\n🆔 *ID Guardado*: \`${channelIdStr}\`\n\n⚠️ *Aviso de Telegram*: ${verify.error}\n\n👉 *Paso necesario*: Abre tu canal en Telegram ➡️ Ajustes ➡️ Administradores ➡️ Añade a *@${getBotConfig().username}* como Administrador con permiso de publicar mensajes.`);
       }
@@ -762,6 +769,38 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
+  // 1.1. Deep Link Client Profile View (from Channel post directly into Mini App)
+  if (text.startsWith('/start ver_')) {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Abre el chat privado para ver el contenido.');
+      return;
+    }
+    if (fromId) {
+      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
+    }
+    const profileId = text.replace('/start ver_', '').trim();
+    const profile = await getProfileById(profileId);
+    const { baseUrl } = getBotConfig();
+    const profileUrl = `${baseUrl}/#profile-${profileId}`;
+    if (profile) {
+      await sendMessage(chatId, `💎 *${profile.name}* — Contenido Exclusivo\n\nTarifa VIP: *Bs. ${profile.rate_bs}*\n\nPulsa el botón abajo para abrir la Mini App directamente en Telegram:`, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: profileUrl } }
+            ],
+            [
+              { text: '📱 Solicitar Disponibilidad', callback_data: `req_${profile.id}` }
+            ]
+          ]
+        }
+      });
+      return;
+    }
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
+    return;
+  }
+
   const normText = text.toLowerCase().trim();
 
   // 1.2. Client Commands & Menus (Interactive for all users)
@@ -774,7 +813,7 @@ export async function processTelegramUpdate(update: any) {
     normText === '/menu'
   ) {
     if (!isPrivateChat(message.chat)) {
-      await sendMessage(chatId, '🔒 Abre el chat privado con el bot para ver el catálogo y menú.');
+      await sendMessage(chatId, '🔒 Abre el chat privado para ver el Canal VIP Free y menú.');
       return;
     }
     if (isAdminUser(fromId)) {
@@ -843,7 +882,7 @@ export async function processTelegramUpdate(update: any) {
       saveSystemSetting('channel_id', savedId);
       if (verify.title) saveSystemSetting('channel_title', verify.title);
       if (verify.username) saveSystemSetting('channel_username', verify.username);
-      await sendMessage(chatId, `🎉 *¡Canal Vinculado Exitosamente!*\n\n📢 *Canal*: ${verify.title || target}\n🆔 *ID*: \`${savedId}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes pulsar *"Guardar y Publicar"* en tu Catálogo!`);
+      await sendMessage(chatId, `🎉 *¡Canal Vinculado Exitosamente!*\n\n📢 *Canal*: ${verify.title || target}\n🆔 *ID*: \`${savedId}\`\n🤖 *Estado del Bot*: Administrador con permisos activo.\n\n✅ ¡Ya puedes pulsar *"Guardar y Publicar"* en tu Canal VIP Free!`);
     } else {
       saveSystemSetting('channel_id', target);
       await sendMessage(chatId, `⚠️ *ID de Canal Guardado:* \`${target}\`\n\n⚠️ *Aviso de Telegram*: ${verify.error}\n\n👉 *Paso importante*: Abre tu canal en Telegram ➡️ Ajustes ➡️ Administradores ➡️ Añade a *@${getBotConfig().username}* como Administrador con permiso de publicar mensajes.`);
@@ -863,7 +902,7 @@ export async function processTelegramUpdate(update: any) {
       const { baseUrl, brandName } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
       const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
-      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y catálogo.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
+      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y Canal VIP Free.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
         reply_markup: {
           inline_keyboard: [
             [
@@ -1351,7 +1390,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 
   const profiles = await getAllProfiles();
   if (profiles.length === 0) {
-    await sendMessage(chatId, '⚠️ *No hay perfiles registrados en el catálogo*.\n\nCrea primero un perfil con `/nuevo` o desde el Panel Web para poder vincularle fotografías y videos.');
+    await sendMessage(chatId, '⚠️ *No hay perfiles registrados en el Canal VIP Free*.\n\nCrea primero un perfil con `/nuevo` o desde el Panel Web para poder vincularle fotografías y videos.');
     return;
   }
 
@@ -1404,7 +1443,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
     const adminToken = generateAdminMagicToken(String(userId));
     const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
 
-    const reply = `✅ *¡Contenido Agregado con Éxito al Catálogo!* 📸\n\n` +
+    const reply = `✅ *¡Contenido Agregado con Éxito al Canal VIP Free!* 📸\n\n` +
       `👤 *Perfil*: *${targetProfile.name}*\n` +
       `📁 *Archivo*: \`${fileName}\` (${sizeFormatted})\n` +
       `🖼️ *Total Fotos / Videos*: *${updatedPhotos.length}*\n\n` +
@@ -1415,7 +1454,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
         inline_keyboard: [
           [
             { text: '👑 Ver en Panel Web', web_app: { url: adminLink } },
-            { text: '💎 Ver Catálogo VIP', web_app: { url: baseUrl } }
+            { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
           ]
         ]
       }
@@ -1442,7 +1481,7 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
-    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al catálogo oficial sin censura.\n\n` +
+    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al contenido oficial sin censura.\n\n` +
     `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
 
   const inlineKeyboard: any[][] = [];
@@ -1452,7 +1491,7 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     ]);
   }
   inlineKeyboard.push([
-    { text: '💎 Abrir Mini App (Catálogo VIP)', web_app: { url: baseUrl } }
+    { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
     { text: btnPrecios, callback_data: 'client_cmd_precios' },
@@ -1507,7 +1546,7 @@ export async function sendClientCanal(chatId: string | number) {
     ]);
   }
   inlineKeyboard.push([
-    { text: '💎 Ver Catálogo VIP (Mini App)', web_app: { url: baseUrl } }
+    { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
     { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
@@ -1845,7 +1884,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
     `📸 *Carga Directa de Contenido:*\n` +
-    `Como Administradora, puedes enviar o reenviar fotografías y videos directamente a este chat y se agregarán de inmediato a la galería de tu catálogo.\n\n` +
+    `Como Administradora, puedes enviar o reenviar fotografías y videos directamente a este chat y se agregarán de inmediato a la galería de tu Canal VIP Free.\n\n` +
     `👇 *Botones:*`;
 
   await sendMessage(chatId, msg, {
@@ -1855,7 +1894,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
           { text: '👑 Abrir Panel Admin (Web App)', web_app: { url: adminLink } }
         ],
         [
-          { text: '💎 Ver Catálogo VIP (Mini App Cliente)', web_app: { url: baseUrl } }
+          { text: '💎 Abrir Canal VIP Free (Mini App Cliente)', web_app: { url: baseUrl } }
         ],
         [
           { text: btnNuevo, callback_data: 'admin_btn_new' },
@@ -1911,11 +1950,11 @@ async function sendAdminHelp(chatId: string | number) {
 async function handleListProfiles(chatId: string | number) {
   const profiles = await getAllProfiles();
   if (profiles.length === 0) {
-    await sendMessage(chatId, '📭 No hay perfiles registrados en el catálogo. Usa /nuevo para crear uno.');
+    await sendMessage(chatId, '📭 No hay perfiles registrados en el Canal VIP Free. Usa /nuevo para crear uno.');
     return;
   }
 
-  let text = '📋 *LISTADO DE PERFILES DEL CATÁLOGO*:\n\n';
+  let text = '📋 *LISTADO DE PERFILES DEL CANAL VIP FREE*:\n\n';
   profiles.forEach(p => {
     const badge = p.status === 'disponible' ? '🟢 Disponible' : p.status === 'ocupada' ? '🔴 Ocupada' : p.status === 'pausada' ? '⏸️ Pausada' : p.status === 'retirada' ? '🗑️ Retirada' : '📁 Borrador';
     text += `• *${p.name}* (${p.age}a) - ${badge}\n  ID: \`${p.id}\` | Zona: ${p.zone} | Tarifa: Bs. ${p.rate_bs}\n\n`;
@@ -2043,7 +2082,7 @@ async function handlePauseCommand(chatId: string | number, id: string) {
   }
   await saveProfile({ id, status: 'pausada' });
   const result = await syncProfileToChannel(id, 'Admin Telegram');
-  await sendMessage(chatId, `⏸️ *Perfil ${profile.name} Pausado*.\nOculto del catálogo público.\n\nSincronización: ${result.message}`);
+  await sendMessage(chatId, `⏸️ *Perfil ${profile.name} Pausado*.\nOculto del Canal VIP Free público.\n\nSincronización: ${result.message}`);
 }
 
 async function handleRetireCommand(chatId: string | number, id: string) {
@@ -2054,7 +2093,7 @@ async function handleRetireCommand(chatId: string | number, id: string) {
   }
   await saveProfile({ id, status: 'retirada' });
   const result = await syncProfileToChannel(id, 'Admin Telegram');
-  await sendMessage(chatId, `🗑️ *Perfil ${profile.name} Retirado* del catálogo y canal.\n\n${result.message}`);
+  await sendMessage(chatId, `🗑️ *Perfil ${profile.name} Retirado* del Canal VIP Free y canal.\n\n${result.message}`);
 }
 
 async function handleConfirmDeleteCommand(chatId: string | number, id: string) {

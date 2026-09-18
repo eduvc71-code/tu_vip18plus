@@ -31,8 +31,8 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
             <button
               onClick={onRefresh}
               disabled={loading}
-              title="Actualizar catálogo"
-              aria-label="Actualizar catálogo"
+              title="Actualizar Canal VIP Free"
+              aria-label="Actualizar Canal VIP Free"
               className="rounded-xl border border-zinc-800 bg-zinc-900 p-2 text-zinc-300 transition-colors hover:border-zinc-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-amber-400' : ''}`} />
@@ -41,11 +41,11 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
               href={`https://t.me/${safeBot}`}
               target="_blank"
               rel="noopener noreferrer"
-              title={`Bot Telegram @${safeBot}`}
+              title={`Telegram VIP @${safeBot}`}
               className="flex h-9 items-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-3 text-xs font-bold text-white shadow-md shadow-blue-500/10 transition-colors hover:from-sky-500 hover:to-blue-500 cursor-pointer"
             >
               <Send className="h-3 w-3 shrink-0" />
-              <span className="hidden sm:inline">Bot</span>
+              <span className="hidden sm:inline">Telegram VIP</span>
             </a>
           </div>
         </div>

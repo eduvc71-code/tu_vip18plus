@@ -29,7 +29,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
               onClick={onContinue}
               className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
-              <span>Continuar al Catálogo</span>
+              <span>Continuar al Canal VIP Free</span>
             </button>
           )}
 
@@ -40,7 +40,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
             className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/80 hover:bg-zinc-800 px-4 text-xs font-bold text-zinc-300 transition-colors"
           >
             <Send className="h-4 w-4 text-sky-400" />
-            Abrir Bot Oficial (@{cleanUsername})
+            Abrir en Telegram VIP (@{cleanUsername})
           </a>
         </div>
       </div>

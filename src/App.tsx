@@ -461,7 +461,7 @@ export default function App() {
             <p>© {new Date().getFullYear()} {displayName}. Todos los derechos reservados.</p>
             <div className="flex items-center gap-4">
               <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 flex items-center gap-1 transition-colors">
-                <Send className="w-3.5 h-3.5" /> Bot de Telegram
+                <Send className="w-3.5 h-3.5" /> Canal VIP Telegram
               </a>
             </div>
           </div>

@@ -34,7 +34,8 @@ import {
   ChevronRight,
   Maximize2,
   BarChart2,
-  ExternalLink
+  ExternalLink,
+  Sliders
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -122,6 +123,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
   const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video'>('photo');
   const [uploadingWelcomeMedia, setUploadingWelcomeMedia] = useState(false);
+
+  // Operating Mode state (Modo A: solo_bot / Modo B: bot_and_channel)
+  const [operatingMode, setOperatingMode] = useState<'solo_bot' | 'bot_and_channel'>('solo_bot');
+  const [updatingMode, setUpdatingMode] = useState(false);
 
   // Auto-dismiss floating toast notification after 3.5s
   useEffect(() => {
@@ -276,6 +281,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.model_vip_link !== undefined) setModelVipLink(infoData.model_vip_link || '');
         if (infoData.welcome_media_url !== undefined) setWelcomeMediaUrl(infoData.welcome_media_url || '');
         if (infoData.welcome_media_type !== undefined) setWelcomeMediaType(infoData.welcome_media_type || 'photo');
+        if (infoData.operating_mode) setOperatingMode(infoData.operating_mode);
       }
       
     } catch {
@@ -537,6 +543,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de conexión al respaldar base de datos' });
     } finally {
       setSyncingDb(false);
+    }
+  };
+
+  const handleUpdateOperatingMode = async (newMode: 'solo_bot' | 'bot_and_channel') => {
+    try {
+      setUpdatingMode(true);
+      setOperatingMode(newMode);
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ operating_mode: newMode })
+      });
+      if (res.ok) {
+        setMessage({
+          type: 'success',
+          text: newMode === 'solo_bot'
+            ? 'Modo A: "Solo Bot (100% Privado)" activado con éxito'
+            : 'Modo B: "Híbrido (Bot + Canal Free)" activado con éxito'
+        });
+      } else {
+        setMessage({ type: 'error', text: 'Error al cambiar modo de operación' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión con el servidor' });
+    } finally {
+      setUpdatingMode(false);
     }
   };
 
@@ -990,7 +1022,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               type="button"
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
             >
-              Ir al Catálogo Público
+              Ir al Canal VIP Free
             </button>
           </div>
         </div>
@@ -1436,6 +1468,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <span className="text-zinc-400 font-medium">Total Multimedia:</span>
                             <span className="font-bold text-zinc-200">{editingProfile?.photos?.length || 0} archivo(s)</span>
                           </div>
+                          <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+                            <span className="text-zinc-400 font-medium">Modo de Operación:</span>
+                            <span className="font-bold text-amber-300">
+                              {operatingMode === 'solo_bot' ? '🤖 Modo A: Solo Bot (100% Privado)' : '📢 Modo B: Híbrido (Bot + Canal)'}
+                            </span>
+                          </div>
                           {editingProfile?.photos?.[0] && (
                             <div className="pt-2 border-t border-zinc-800 flex items-center gap-3">
                               <img
@@ -1445,14 +1483,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               />
                               <div className="text-[11px] text-zinc-400">
                                 <span className="font-semibold text-amber-300">Foto de Portada Oficial</span>
-                                <p className="text-zinc-500 text-[10px]">Esta imagen encabezará la publicación en Telegram.</p>
+                                <p className="text-zinc-500 text-[10px]">
+                                  {operatingMode === 'solo_bot'
+                                    ? 'Encabezará el perfil en la Mini App privada.'
+                                    : 'Encabezará el post en el Canal Free de Telegram.'}
+                                </p>
                               </div>
                             </div>
                           )}
                         </div>
 
                         <p className="text-[11px] text-zinc-300 leading-relaxed">
-                          Al pulsar el botón a continuación, el contenido se activará en la <strong>Mini App</strong> y se sincronizará automáticamente en el <strong>Canal VIP de Telegram</strong> con el teclado interactivo de reacciones (❤️, ⭐, 🔥, 👍).
+                          {operatingMode === 'solo_bot' ? (
+                            <>
+                              El contenido se activará inmediatamente en la <strong>Mini App (Canal VIP Free)</strong> para todos los clientes en privado, sin publicar en canales públicos.
+                            </>
+                          ) : (
+                            <>
+                              El contenido se activará en la <strong>Mini App</strong> y se sincronizará automáticamente en el <strong>Canal VIP Free de Telegram</strong> con botones interactivos hacia el bot.
+                            </>
+                          )}
                         </p>
                       </div>
 
@@ -1464,7 +1514,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
                       >
                         <Send className="w-5 h-5" />
-                        {publishing ? 'Publicando en Telegram y Mini App...' : '🚀 Publicar en Telegram y Mini App'}
+                        {publishing
+                          ? 'Publicando...'
+                          : operatingMode === 'solo_bot'
+                            ? '🚀 Publicar en Canal VIP Free (Mini App)'
+                            : '🚀 Publicar en Telegram y Canal VIP Free'}
                       </button>
                     </div>
 
@@ -1772,6 +1826,91 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {activeTab === 'telegram' && (
               <div className="space-y-6 text-xs">
 
+                {/* SELECTOR MODO DE OPERACIÓN: MODO A (SOLO BOT) / MODO B (HÍBRIDO BOT + CANAL) */}
+                <div className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
+                    <div>
+                      <h4 className="text-base font-extrabold text-white flex items-center gap-2">
+                        <Sliders className="w-5 h-5 text-amber-400" /> Modo de Operación del Sistema
+                      </h4>
+                      <p className="text-zinc-400 text-xs mt-0.5">
+                        Elige cómo deseas que opere el sistema al publicar y recibir clientes
+                      </p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 w-fit">
+                      {operatingMode === 'solo_bot' ? '🤖 Modo A Activo' : '📢 Modo B Activo'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    {/* BOTÓN MODO A: SOLO BOT */}
+                    <button
+                      type="button"
+                      disabled={updatingMode}
+                      onClick={() => handleUpdateOperatingMode('solo_bot')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        operatingMode === 'solo_bot'
+                          ? 'bg-amber-500/15 border-amber-500 shadow-lg shadow-amber-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white flex items-center gap-2">
+                          🤖 Modo A: "Solo Bot"
+                        </span>
+                        {operatingMode === 'solo_bot' && (
+                          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-amber-300/90 text-[11px] font-bold mt-1">100% Privado y Confidencial</p>
+                      <ul className="mt-2.5 space-y-1.5 text-[11px] text-zinc-400">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Publica directamente a la Mini App.
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Todo visitante se registra automáticamente como suscriptor.
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Cero publicaciones ni reportes en canales públicos.
+                        </li>
+                      </ul>
+                    </button>
+
+                    {/* BOTÓN MODO B: HÍBRIDO BOT + CANAL */}
+                    <button
+                      type="button"
+                      disabled={updatingMode}
+                      onClick={() => handleUpdateOperatingMode('bot_and_channel')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        operatingMode === 'bot_and_channel'
+                          ? 'bg-amber-500/15 border-amber-500 shadow-lg shadow-amber-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white flex items-center gap-2">
+                          📢 Modo B: "Híbrido"
+                        </span>
+                        {operatingMode === 'bot_and_channel' && (
+                          <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
+                        )}
+                      </div>
+                      <p className="text-amber-300/90 text-[11px] font-bold mt-1">Bot + Canal Free (Vitrina)</p>
+                      <ul className="mt-2.5 space-y-1.5 text-[11px] text-zinc-400">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Publica en la Mini App y envía preview al Canal Free.
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Los botones del Canal abren la Mini App directamente en Telegram.
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-emerald-400 font-bold">✓</span> Permite difusión masiva y viralidad en Telegram.
+                        </li>
+                      </ul>
+                    </button>
+                  </div>
+                </div>
+
                 {/* FOTO O VIDEO DE BIENVENIDA (BOT Y CANAL) */}
                 <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
                   <div className="flex items-center justify-between">
@@ -1897,7 +2036,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Pin className="w-4 h-4 text-amber-400" /> Mensaje Fijado en el Catálogo Web
+                      <Pin className="w-4 h-4 text-amber-400" /> Mensaje Fijado en el Canal VIP Free
                     </h4>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <span className="text-xs text-zinc-400 font-medium">Estado:</span>
@@ -1913,7 +2052,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </label>
                   </div>
                   <p className="text-zinc-400 text-xs">
-                    Fija un anuncio que permanecerá visible en la parte superior del catálogo web.
+                    Fija un anuncio que permanecerá visible en la parte superior del Canal VIP Free.
                   </p>
                   <textarea
                     rows={2}
@@ -1933,7 +2072,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             body: JSON.stringify({ pinned_message_text: pinnedMessageText, pinned_message_active: pinnedMessageActive })
                           });
                           if (res.ok) {
-                            setMessage({ type: 'success', text: 'Mensaje fijado actualizado correctamente en el catálogo' });
+                            setMessage({ type: 'success', text: 'Mensaje fijado actualizado correctamente en el Canal VIP Free' });
                           } else {
                             setMessage({ type: 'error', text: 'Error al guardar mensaje fijado' });
                           }
@@ -2026,7 +2165,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <Send className="w-4 h-4 text-amber-400" /> Nombre de Usuario del Bot en Telegram
                   </h4>
                   <p className="text-zinc-400">
-                    Username exacto del bot sin @. Los enlaces del catálogo redirigirán a este bot.
+                    Username exacto de Telegram sin @. Los enlaces del Canal VIP Free redirigirán a este usuario.
                   </p>
                 </form>
 
