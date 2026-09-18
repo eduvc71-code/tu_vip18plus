@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   User,
   Users,
-  ShieldAlert,
   Clock,
   Eye,
   Activity,
@@ -28,8 +27,6 @@ import {
   Flame,
   Sparkles,
   HardDrive,
-  FileVideo,
-  FileImage,
   ChevronLeft,
   ChevronRight,
   Maximize2,
@@ -79,7 +76,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
 
   const [publishing, setPublishing] = useState(false);
-  const [editingDescForUrl, setEditingDescForUrl] = useState<string | null>(null);
   const [tempDescText, setTempDescText] = useState<string>('');
 
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -110,7 +106,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Upload workflow state (comment and ephemeral before upload)
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
-  const [uploadDuration, setUploadDuration] = useState(10);
+  const uploadDuration = 10;
 
   // Custom buttons state
   const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
@@ -572,46 +568,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleSyncChannel = async (profileId: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/profiles/${profileId}/publish`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMessage({ type: 'success', text: `Sincronización con Canal Telegram exitosa: ${data.message}` });
-        fetchData();
-      } else {
-        setMessage({ type: 'error', text: data.message || 'Error al publicar en canal' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de servidor al sincronizar' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteProfile = async (profileId: string, name: string) => {
-    if (!window.confirm(`¿Está segura de eliminar el perfil de "${name}"? Se removerá del canal de Telegram y de la web.`)) return;
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/admin/profiles/${profileId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setMessage({ type: 'success', text: `Perfil ${name} eliminado con éxito.` });
-        fetchData();
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error al eliminar perfil' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleRegisterWebhook = async () => {
     setLoading(true);
     try {
@@ -786,7 +742,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         setMessage({ type: 'success', text: 'Descripción de este archivo guardada con éxito.' });
-        setEditingDescForUrl(null);
         fetchData();
       } else {
         setMessage({ type: 'error', text: 'Error al guardar descripción del archivo' });
@@ -818,67 +773,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de conexión al responder solicitud' });
     } finally {
       setSendingReply(false);
-    }
-  };
-
-  const handleSaveAndPublish = async () => {
-    const targetId = editingProfile?.id || profiles[0]?.id;
-    if (!targetId) {
-      setMessage({ type: 'error', text: 'No hay perfil seleccionado para publicar en el canal.' });
-      return;
-    }
-    setPublishing(true);
-    setMessage(null);
-    try {
-      // 1. Save profile updates first if editing
-      if (editingProfile) {
-        const resSave = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify(formData)
-        });
-        const dataSave = await resSave.json();
-        if (!resSave.ok) {
-          setMessage({ type: 'error', text: dataSave.error || 'Error al guardar los datos del perfil.' });
-          setPublishing(false);
-          return;
-        }
-
-        // 2. Upload any queued photos
-        if (selectedPhotoFiles && selectedPhotoFiles.length > 0) {
-          const body = new FormData();
-          for (let i = 0; i < selectedPhotoFiles.length; i++) {
-            body.append('photos', selectedPhotoFiles[i]);
-          }
-          await fetch(`/api/admin/profiles/${editingProfile.id}/photos`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body
-          });
-          setSelectedPhotoFiles(null);
-        }
-      }
-
-      // 3. Publish to Telegram Channel
-      const resPub = await fetch(`/api/admin/profiles/${targetId}/publish`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-      });
-      const dataPub = await resPub.json();
-      if (resPub.ok && dataPub.success) {
-        setMessage({
-          type: 'success',
-          text: `🚀 ¡Perfil guardado y publicado con éxito en el Canal VIP! (Mensaje #${dataPub.telegramMessageId || 'OK'})`
-        });
-        fetchData();
-      } else {
-        const errorMsg = dataPub.message || 'Error al publicar en el canal de Telegram';
-        setMessage({ type: 'error', text: errorMsg });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de conexión al guardar y publicar en Telegram.' });
-    } finally {
-      setPublishing(false);
     }
   };
 
@@ -952,12 +846,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const resetNewForm = () => {
-    setEditingProfile(null);
-    setFormData({ name: '', age: 18, zone: 'Contenido +18 VIP', description: '', rate_bs: 450, commission_bs: 50, status: 'disponible', priority_order: 0 });
-    setActiveTab('profiles');
   };
 
   if (!isOpen) return null;
