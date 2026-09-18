@@ -2,7 +2,7 @@ import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, ProfileStatus, CustomButton, DynamicPoll } from '../types.js';
-import { backupDatabaseToB2, downloadDatabaseFromB2 } from './b2Storage.js';
+import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'catalogo.sqlite');
@@ -20,27 +20,32 @@ export async function getDb(): Promise<Database> {
   const SQL = await initSqlJs();
 
   let loadedFromB2 = false;
-  // If local file is missing or empty, restore automatically from Backblaze B2
-  if (!fs.existsSync(DB_FILE) || fs.statSync(DB_FILE).size === 0) {
+  // If B2 is configured, ALWAYS check B2 first on startup so fresh deploys on Render retain production data!
+  if (isB2Configured()) {
     try {
+      console.log('[Database] Verificando y sincronizando con Backblaze B2...');
       const b2Buf = await downloadDatabaseFromB2();
       if (b2Buf && b2Buf.length > 0) {
         fs.writeFileSync(DB_FILE, b2Buf);
         db = new SQL.Database(b2Buf);
         loadedFromB2 = true;
-        console.log('[Database] Restaurada exitosamente desde Backblaze B2');
+        console.log('[Database] ✅ Base de datos de producción restaurada exitosamente desde Backblaze B2');
+      } else {
+        console.log('[Database] No se encontró base previa en B2.');
       }
     } catch (err: any) {
-      console.warn('[Database] No se pudo restaurar desde B2, iniciando base local:', err?.message || err);
+      console.warn('[Database] No se pudo restaurar desde B2, usando copia local o inicial:', err?.message || err);
     }
   }
 
   if (!db) {
-    if (fs.existsSync(DB_FILE)) {
+    if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
       const filebuffer = fs.readFileSync(DB_FILE);
       db = new SQL.Database(filebuffer);
+      console.log('[Database] Cargada base local existente.');
     } else {
       db = new SQL.Database();
+      console.log('[Database] Inicializando base vacía.');
     }
   }
 

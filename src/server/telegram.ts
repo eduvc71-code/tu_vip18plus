@@ -225,7 +225,53 @@ export async function pinChatMessage(chatId: string | number, messageId: number)
   });
 }
 
-export function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
+let cachedCommandsMap: Record<string, string> | null = null;
+let lastCommandsFetch = 0;
+
+export async function getBotCommandDescription(commandName: string): Promise<string | null> {
+  const now = Date.now();
+  if (!cachedCommandsMap || (now - lastCommandsFetch > 60000)) {
+    try {
+      const res = await callTelegramApi('getMyCommands', {});
+      if (res && res.ok && Array.isArray(res.result)) {
+        const newMap: Record<string, string> = {};
+        for (const item of res.result) {
+          if (item.command && item.description) {
+            newMap[item.command.toLowerCase().trim()] = item.description.trim();
+          }
+        }
+        cachedCommandsMap = newMap;
+        lastCommandsFetch = now;
+      }
+    } catch (e) {
+      console.warn('[Telegram] No se pudieron consultar comandos via getMyCommands:', e);
+    }
+  }
+
+  const cleanCmd = commandName.replace(/^\//, '').toLowerCase().trim();
+  if (cachedCommandsMap && cachedCommandsMap[cleanCmd]) {
+    return cachedCommandsMap[cleanCmd];
+  }
+  return null;
+}
+
+export async function getBotCommandText(commandName: string, fallback: string, emojiPrefix?: string): Promise<string> {
+  const desc = await getBotCommandDescription(commandName);
+  if (desc) {
+    if (emojiPrefix && !desc.startsWith(emojiPrefix.trim())) {
+      return `${emojiPrefix} ${desc}`;
+    }
+    return desc;
+  }
+  return fallback;
+}
+
+export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
+  const btnCanal = await getBotCommandText('canal', '📢 Canal VIP', '📢');
+  const btnListar = await getBotCommandText('listar', '📋 Listar Contenido', '📋');
+  const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
+  const btnAyuda = await getBotCommandText('ayuda', '❓ Ayuda Admin', '❓');
+
   return {
     keyboard: [
       [
@@ -233,16 +279,16 @@ export function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
         { text: '💎 Ver Catálogo VIP', web_app: { url: baseUrl } }
       ],
       [
-        { text: '📢 Canal VIP' },
-        { text: '📋 Listar Contenido' }
+        { text: btnCanal },
+        { text: btnListar }
       ],
       [
-        { text: '➕ Nuevo Perfil' },
+        { text: btnNuevo },
         { text: '🔘 Botones' }
       ],
       [
         { text: '📊 Dinámicas / Encuestas' },
-        { text: '❓ Ayuda Admin' }
+        { text: btnAyuda }
       ],
       [
         { text: '❌ Cancelar' }
@@ -877,7 +923,7 @@ export async function processTelegramUpdate(update: any) {
   const adminToken = generateAdminMagicToken(String(fromId));
   const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
 
-  if (adminText === '📢 Canal VIP') {
+  if (adminText === '📢 Canal VIP' || adminText.includes('Canal') || (cachedCommandsMap?.['canal'] && adminText.includes(cachedCommandsMap['canal']))) {
     const { channelId, username } = getBotConfig();
     const storedTitle = getSystemSetting('channel_title');
     await sendMessage(chatId, `📢 *Canal VIP Configurado:*\n\n• Canal: *${storedTitle || channelId}*\n• ID: \`${channelId}\`\n• Bot Administrador: @${username}\n\n_Para cambiar de canal reenvía cualquier post de tu canal o usa \`/setcanal @TuCanal\`._`);
@@ -925,26 +971,27 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  if (adminText === '📋 Listar Contenido') {
+  if (adminText === '📋 Listar Contenido' || adminText.includes('Listar') || adminText.includes('Perfiles') || (cachedCommandsMap?.['listar'] && adminText.includes(cachedCommandsMap['listar']))) {
     await handleListProfiles(chatId);
     return;
   }
 
-  if (adminText === '➕ Nuevo Perfil') {
+  if (adminText === '➕ Nuevo Perfil' || adminText.includes('Nuevo') || (cachedCommandsMap?.['nuevo'] && adminText.includes(cachedCommandsMap['nuevo']))) {
     await setConversationState(userIdStr, 'NEW_NAME', {});
     await sendMessage(chatId, '➕ *Crear Nuevo Perfil (Paso 1/5)*\n\nPor favor, escribe el *Nombre Público*:');
     return;
   }
 
-  if (adminText === '❓ Ayuda Admin') {
+  if (adminText === '❓ Ayuda Admin' || adminText.includes('Ayuda') || (cachedCommandsMap?.['ayuda'] && adminText.includes(cachedCommandsMap['ayuda']))) {
     await sendAdminHelp(chatId);
     return;
   }
 
-  if (adminText === '❌ Cancelar') {
+  if (adminText === '❌ Cancelar' || adminText.includes('Cancelar')) {
     await clearConversationState(userIdStr);
+    const replyKbd = await getAdminReplyKeyboard(adminLink, baseUrl);
     await sendMessage(chatId, '❌ *Operación cancelada*. Has regresado al menú principal.', {
-      reply_markup: getAdminReplyKeyboard(adminLink, baseUrl)
+      reply_markup: replyKbd
     });
     return;
   }
@@ -1388,6 +1435,11 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
     : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
 
+  const btnCanal = await getBotCommandText('canal', '📢 Entrar al Canal Free Oficial', '📢');
+  const btnPrecios = await getBotCommandText('precios', '💰 Tarifas y Precios VIP', '💰');
+  const btnInfo = await getBotCommandText('info', 'ℹ️ Información', 'ℹ️');
+  const btnAyuda = await getBotCommandText('ayuda', '❓ Ayuda y Soporte', '❓');
+
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
     `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al catálogo oficial sin censura.\n\n` +
@@ -1396,18 +1448,18 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
   const inlineKeyboard: any[][] = [];
   if (channelUrl) {
     inlineKeyboard.push([
-      { text: '📢 Entrar al Canal Free Oficial', url: channelUrl }
+      { text: btnCanal, url: channelUrl }
     ]);
   }
   inlineKeyboard.push([
     { text: '💎 Abrir Mini App (Catálogo VIP)', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
-    { text: '💰 Tarifas y Precios VIP', callback_data: 'client_cmd_precios' },
-    { text: 'ℹ️ Información', callback_data: 'client_cmd_info' }
+    { text: btnPrecios, callback_data: 'client_cmd_precios' },
+    { text: btnInfo, callback_data: 'client_cmd_info' }
   ]);
   inlineKeyboard.push([
-    { text: '❓ Ayuda y Soporte', callback_data: 'client_cmd_ayuda' }
+    { text: btnAyuda, callback_data: 'client_cmd_ayuda' }
   ]);
 
   const welcomeMediaUrl = getSystemSetting('welcome_media_url');
@@ -1442,6 +1494,8 @@ export async function sendClientCanal(chatId: string | number) {
     ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
     : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
 
+  const btnCanal = await getBotCommandText('canal', '📢 Ir al Canal Telegram', '📢');
+
   const text = `📢 *CANAL OFICIAL FREE* 📢\n\n` +
     `En nuestro canal compartimos previews, novedades y promociones especiales.\n\n` +
     `👉 *Abre la Mini App para ver la galería completa:*`;
@@ -1449,7 +1503,7 @@ export async function sendClientCanal(chatId: string | number) {
   const inlineKeyboard: any[][] = [];
   if (channelUrl) {
     inlineKeyboard.push([
-      { text: '📢 Ir al Canal Telegram', url: channelUrl }
+      { text: btnCanal, url: channelUrl }
     ]);
   }
   inlineKeyboard.push([
@@ -1468,6 +1522,8 @@ export async function sendClientCanal(chatId: string | number) {
 
 export async function sendClientPrecios(chatId: string | number) {
   const { baseUrl } = getBotConfig();
+  const btnInfo = await getBotCommandText('info', 'ℹ️ Información y Seguridad', 'ℹ️');
+
   const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP* 💰\n\n` +
     `✨ *¿Qué incluye la Suscripción VIP?*\n` +
     `• Acceso ilimitado a la galería privada completa (fotos y videos en alta definición).\n` +
@@ -1485,7 +1541,7 @@ export async function sendClientPrecios(chatId: string | number) {
           { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
         ],
         [
-          { text: 'ℹ️ Información y Seguridad', callback_data: 'client_cmd_info' },
+          { text: btnInfo, callback_data: 'client_cmd_info' },
           { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
         ]
       ]
@@ -1495,6 +1551,8 @@ export async function sendClientPrecios(chatId: string | number) {
 
 export async function sendClientInfo(chatId: string | number) {
   const { baseUrl } = getBotConfig();
+  const btnPrecios = await getBotCommandText('precios', '💰 Ver Tarifas y Precios', '💰');
+
   const text = `ℹ️ *INFORMACIÓN, SEGURIDAD Y DISCRECIÓN* ℹ️\n\n` +
     `🔒 *Garantía de Confidencialidad:*\n` +
     `• Contenido 100% digital exclusivo para mayores de 18 años (+18).\n` +
@@ -1509,7 +1567,7 @@ export async function sendClientInfo(chatId: string | number) {
           { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
         ],
         [
-          { text: '💰 Ver Tarifas y Precios', callback_data: 'client_cmd_precios' },
+          { text: btnPrecios, callback_data: 'client_cmd_precios' },
           { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
         ]
       ]
@@ -1519,6 +1577,8 @@ export async function sendClientInfo(chatId: string | number) {
 
 export async function sendClientAyuda(chatId: string | number) {
   const { baseUrl } = getBotConfig();
+  const btnPrecios = await getBotCommandText('precios', '💰 Ver Precios', '💰');
+
   const text = `❓ *PREGUNTAS FRECUENTES Y AYUDA* ❓\n\n` +
     `1️⃣ *¿Cómo abro la galería?*\n` +
     `Pulsa el botón *"Ver Canal VIP Free"* en el menú inferior del bot o en cualquier mensaje.\n\n` +
@@ -1536,7 +1596,7 @@ export async function sendClientAyuda(chatId: string | number) {
           { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
         ],
         [
-          { text: '💰 Ver Precios', callback_data: 'client_cmd_precios' },
+          { text: btnPrecios, callback_data: 'client_cmd_precios' },
           { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
         ]
       ]
@@ -1778,11 +1838,15 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
   const adminToken = generateAdminMagicToken(String(chatId));
   const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
 
+  const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
+  const btnListar = await getBotCommandText('listar', '📋 Listar Perfiles', '📋');
+  const btnAyuda = await getBotCommandText('ayuda', '📖 Manual / Ayuda Admin', '📖');
+
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
     `📸 *Carga Directa de Contenido:*\n` +
     `Como Administradora, puedes enviar o reenviar fotografías y videos directamente a este chat y se agregarán de inmediato a la galería de tu catálogo.\n\n` +
-    `👇 *Acciones Rápidas con Botones:*`;
+    `👇 *Botones:*`;
 
   await sendMessage(chatId, msg, {
     reply_markup: {
@@ -1794,20 +1858,21 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
           { text: '💎 Ver Catálogo VIP (Mini App Cliente)', web_app: { url: baseUrl } }
         ],
         [
-          { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
-          { text: '📋 Listar Perfiles', callback_data: 'admin_btn_list' }
+          { text: btnNuevo, callback_data: 'admin_btn_new' },
+          { text: btnListar, callback_data: 'admin_btn_list' }
         ],
         [
           { text: '📌 Fijar Anuncio en Canal', callback_data: 'admin_btn_pin' },
-          { text: '📖 Manual / Ayuda Admin', callback_data: 'admin_btn_help' }
+          { text: btnAyuda, callback_data: 'admin_btn_help' }
         ]
       ]
     }
   });
 
   // Activate the persistent keyboard menu so the admin always has buttons on their phone
+  const replyKbd = await getAdminReplyKeyboard(adminLink, baseUrl);
   await sendMessage(chatId, '👇 *Menú de Teclado Activado:* Puedes pulsar los botones inferiores en cualquier momento sin comandos.', {
-    reply_markup: getAdminReplyKeyboard(adminLink, baseUrl)
+    reply_markup: replyKbd
   });
 }
 
@@ -1815,6 +1880,9 @@ async function sendAdminHelp(chatId: string | number) {
   const { baseUrl, brandName } = getBotConfig();
   const adminToken = generateAdminMagicToken(String(chatId));
   const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+
+  const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
+  const btnListar = await getBotCommandText('listar', '📋 Listar Perfiles', '📋');
 
   const msg = `📖 *Manual de Administración — ${brandName || 'IAM DANII VIP'}* 📖\n\n` +
     `1️⃣ *Para gestionar perfiles*: Pulsa los botones abajo o usa \`/nuevo\` y \`/listar\`.\n` +
@@ -1832,8 +1900,8 @@ async function sendAdminHelp(chatId: string | number) {
           { text: '🔐 Abrir Panel Web', url: adminLink }
         ],
         [
-          { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
-          { text: '📋 Listar Perfiles', callback_data: 'admin_btn_list' }
+          { text: btnNuevo, callback_data: 'admin_btn_new' },
+          { text: btnListar, callback_data: 'admin_btn_list' }
         ]
       ]
     }

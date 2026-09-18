@@ -191,6 +191,7 @@ export async function backupDatabaseToB2(buffer: Buffer): Promise<string> {
   const connection = getB2Connection();
   if (!connection) throw new Error(`Backblaze B2 no configurado: ${missingB2Variables().join(', ')}`);
 
+  // Canonical SQLite database object in B2 (overwrites in place, no accumulation)
   const objectKey = 'tu-vip/db/catalogo.sqlite';
   await connection.client.send(new PutObjectCommand({
     Bucket: connection.bucket,
@@ -199,20 +200,6 @@ export async function backupDatabaseToB2(buffer: Buffer): Promise<string> {
     ContentType: 'application/x-sqlite3',
     CacheControl: 'private, no-store'
   }));
-
-  // Timestamped snapshot in tu-vip/backups/
-  const timestampKey = `tu-vip/backups/db_backup_${Date.now()}.sqlite`;
-  try {
-    await connection.client.send(new PutObjectCommand({
-      Bucket: connection.bucket,
-      Key: timestampKey,
-      Body: buffer,
-      ContentType: 'application/x-sqlite3',
-      CacheControl: 'private, no-store'
-    }));
-  } catch (e) {
-    console.warn('[B2] Snapshot adicional falló:', e);
-  }
 
   return objectKey;
 }
@@ -223,17 +210,47 @@ export async function downloadDatabaseFromB2(): Promise<Buffer | null> {
 
   try {
     const objectKey = 'tu-vip/db/catalogo.sqlite';
-    const object = await connection.client.send(new GetObjectCommand({
+    try {
+      const object = await connection.client.send(new GetObjectCommand({
+        Bucket: connection.bucket,
+        Key: objectKey
+      }));
+
+      if (object.Body) {
+        return await streamToBuffer(object.Body);
+      }
+    } catch (err: any) {
+      if (err?.$metadata?.httpStatusCode !== 404 && err?.name !== 'NoSuchKey' && err?.Code !== 'NoSuchKey') {
+        throw err;
+      }
+    }
+
+    // Fallback: If canonical file does not exist yet, look for the most recent backup in tu-vip/backups/
+    const listRes = await connection.client.send(new ListObjectsV2Command({
       Bucket: connection.bucket,
-      Key: objectKey
+      Prefix: 'tu-vip/backups/db_backup_'
     }));
 
-    if (!object.Body) return null;
-    return await streamToBuffer(object.Body);
-  } catch (err: any) {
-    if (err?.$metadata?.httpStatusCode === 404 || err?.name === 'NoSuchKey' || err?.Code === 'NoSuchKey') {
-      return null;
+    if (listRes.Contents && listRes.Contents.length > 0) {
+      const sorted = listRes.Contents.sort((a, b) => (b.LastModified?.getTime() || 0) - (a.LastModified?.getTime() || 0));
+      const newest = sorted[0];
+      if (newest.Key) {
+        console.log(`[B2] Restaurando desde el respaldo más reciente en backups: ${newest.Key}`);
+        const obj = await connection.client.send(new GetObjectCommand({
+          Bucket: connection.bucket,
+          Key: newest.Key
+        }));
+        if (obj.Body) {
+          const buf = await streamToBuffer(obj.Body);
+          // Migrate to canonical path so future runs overwrite tu-vip/db/catalogo.sqlite directly
+          await backupDatabaseToB2(buf);
+          return buf;
+        }
+      }
     }
+
+    return null;
+  } catch (err: any) {
     console.warn('[B2] Error descargando base de datos desde B2:', err?.message || err);
     return null;
   }
