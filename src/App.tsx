@@ -128,7 +128,7 @@ export default function App() {
         const info = await resInfo.json();
         if (info.bot_username) {
           const safeBot = info.bot_username.replace(/^@/, '').trim();
-          setBotUsername(safeBot || 'Danii_Catalogo_SCZ_bot');
+          setBotUsername(safeBot || 'IAM_Danii_VIP_bot');
         }
         if (info.channel_id) setChannelId(info.channel_id);
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);

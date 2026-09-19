@@ -64,8 +64,8 @@ function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
   const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
-  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_vip_link', '')`);
-  database.run(`UPDATE system_settings SET value = 'Danii_Catalogo_SCZ_bot' WHERE key = 'bot_username'`);
+  const defaultBotUsername = (process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
 }
 
 export function saveDb(): void {

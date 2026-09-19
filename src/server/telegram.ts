@@ -48,8 +48,8 @@ export function getBotConfig() {
     token = ACTIVE_BOT_TOKEN;
   }
   const storedUsername = getSystemSetting('bot_username');
-  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Catalogo_SCZ_bot';
-  let username = rawUsername.replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
+  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot';
+  let username = rawUsername.replace(/^@/, '').trim() || 'IAM_Danii_VIP_bot';
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();

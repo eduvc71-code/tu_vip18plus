@@ -3,17 +3,19 @@ services:
     name: iam-danii-vip-plus18
     env: node
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     envVars:
       - key: PORT
         value: 10000
+      - key: NODE_VERSION
+        value: 22.14.0
       - key: NODE_ENV
         value: production
       - key: BOT_TOKEN
         sync: false
       - key: BOT_USERNAME
-        value: Danii_Catalogo_SCZ_bot
+        value: IAM_Danii_VIP_bot
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       - key: ADMIN_SIGNING_SECRET
