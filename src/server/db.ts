@@ -64,8 +64,12 @@ function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
   const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
-  const defaultBotUsername = (process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  let defaultBotUsername = (process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  if (!defaultBotUsername || /ruti|flavia/i.test(defaultBotUsername)) {
+    defaultBotUsername = 'IAM_Danii_VIP_bot';
+  }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
+  database.run(`UPDATE system_settings SET value = 'IAM_Danii_VIP_bot' WHERE key = 'bot_username' AND (value LIKE '%ruti%' OR value LIKE '%flavia%' OR value = 'Danii_Catalogo_SCZ_bot')`);
 }
 
 export function saveDb(): void {
@@ -276,7 +280,7 @@ function seedInitialData(database: Database): void {
 
   if (count === 0) {
     const now = new Date().toISOString();
-    const modelName = process.env.VIP_MODEL_NAME || 'IAM Danii';
+    const modelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM DANI 🧸🩷';
 
     const sampleProfiles: Partial<Profile>[] = [
       {
@@ -284,8 +288,8 @@ function seedInitialData(database: Database): void {
         name: modelName,
         age: 21,
         zone: 'Contenido +18 VIP',
-        description: 'Modelo exclusiva y creadora de contenido VIP (+18). Acceso confidencial a galería privada, packs exclusivos y atención directa sin intermediarios ni reservas.',
-        rate_bs: 0,
+        description: 'Holis, te doy la bienvenida a mi espacio privado y oficial.\n\nAcá podrás explorar información exclusiva y detalles de lo que desees saber de mí o si quieres ver más de mí 🙈\n\nPresiona cualquiera de las opciones que te salen abajo ‼️',
+        rate_bs: 100,
         commission_bs: 0,
         photos: [],
         ephemeral_config: {},

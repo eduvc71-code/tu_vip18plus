@@ -49,6 +49,9 @@ export function getBotConfig() {
   }
   const storedUsername = getSystemSetting('bot_username');
   let rawUsername = process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot';
+  if (/ruti|flavia/i.test(rawUsername)) {
+    rawUsername = 'IAM_Danii_VIP_bot';
+  }
   let username = rawUsername.replace(/^@/, '').trim() || 'IAM_Danii_VIP_bot';
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   const storedChannel = getSystemSetting('channel_id');
