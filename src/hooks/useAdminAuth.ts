@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface UseAdminAuthReturn {
   token: string;
@@ -29,7 +29,23 @@ export const useAdminAuth = ({
   const [loginError, setLoginError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Keep a stable ref for onLoginSuccess to prevent infinite re-render loops
+  const onLoginSuccessRef = useRef(onLoginSuccess);
+  useEffect(() => {
+    onLoginSuccessRef.current = onLoginSuccess;
+  }, [onLoginSuccess]);
+
+  // Guard to run verification only once per panel open session
+  const hasCheckedRef = useRef(false);
+
   const verifyAndAuthenticate = useCallback(async (tok: string): Promise<boolean> => {
+    if (!tok) {
+      setToken('');
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+      return false;
+    }
+
     setLoading(true);
     try {
       const res = await fetch('/api/admin/auth/verify', {
@@ -41,88 +57,112 @@ export const useAdminAuth = ({
       if (res.ok && data.valid) {
         setToken(tok);
         setIsAuthenticated(true);
+        setAuthChecked(true);
         try { localStorage.setItem('danii_admin_token', tok); } catch {}
-        if (onLoginSuccess) {
-          void onLoginSuccess(tok);
+        if (onLoginSuccessRef.current) {
+          void onLoginSuccessRef.current(tok);
         }
         return true;
       } else {
+        setToken('');
         setIsAuthenticated(false);
+        setAuthChecked(true);
         try { localStorage.removeItem('danii_admin_token'); } catch {}
         return false;
       }
-    } catch {
+    } catch (err) {
+      console.error('Error verifying admin token:', err);
+      setToken('');
       setIsAuthenticated(false);
+      setAuthChecked(true);
       return false;
     } finally {
-      setAuthChecked(true);
       setLoading(false);
     }
-  }, [onLoginSuccess]);
+  }, []);
 
   const handleLoginWithPin = useCallback(async (e?: React.FormEvent): Promise<string | null> => {
-    if (e) e.preventDefault();
-    if (!pinInput.trim()) return null;
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const cleanPin = pinInput.trim();
+    if (!cleanPin) return null;
+
     setLoading(true);
     setLoginError('');
     try {
       const res = await fetch('/api/admin/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinInput.trim() })
+        body: JSON.stringify({ pin: cleanPin })
       });
       const data = await res.json();
       if (res.ok && data.valid && data.token) {
         setToken(data.token);
         setIsAuthenticated(true);
+        setAuthChecked(true);
+        setLoginError('');
         try { localStorage.setItem('danii_admin_token', data.token); } catch {}
-        if (onLoginSuccess) {
-          void onLoginSuccess(data.token);
+        if (onLoginSuccessRef.current) {
+          void onLoginSuccessRef.current(data.token);
         }
         return data.token;
       } else {
         setLoginError(data.error || 'Credenciales incorrectas');
         return null;
       }
-    } catch {
-      setLoginError('Error de conexión con el servidor');
+    } catch (err) {
+      console.error('Error in login request:', err);
+      setLoginError('Error de conexión con el servidor. Revisa tu conexión.');
       return null;
     } finally {
       setLoading(false);
     }
-  }, [pinInput, onLoginSuccess]);
+  }, [pinInput]);
 
   const handleLogout = useCallback(() => {
     setToken('');
     setIsAuthenticated(false);
+    setPinInput('');
+    setLoginError('');
     try { localStorage.removeItem('danii_admin_token'); } catch {}
     window.location.href = '/';
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const magicToken = urlParams.get('admin_token') || '';
-      const savedToken = (() => {
-        try { return localStorage.getItem('danii_admin_token') || ''; } catch { return ''; }
-      })();
-      const tokenToTry = magicToken || savedToken;
-
-      if (tokenToTry) {
-        void verifyAndAuthenticate(tokenToTry).then(valid => {
-          if (valid && magicToken) {
-            urlParams.delete('admin_token');
-            const newQuery = urlParams.toString();
-            const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
-            window.history.replaceState({}, document.title, newUrl);
-          }
-        });
-      } else {
-        setIsAuthenticated(false);
-        setAuthChecked(true);
-      }
+    if (!isOpen) {
+      hasCheckedRef.current = false;
+      return;
     }
-  }, [isOpen, verifyAndAuthenticate]);
+
+    if (hasCheckedRef.current || isAuthenticated) {
+      return;
+    }
+
+    hasCheckedRef.current = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const magicToken = urlParams.get('admin_token') || '';
+    const savedToken = (() => {
+      try { return localStorage.getItem('danii_admin_token') || ''; } catch { return ''; }
+    })();
+    const tokenToTry = magicToken || savedToken;
+
+    if (tokenToTry) {
+      void verifyAndAuthenticate(tokenToTry).then(valid => {
+        if (valid && magicToken) {
+          urlParams.delete('admin_token');
+          const newQuery = urlParams.toString();
+          const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      });
+    } else {
+      setIsAuthenticated(false);
+      setAuthChecked(true);
+    }
+  }, [isOpen, isAuthenticated, verifyAndAuthenticate]);
 
   return {
     token,
@@ -137,4 +177,3 @@ export const useAdminAuth = ({
     verifyAndAuthenticate
   };
 };
-

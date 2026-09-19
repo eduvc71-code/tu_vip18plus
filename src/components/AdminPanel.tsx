@@ -17,6 +17,7 @@ import {
   Users,
   Clock,
   Eye,
+  EyeOff,
   Activity,
   LogOut,
   QrCode,
@@ -71,6 +72,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       void fetchData(tok);
     }
   });
+
+  const [showPinText, setShowPinText] = useState(false);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
@@ -1037,7 +1040,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   if (!isOpen) return null;
 
-  if (!authChecked || !isAuthenticated) {
+  if (!authChecked) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-md">
+        <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-zinc-900 p-8 text-center shadow-2xl space-y-4">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+            <RefreshCw className="h-7 w-7 animate-spin" />
+          </div>
+          <h2 className="font-serif text-lg font-bold text-white">
+            Verificando Credenciales...
+          </h2>
+          <p className="text-xs text-zinc-400">
+            Comprobando acceso seguro al Panel VIP
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-md overflow-y-auto">
         <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-zinc-900 p-6 text-center shadow-2xl space-y-4">
@@ -1050,7 +1071,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Panel Administrativo VIP
             </h2>
             <p className="mt-1 text-xs text-zinc-400">
-              Ingresa con tu PIN o Telegram ID autorizado
+              Ingresa con tu PIN autorizado o Telegram ID
             </p>
           </div>
 
@@ -1059,14 +1080,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <label className="block text-[11px] font-bold uppercase text-zinc-300 mb-1">
                 PIN de Acceso o ID Administrador
               </label>
-              <input
-                type="password"
-                value={pinInput}
-                onChange={(e) => setPinInput(e.target.value)}
-                placeholder="Ingresa tu PIN o ID Telegram"
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
-                autoFocus
-              />
+              <div className="relative">
+                <input
+                  type={showPinText ? 'text' : 'password'}
+                  value={pinInput}
+                  onChange={(e) => setPinInput(e.target.value)}
+                  placeholder="Ingresa tu PIN o ID Telegram"
+                  className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
+                  autoFocus
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPinText(prev => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors p-1"
+                  title={showPinText ? "Ocultar PIN" : "Mostrar PIN"}
+                >
+                  {showPinText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
 
             {loginError && (
@@ -1079,7 +1111,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
               {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-              <span>Entrar al Panel Admin</span>
+              <span>{authLoading ? 'Verificando...' : 'Entrar al Panel Admin'}</span>
             </button>
           </form>
 
@@ -1095,7 +1127,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <button
               onClick={onClose}
               type="button"
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
             >
               Ir al Canal VIP Free
             </button>
