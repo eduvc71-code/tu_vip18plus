@@ -116,6 +116,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
+  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
 
   // Custom buttons state
   const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
@@ -425,6 +426,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body.append('is_ephemeral', 'true');
         body.append('ephemeral_duration', String(uploadDuration || 10));
       }
+      body.append('initial_status', String(uploadInitialStatus));
       const res = await fetch(`/api/admin/profiles/${profileId}/photos`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -434,7 +436,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: '✅ Guardado en Backblaze B2 exitosamente (Borrador). Puedes seguir seleccionando fotos para colocar comentarios o pulsar "Publicar en Canal VIP" cuando termines.'
+          text: uploadInitialStatus === 1
+            ? '🚀 Multimedia subida y publicada como ACTIVA exitosamente en la Mini App y servidor.'
+            : '✅ Multimedia subida y guardada como BORRADOR (Para Publicar) en el servidor.'
         });
         setSelectedPhotoFiles(null);
         setUploadComment('');
@@ -649,6 +653,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       setMessage({ type: 'error', text: 'Error al eliminar el archivo' });
+    }
+  };
+
+  const handleDeleteMediaPermanently = async (photoUrl: string) => {
+    if (!editingProfile) return;
+    if (!confirm('⚠️ ¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE este archivo del servidor y de Backblaze B2?\n\nEsta acción borrará el archivo de raíz y no se puede deshacer.')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ media_url: photoUrl })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: '🗑️ Archivo eliminado físicamente del servidor y base de datos.' });
+        if (enlargedMediaUrl === photoUrl) setEnlargedMediaUrl(null);
+        if (data.profile) setEditingProfile(data.profile);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al eliminar archivo del servidor' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar archivo' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1220,29 +1250,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <span>{editingProfile ? `Perfil VIP: ${editingProfile.name}` : 'Perfil VIP'}</span>
                   </h3>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {profiles.map(p => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          setEditingProfile(p);
-                          setFormData({
-                            name: p.name, age: p.age, zone: p.zone,
-                            description: p.description, rate_bs: p.rate_bs,
-                            commission_bs: 0, status: p.status,
-                            priority_order: p.priority_order || 0
-                          });
-                          setProfileStep(1);
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all ${
-                          editingProfile?.id === p.id
-                            ? 'bg-amber-500 text-zinc-950 shadow-md'
-                            : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                        }`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
                     <button
                       type="button"
                       onClick={() => {
@@ -1256,10 +1263,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             priority_order: target.priority_order || 0
                           });
                         }
-                        setMessage({
-                          type: 'success',
-                          text: 'ℹ️ Modo Carga Directa: Todo el contenido que subas aquí se guardará exclusivamente en el servidor (Status 2: Borrador). Para publicarlo en la Mini App y Canal VIP, pasa al Paso 3 ("Ver para Publicar") y pulsa "🚀 Activar Todo y Publicar".'
-                        });
                         setProfileStep(2);
                       }}
                       className="px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 font-sans"
@@ -1392,225 +1395,316 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </form>
                 )}
 
-                {/* ── PASO 2: CARGAR / SUBIR CONTENIDO (STATUS = 2) ── */}
-                {profileStep === 2 && (
-                  <div className="space-y-4 text-xs">
-                    <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-md">
-                      <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                        <h4 className="font-bold text-white flex items-center gap-2 text-xs">
-                          <Upload className="w-4 h-4 text-amber-400" /> Paso 2: Cargar / Subir Contenido
-                        </h4>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold text-[10px]">
-                            🟡 Status Inicial = 2 (Para Publicar)
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-mono">
-                            {editingProfile?.photos?.length || 0} archivo(s)
-                          </span>
-                        </div>
-                      </div>
+                {/* ── PASO 2: CARGAR / SUBIR Y GESTIONAR MULTIMEDIA ── */}
+                {profileStep === 2 && (() => {
+                  const photos = editingProfile?.photos || [];
+                  const activePhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 1);
+                  const pendingPhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 2);
+                  const displayedPhotos = mediaStatusFilter === 'pending'
+                    ? pendingPhotos
+                    : mediaStatusFilter === 'active'
+                    ? activePhotos
+                    : photos;
 
-                      {/* Notificación explicativa de seguridad */}
-                      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-[11px] text-zinc-300 space-y-1.5">
-                        <p className="flex items-center gap-1.5 text-amber-400 font-bold">
-                          <Sparkles className="w-3.5 h-3.5 shrink-0" /> Modo Seguro Activado
-                        </p>
-                        <p className="text-zinc-400 text-[10px] leading-relaxed">
-                          Todo contenido multimedia que cargues aquí ingresa automáticamente con <strong>Status = 2 (Para Publicar)</strong>. Se almacena seguro en el servidor y Backblaze B2, pero permanece oculto a clientes hasta que en el <strong>Paso 3 (Ver para Publicar)</strong> lo revises y actives a <strong>Status = 1</strong>.
-                        </p>
-                      </div>
-
-                      {/* Entrada opcional rápida para comentar o activar sugestivo al subir */}
-                      <div className="p-3.5 bg-zinc-900/90 border border-zinc-800 rounded-xl space-y-2.5">
-                        <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
-                          <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                          Comentario / Descripción para este material (Opcional):
-                        </label>
-                        <input
-                          type="text"
-                          value={uploadComment}
-                          onChange={(e) => setUploadComment(e.target.value)}
-                          placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda..."
-                          className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
-                        />
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={uploadSugestiva}
-                              onChange={(e) => setUploadSugestiva(e.target.checked)}
-                              className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                            />
-                            <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
-                              <Flame className={`w-3.5 h-3.5 ${uploadSugestiva ? 'text-rose-400' : 'text-zinc-500'}`} />
-                              Marcar como Sugestiva / Efímera
+                  return (
+                    <div className="space-y-4 text-xs">
+                      <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-md">
+                        <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
+                          <h4 className="font-bold text-white flex items-center gap-2 text-xs">
+                            <Upload className="w-4 h-4 text-amber-400" /> Paso 2: Gestión y Carga de Multimedia
+                          </h4>
+                          <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                              🟢 {activePhotos.length} Publicadas
                             </span>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
+                              🟡 {pendingPhotos.length} Sin Publicar
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Selector de Estado al Subir Contenido */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3 bg-zinc-900/90 rounded-xl border border-zinc-800">
+                          <div className="space-y-0.5">
+                            <span className="text-[11px] font-bold text-zinc-200 flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                              Al subir nuevo contenido, guardarlo como:
+                            </span>
+                            <p className="text-[10px] text-zinc-400">
+                              {uploadInitialStatus === 1
+                                ? 'Se publicará inmediatamente en la Mini App para los clientes.'
+                                : 'Se guardará en el servidor en modo borrador, oculto a clientes hasta que decidas publicarlo.'}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setUploadInitialStatus(1)}
+                              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                uploadInitialStatus === 1
+                                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              <span>🟢 Publicada (Activa)</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setUploadInitialStatus(2)}
+                              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                uploadInitialStatus === 2
+                                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
+                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              <span>🟡 Borrador (Oculto)</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Entrada opcional rápida para comentar o activar sugestivo al subir */}
+                        <div className="p-3.5 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
+                          <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                            Comentario / Descripción para este material (Opcional):
+                          </label>
+                          <input
+                            type="text"
+                            value={uploadComment}
+                            onChange={(e) => setUploadComment(e.target.value)}
+                            placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda..."
+                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
+                          />
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={uploadSugestiva}
+                                onChange={(e) => setUploadSugestiva(e.target.checked)}
+                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                              />
+                              <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                                <Flame className={`w-3.5 h-3.5 ${uploadSugestiva ? 'text-rose-400' : 'text-zinc-500'}`} />
+                                Marcar como Sugestiva / Efímera
+                              </span>
+                            </label>
+
+                            {uploadSugestiva && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-zinc-400 font-semibold">Revelar por:</span>
+                                {[5, 10, 15, 30].map((sec) => (
+                                  <button
+                                    key={sec}
+                                    type="button"
+                                    onClick={() => setUploadDuration(sec)}
+                                    className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
+                                      uploadDuration === sec
+                                        ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
+                                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                    }`}
+                                  >
+                                    {sec}s
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Selector de archivos para subir */}
+                        <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                          <label className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
+                            <Upload className="w-4 h-4 shrink-0" />
+                            <span>
+                              {selectedPhotoFiles && selectedPhotoFiles.length > 0
+                                ? `${selectedPhotoFiles.length} archivo(s) seleccionado(s)`
+                                : 'Toca aquí para seleccionar fotos o videos'}
+                            </span>
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,image/*,video/*"
+                              onChange={(e) => setSelectedPhotoFiles(e.target.files)}
+                              className="hidden"
+                            />
                           </label>
 
-                          {uploadSugestiva && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] text-zinc-400 font-semibold">Revelar por:</span>
-                              {[5, 10, 15, 30].map((sec) => (
-                                <button
-                                  key={sec}
-                                  type="button"
-                                  onClick={() => setUploadDuration(sec)}
-                                  className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                                    uploadDuration === sec
-                                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
-                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  {sec}s
-                                </button>
-                              ))}
-                            </div>
+                          {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleUploadPhotos(editingProfile.id)}
+                              disabled={uploadingPhotos}
+                              className={`py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
+                                uploadInitialStatus === 1
+                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                                  : 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-amber-500/20'
+                              }`}
+                            >
+                              <HardDrive className="w-4 h-4" />
+                              {uploadingPhotos
+                                ? 'Subiendo...'
+                                : uploadInitialStatus === 1
+                                ? '🚀 Subir y Publicar'
+                                : '💾 Subir como Borrador'}
+                            </button>
                           )}
                         </div>
-                      </div>
 
-                      {/* Selector de archivos para subir */}
-                      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
-                        <label className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
-                          <Upload className="w-4 h-4 shrink-0" />
-                          <span>
-                            {selectedPhotoFiles && selectedPhotoFiles.length > 0
-                              ? `${selectedPhotoFiles.length} archivo(s) seleccionado(s)`
-                              : 'Toca aquí para seleccionar fotos o videos'}
-                          </span>
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,image/*,video/*"
-                            onChange={(e) => setSelectedPhotoFiles(e.target.files)}
-                            className="hidden"
-                          />
-                        </label>
+                        {/* Separación y Filtros de Contenido */}
+                        {photos.length > 0 ? (
+                          <div className="space-y-3.5 pt-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-zinc-900 gap-2">
+                              <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                                <button
+                                  type="button"
+                                  onClick={() => setMediaStatusFilter('active')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    mediaStatusFilter === 'active'
+                                      ? 'bg-emerald-600 text-white shadow'
+                                      : 'text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟢 Publicadas ({activePhotos.length})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMediaStatusFilter('pending')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    mediaStatusFilter === 'pending'
+                                      ? 'bg-amber-500 text-zinc-950 shadow'
+                                      : 'text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟡 Sin Publicar ({pendingPhotos.length})</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setMediaStatusFilter('all')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                    mediaStatusFilter === 'all'
+                                      ? 'bg-zinc-700 text-white shadow'
+                                      : 'text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>Todos ({photos.length})</span>
+                                </button>
+                              </div>
+                              <span className="text-[10px] text-zinc-500">Toca un archivo para ver detalles o cambiar su estado</span>
+                            </div>
 
-                        {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => handleUploadPhotos(editingProfile.id)}
-                            disabled={uploadingPhotos}
-                            className="py-3.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold text-xs cursor-pointer shrink-0 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60"
-                          >
-                            <HardDrive className="w-4 h-4" />
-                            {uploadingPhotos ? 'Subiendo...' : '💾 Cargar Multimedia (Status 2)'}
-                          </button>
+                            {displayedPhotos.length === 0 ? (
+                              <div className="p-8 text-center bg-zinc-950/40 border border-dashed border-zinc-850 rounded-2xl text-zinc-500 text-xs">
+                                No hay archivos en este filtro.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                {displayedPhotos.map((photoUrl, idx) => {
+                                  const mediaStatus = editingProfile.media_status?.[photoUrl] || 2;
+                                  const isEphemeral = Boolean(editingProfile.ephemeral_config?.[photoUrl]?.enabled);
+                                  const duration = editingProfile.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
+                                  const hasDescription = Boolean(editingProfile.media_descriptions?.[photoUrl]);
+                                  const isCover = editingProfile.photos?.[0] === photoUrl;
+
+                                  return (
+                                    <div
+                                      key={photoUrl}
+                                      onClick={() => {
+                                        setEnlargedMediaUrl(photoUrl);
+                                        setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
+                                      }}
+                                      className="group relative rounded-2xl overflow-hidden border border-zinc-800 hover:border-amber-500/70 bg-zinc-900 flex flex-col cursor-pointer transition-all hover:shadow-xl hover:shadow-amber-500/10 active:scale-[0.98]"
+                                    >
+                                      <div className="relative aspect-square w-full bg-zinc-950 overflow-hidden">
+                                        {isVideoUrl(photoUrl) ? (
+                                          <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
+                                        ) : (
+                                          <img src={photoUrl} alt={`Foto ${idx + 1}`} draggable={false} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                                        )}
+
+                                        {/* Status Badge Superior Izquierdo */}
+                                        <div className="absolute top-2 left-2 z-10">
+                                          {mediaStatus === 1 ? (
+                                            <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
+                                              🟢 Activa
+                                            </span>
+                                          ) : (
+                                            <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
+                                              🟡 Para Publicar
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-center p-2">
+                                          <span className="p-2 rounded-full bg-amber-500 text-zinc-950 shadow-lg">
+                                            <Maximize2 className="w-4 h-4" />
+                                          </span>
+                                          <span className="text-[10px] font-black text-white bg-black/80 px-2 py-0.5 rounded-md border border-amber-500/40">
+                                            Detalles / Estado
+                                          </span>
+                                        </div>
+
+                                        <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
+                                          {isCover && (
+                                            <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
+                                              Portada
+                                            </span>
+                                          )}
+                                          {isEphemeral && (
+                                            <span className="px-1.5 py-0.5 rounded-md bg-rose-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow">
+                                              <Flame className="w-2.5 h-2.5" /> {duration}s
+                                            </span>
+                                          )}
+                                          {hasDescription && (
+                                            <span className="px-1.5 py-0.5 rounded-md bg-blue-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow" title="Tiene descripción">
+                                              <MessageSquare className="w-2.5 h-2.5" />
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {/* Botón Borrar Definitivamente del Servidor */}
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteMediaPermanently(photoUrl);
+                                          }}
+                                          className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md transition-opacity cursor-pointer z-20 opacity-80 group-hover:opacity-100"
+                                          title="Borrar definitivamente del servidor"
+                                          aria-label="Borrar definitivamente del servidor"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-zinc-500 italic text-center py-6">No hay fotos ni videos cargados aún. Selecciona archivos arriba para comenzar.</p>
                         )}
                       </div>
 
-                      {editingProfile && editingProfile.photos && editingProfile.photos.length > 0 ? (
-                        <div className="space-y-4 pt-1">
-                          <div className="flex items-center justify-between pb-1 border-b border-zinc-900">
-                            <span className="text-zinc-400 font-semibold text-[11px]">Archivos subidos en este perfil:</span>
-                            <span className="text-[10px] text-zinc-500">Toca cualquier archivo para inspeccionar</span>
-                          </div>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                            {editingProfile.photos.map((photoUrl, idx) => {
-                              const mediaStatus = editingProfile.media_status?.[photoUrl] || 2;
-                              const isEphemeral = Boolean(editingProfile.ephemeral_config?.[photoUrl]?.enabled);
-                              const duration = editingProfile.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
-                              const hasDescription = Boolean(editingProfile.media_descriptions?.[photoUrl]);
-                              const isCover = editingProfile.photos?.[0] === photoUrl;
-
-                              return (
-                                <div
-                                  key={photoUrl}
-                                  onClick={() => {
-                                    setEnlargedMediaUrl(photoUrl);
-                                    setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
-                                  }}
-                                  className="group relative rounded-2xl overflow-hidden border border-zinc-800 hover:border-amber-500/70 bg-zinc-900 flex flex-col cursor-pointer transition-all hover:shadow-xl hover:shadow-amber-500/10 active:scale-[0.98]"
-                                >
-                                  <div className="relative aspect-square w-full bg-zinc-950 overflow-hidden">
-                                    {isVideoUrl(photoUrl) ? (
-                                      <video src={photoUrl} className="w-full h-full object-cover" muted playsInline preload="metadata" />
-                                    ) : (
-                                      <img src={photoUrl} alt={`Foto ${idx + 1}`} draggable={false} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-                                    )}
-
-                                    {/* Status Badge Superior Izquierdo */}
-                                    <div className="absolute top-2 left-2 z-10">
-                                      {mediaStatus === 1 ? (
-                                        <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
-                                          🟢 Activa
-                                        </span>
-                                      ) : (
-                                        <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
-                                          🟡 Para Publicar
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-center p-2">
-                                      <span className="p-2 rounded-full bg-amber-500 text-zinc-950 shadow-lg">
-                                        <Maximize2 className="w-4 h-4" />
-                                      </span>
-                                      <span className="text-[10px] font-black text-white bg-black/80 px-2 py-0.5 rounded-md border border-amber-500/40">
-                                        Detalles / Estado
-                                      </span>
-                                    </div>
-
-                                    <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1 z-10 pointer-events-none">
-                                      {isCover && (
-                                        <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
-                                          Portada
-                                        </span>
-                                      )}
-                                      {isEphemeral && (
-                                        <span className="px-1.5 py-0.5 rounded-md bg-rose-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow">
-                                          <Flame className="w-2.5 h-2.5" /> {duration}s
-                                        </span>
-                                      )}
-                                      {hasDescription && (
-                                        <span className="px-1.5 py-0.5 rounded-md bg-blue-500 text-white font-black text-[9px] flex items-center gap-0.5 shadow" title="Tiene descripción">
-                                          <MessageSquare className="w-2.5 h-2.5" />
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleRemovePhoto(photoUrl);
-                                      }}
-                                      className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow-md transition-opacity cursor-pointer z-20 opacity-80 group-hover:opacity-100"
-                                      title="Eliminar archivo"
-                                      aria-label="Eliminar archivo"
-                                    >
-                                      <X className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-zinc-500 italic text-center py-6">No hay fotos ni videos cargados aún. Selecciona archivos arriba para comenzar.</p>
-                      )}
+                      <div className="flex gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setProfileStep(1)}
+                          className="py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          <ChevronLeft className="w-4 h-4" /> Volver a Datos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setProfileStep(3)}
+                          className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          Continuar a Ver para Publicar (Paso 3) ➔
+                        </button>
+                      </div>
                     </div>
-
-                    <div className="flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setProfileStep(1)}
-                        className="py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                      >
-                        <ChevronLeft className="w-4 h-4" /> Volver a Datos
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProfileStep(3)}
-                        className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        Continuar a Ver para Publicar (Paso 3) ➔
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* ── PASO 3: VER PARA PUBLICAR (DETALLES Y GESTIÓN DE STATUS) ── */}
                 {profileStep === 3 && (() => {
@@ -2529,14 +2623,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const toRemove = enlargedMediaUrl;
-                                    setEnlargedMediaUrl(null);
-                                    handleRemovePhoto(toRemove);
+                                    if (enlargedMediaUrl) handleDeleteMediaPermanently(enlargedMediaUrl);
                                   }}
-                                  className="py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  className="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  title="Borrar definitivamente del servidor y Backblaze B2"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
-                                  Eliminar Archivo
+                                  Borrar del Servidor
                                 </button>
                               </div>
 

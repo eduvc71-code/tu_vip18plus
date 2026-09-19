@@ -6,7 +6,8 @@ import {
   isB2Configured,
   mediaUrl,
   streamB2Object,
-  uploadToB2
+  uploadToB2,
+  deleteB2Media
 } from './b2Storage.js';
 import {
   getPublicProfiles,
@@ -14,6 +15,7 @@ import {
   getAllProfiles,
   saveProfile,
   deleteProfile,
+  removeMediaFromProfile,
   createCustomerRequest,
   getCustomerRequests,
   getCustomerRequestById,
@@ -686,10 +688,11 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
       }
     }
 
-    // Status = 2 (Para Publicar) por defecto para todo contenido nuevo subido
+    // Determinar estatus inicial: 1 (Publicada) o 2 (Para Publicar / Borrador) según elección del admin
+    const chosenStatus: 1 | 2 = Number(req.body.initial_status) === 1 ? 1 : 2;
     let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
     for (const url of uploadedUrls) {
-      mediaStatus[url] = 2; // 2 = Para Publicar
+      mediaStatus[url] = chosenStatus;
     }
 
     const updated = await saveProfile({
@@ -701,13 +704,61 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
     });
 
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name} (Status = 2: Para Publicar)`, profileId);
+    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name} (Status = ${chosenStatus === 1 ? '1: Publicada' : '2: Borrador'})`, profileId);
 
-    // No auto-sync to channel: Content is stored safely in B2 as draft until admin clicks publish
+    // No auto-sync to channel: Content is stored safely in B2 until admin clicks publish
     broadcastEvent('PROFILE_UPDATED', updated);
     res.json({ success: true, profile: updated, new_media: uploadedUrls });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al subir imágenes o videos', details: err?.message });
+  }
+});
+
+// DELETE Media from server (B2/local disk and database)
+router.delete('/admin/profiles/:id/media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url } = req.body;
+    if (!media_url) {
+      res.status(400).json({ error: 'URL de archivo no proporcionada' });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+
+    // 1. Borrar físicamente de Backblaze B2 si aplica
+    try {
+      await deleteB2Media(media_url);
+    } catch (b2Err) {
+      console.warn('Advertencia al borrar de B2:', b2Err);
+    }
+
+    // 2. Borrar de disco local si aplica
+    if (media_url.includes('/uploads/')) {
+      try {
+        const filename = media_url.split('/uploads/').pop();
+        if (filename) {
+          const localPath = path.join(process.cwd(), 'public', 'uploads', filename);
+          if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        }
+      } catch (fsErr) {
+        console.warn('Advertencia al borrar archivo local:', fsErr);
+      }
+    }
+
+    // 3. Eliminar de la base de datos
+    const updated = await removeMediaFromProfile(profileId, media_url);
+    if (!updated) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    await addAuditLog('DELETE_MEDIA', adminId, `Archivo multimedia eliminado físicamente del servidor para ${updated.name}`, profileId);
+    broadcastEvent('PROFILE_UPDATED', updated);
+
+    res.json({ success: true, profile: updated, message: 'Archivo eliminado físicamente del servidor con éxito.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al borrar archivo del servidor', details: err?.message });
   }
 });
 

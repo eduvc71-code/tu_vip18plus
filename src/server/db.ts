@@ -69,11 +69,9 @@ function ensureDefaultSettings(database: Database): void {
     defaultBotUsername = 'IAM_Danii_VIP_bot';
   }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
-  database.run(`UPDATE system_settings SET value = 'IAM_Danii_VIP_bot' WHERE key = 'bot_username' AND (value LIKE '%ruti%' OR value LIKE '%flavia%' OR value = 'Danii_Catalogo_SCZ_bot')`);
   const defaultAdminUsername = (process.env.ADMIN_TELEGRAM_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_contact_username', ?)`, [defaultAdminUsername]);
   seedPaymentMethods(database);
-  consolidateToSingleVipProfile(database);
 }
 
 function consolidateToSingleVipProfile(database: Database): void {
@@ -815,6 +813,27 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
 
   saveDb();
   return (await getProfileById(profile.id, false))!;
+}
+
+export async function removeMediaFromProfile(profileId: string, mediaUrl: string): Promise<Profile | null> {
+  const profile = await getProfileById(profileId, false);
+  if (!profile) return null;
+
+  const updatedPhotos = (profile.photos || []).filter(u => u !== mediaUrl);
+  const updatedMediaStatus = { ...(profile.media_status || {}) };
+  delete updatedMediaStatus[mediaUrl];
+  const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+  delete updatedDescriptions[mediaUrl];
+  const updatedEphemeral = { ...(profile.ephemeral_config || {}) };
+  delete updatedEphemeral[mediaUrl];
+
+  return await saveProfile({
+    id: profileId,
+    photos: updatedPhotos,
+    media_status: updatedMediaStatus,
+    media_descriptions: updatedDescriptions,
+    ephemeral_config: updatedEphemeral
+  });
 }
 
 export async function toggleProfileReaction(

@@ -203,30 +203,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               <ShieldCheck className="h-5 w-5 text-amber-400" aria-label="Contenido protegido" />
             </div>
 
-            {/* Quick Interactions Bar (Synchronized with Bot & Channel) */}
-            <div
-              onClick={() => onSelectProfile(profile)}
-              className="my-3 flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-300 hover:border-amber-500/40 cursor-pointer transition-colors"
-              title="Toca para ver detalles y reaccionar"
-            >
-              <div className="flex items-center gap-2.5">
-                <span className="flex items-center gap-1 hover:text-rose-400 transition-colors">
-                  ❤️ <span className="font-mono font-bold text-zinc-200">{profile.reactions?.hearts || 0}</span>
-                </span>
-                <span className="flex items-center gap-1 hover:text-amber-300 transition-colors">
-                  ⭐ <span className="font-mono font-bold text-zinc-200">{profile.reactions?.stars || 0}</span>
-                </span>
-                <span className="flex items-center gap-1 hover:text-orange-400 transition-colors">
-                  🔥 <span className="font-mono font-bold text-zinc-200">{profile.reactions?.fires || 0}</span>
-                </span>
-                <span className="flex items-center gap-1 hover:text-blue-400 transition-colors">
-                  👍 <span className="font-mono font-bold text-zinc-200">{profile.reactions?.likes || 0}</span>
-                </span>
-              </div>
-              <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
-                Reaccionar
-              </span>
-            </div>
+            {/* Descripción del Perfil configurada en Datos */}
+            {profile.description && (
+              <p className="my-2 text-xs text-zinc-300 line-clamp-3 leading-relaxed font-normal">
+                {profile.description}
+              </p>
+            )}
 
             {/* Contenedor de precio ultra-compacto */}
             <div className="my-2.5 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs">
