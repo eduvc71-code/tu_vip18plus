@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Profile } from '../types';
-import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link, Flame, Sparkles, Heart } from 'lucide-react';
+import { X, Send, ShieldCheck, ChevronLeft, ChevronRight, Lock, Link, Sparkles } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -15,7 +15,7 @@ interface ProfileDetailModalProps {
 
 export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   profile,
-  botUsername,
+  botUsername: _botUsername,
   modelName,
   modelVipLink,
   onClose,
@@ -127,8 +127,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const currentItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description;
   const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[currentMediaUrl]?.enabled);
   const currentDuration = profile.ephemeral_config?.[currentMediaUrl]?.duration_seconds || 5;
-
-  const isAvailable = profile.status === 'disponible';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/90 backdrop-blur-md overflow-y-auto">

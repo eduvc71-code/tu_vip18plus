@@ -1,5 +1,5 @@
 import React from 'react';
-import { Lock, Send, ShieldAlert } from 'lucide-react';
+import { Lock, Send } from 'lucide-react';
 
 interface TelegramGateProps {
   botUsername: string;
@@ -7,7 +7,7 @@ interface TelegramGateProps {
 }
 
 export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onContinue }) => {
-  const cleanUsername = (botUsername || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  const cleanUsername = (botUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
   const botUrl = `https://t.me/${cleanUsername}`;
 
   return (

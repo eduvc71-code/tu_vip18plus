@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
+import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 

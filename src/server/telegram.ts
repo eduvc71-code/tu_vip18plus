@@ -567,7 +567,7 @@ export function notifyReactionListeners(data: { profileId: string; reactions: an
   }
 }
 
-export async function buildChannelPostMarkup(profile: Profile, baseUrl: string, username: string) {
+export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string, username: string) {
   const reactions: any = profile.reactions || {};
   const reactionRow1 = [
     { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
@@ -1048,7 +1048,7 @@ export async function processTelegramUpdate(update: any) {
   }
 
   if (text === '/anclar' || text === '/pin') {
-    const { baseUrl, username } = getBotConfig();
+    const { username } = getBotConfig();
     const cleanUsername = username || process.env.BOT_USERNAME || 'vip_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *IAM DANII VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
@@ -1467,8 +1467,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 }
 
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
-  const { baseUrl, username, brandName, channelId } = getBotConfig();
-  const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
+  const { baseUrl, brandName, channelId } = getBotConfig();
   const cleanChannelId = channelId ? channelId.replace(/^-100/, '') : '';
   const storedChannelUsername = getSystemSetting('channel_username');
   const channelUrl = storedChannelUsername 
@@ -1761,8 +1760,8 @@ async function handleCallbackQuery(cb: any) {
   }
 
   if (data === 'admin_btn_pin') {
-    const { baseUrl, username, brandName } = getBotConfig();
-    const cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
+    const { username, brandName } = getBotConfig();
+    const cleanUsername = username || process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot';
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *${brandName || 'IAM DANII'} VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
@@ -2005,7 +2004,7 @@ ${profile.description}
   });
 }
 
-async function handleStartEditProfile(chatId: string | number, userId: string, id: string) {
+async function handleStartEditProfile(chatId: string | number, _userId: string, id: string) {
   const profile = await getProfileById(id);
   if (!profile) {
     await sendMessage(chatId, `❌ Perfil con ID \`${id}\` no encontrado.`);
@@ -2122,7 +2121,7 @@ async function handleClientAvailabilityRequest(message: any, profileId: string) 
   }
 
   // Register request in database
-  const request = await createCustomerRequest({
+  await createCustomerRequest({
     profile_id: profile.id,
     profile_name: profile.name,
     telegram_user_id: String(clientUser.id),

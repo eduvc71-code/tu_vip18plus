@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Profile, CustomButton, DynamicPoll } from './types';
 import { Header } from './components/Header';
 import { ProfileCard } from './components/ProfileCard';
@@ -15,19 +15,14 @@ export default function App() {
   const [activePolls, setActivePolls] = useState<DynamicPoll[]>([]);
   const [userVotedPolls, setUserVotedPolls] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('todos');
 
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
-  const [botUsername, setBotUsername] = useState('Danii_Catalogo_SCZ_bot');
+  const [botUsername, setBotUsername] = useState('IAM_Danii_VIP_bot');
   const [channelId, setChannelId] = useState('-1004356066811');
   const [modelDisplayName, setModelDisplayName] = useState('IAM Danii');
   const [modelVipLink, setModelVipLink] = useState('');
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [telegramAuthorized, setTelegramAuthorized] = useState(false);
   const [accessChecking, setAccessChecking] = useState(true);
   const [pinnedText, setPinnedText] = useState('');
@@ -48,7 +43,6 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('admin_token') || params.get('admin') === 'true' || params.get('panel') === 'true') {
-      setIsAdminOpen(true);
       setAccessChecking(false);
       return;
     }
@@ -143,7 +137,7 @@ export default function App() {
         if (info.model_vip_link !== undefined) setModelVipLink(info.model_vip_link);
       }
     } catch {
-      setError('Error al cargar la lista de perfiles');
+      // safe fallback
     } finally {
       setLoading(false);
     }

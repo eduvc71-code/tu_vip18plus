@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ProtectedMedia, isVideoUrl } from './ProtectedMedia';
-import { Flame, Clock, Lock, Send, Eye, Sparkles } from 'lucide-react';
+import { ProtectedMedia } from './ProtectedMedia';
+import { Flame, Clock, Lock, Eye, Sparkles } from 'lucide-react';
 
 interface EphemeralViewerProps {
   src: string;

@@ -6,7 +6,6 @@ import {
   isB2Configured,
   mediaUrl,
   streamB2Object,
-  uploadBufferToB2,
   uploadToB2
 } from './b2Storage.js';
 import {
@@ -34,7 +33,6 @@ import {
   deleteCustomButton,
   getAllPolls,
   getActivePolls,
-  getPollById,
   savePoll,
   votePoll,
   deletePoll,
@@ -94,7 +92,7 @@ function saveLocalUpload(file: Express.Multer.File, baseUrl: string) {
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // up to 50 MB per image/video
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
       cb(null, true);
     } else {
@@ -150,7 +148,7 @@ router.get('/events', (req: Request, res: Response) => {
 });
 
 // GET Public Info & Bot Status
-router.get('/info', (req: Request, res: Response) => {
+router.get('/info', (_req: Request, res: Response) => {
   const config = getBotConfig();
   const tgVal = getSystemSetting('telegram_only_access');
   const telegramOnly = tgVal === null ? true : (tgVal === 'true');
@@ -177,7 +175,7 @@ router.get('/info', (req: Request, res: Response) => {
 });
 
 // GET Public Profiles
-router.get('/profiles', async (req: Request, res: Response) => {
+router.get('/profiles', async (_req: Request, res: Response) => {
   try {
     const profiles = await getPublicProfiles();
     res.json(profiles);
@@ -484,7 +482,7 @@ router.post('/admin/auth/login', (req: Request, res: Response) => {
 
 
 // GET All Profiles for Admin Panel
-router.get('/admin/profiles', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/profiles', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const profiles = await getAllProfiles();
     res.json(profiles);
@@ -496,7 +494,7 @@ router.get('/admin/profiles', requireAdminAuth, async (req: Request, res: Respon
 // POST Create Profile from Web Admin Panel
 router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order, ephemeral_config } = req.body;
+    const { name, age, zone, description, rate_bs, photos, status, priority_order, ephemeral_config } = req.body;
 
     if (!name || !age || age < 18) {
       res.status(400).json({ error: 'El nombre es obligatorio y la edad debe ser igual o mayor a 18 años.' });
@@ -754,7 +752,7 @@ router.put('/admin/profiles/:id/media-status', requireAdminAuth, async (req: Req
 });
 
 // GET Customer Requests
-router.get('/admin/requests', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/requests', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const requests = await getCustomerRequests();
     res.json(requests);
@@ -815,7 +813,7 @@ router.post('/admin/requests/:id/reply', requireAdminAuth, async (req: Request, 
 });
 
 // GET Audit Logs & Sync Errors
-router.get('/admin/logs', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/logs', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const auditLogs = await getAuditLogs();
     const syncErrors = await getSyncErrors();
@@ -826,7 +824,7 @@ router.get('/admin/logs', requireAdminAuth, async (req: Request, res: Response) 
 });
 
 // POST Setup Telegram Webhook Helper
-router.post('/admin/webhook/setup', requireAdminAuth, async (req: Request, res: Response) => {
+router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res: Response) => {
   const { token, secret, baseUrl } = getBotConfig();
   if (!token) {
     res.status(400).json({ error: 'BOT_TOKEN no configurado en las variables de entorno' });
@@ -909,7 +907,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
 });
 
 // GET Status of configured Telegram Channel
-router.get('/admin/settings/channel', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/settings/channel', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const { channelId, username } = getBotConfig();
     const storedTitle = getSystemSetting('channel_title') || '';
@@ -1042,7 +1040,7 @@ router.delete('/admin/settings/welcome-media', requireAdminAuth, async (req: Req
 // ==========================================
 
 // GET All custom buttons (admin)
-router.get('/admin/buttons', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/buttons', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const buttons = await getAllCustomButtons();
     res.json(buttons);
@@ -1107,7 +1105,7 @@ router.get('/buttons/public', async (req: Request, res: Response) => {
 // ==========================================
 
 // GET All polls (admin)
-router.get('/admin/polls', requireAdminAuth, async (req: Request, res: Response) => {
+router.get('/admin/polls', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const polls = await getAllPolls();
     res.json(polls);
@@ -1171,7 +1169,7 @@ router.delete('/admin/polls/:id', requireAdminAuth, async (req: Request, res: Re
 });
 
 // GET Active polls (Mini App)
-router.get('/polls/active', async (req: Request, res: Response) => {
+router.get('/polls/active', async (_req: Request, res: Response) => {
   try {
     const polls = await getActivePolls();
     res.json(polls);

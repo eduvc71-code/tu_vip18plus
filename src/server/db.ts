@@ -1,7 +1,7 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, ProfileStatus, CustomButton, DynamicPoll } from '../types.js';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll } from '../types.js';
 import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -276,7 +276,6 @@ function seedInitialData(database: Database): void {
 
   if (count === 0) {
     const now = new Date().toISOString();
-    const brandName = process.env.VIP_BRAND_NAME || 'IAM DANII VIP';
     const modelName = process.env.VIP_MODEL_NAME || 'IAM Danii';
 
     const sampleProfiles: Partial<Profile>[] = [
