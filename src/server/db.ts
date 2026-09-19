@@ -185,6 +185,9 @@ function initTables(database: Database): void {
   if (!existingProfileCols.has('media_status')) {
     database.run(`ALTER TABLE profiles ADD COLUMN media_status TEXT`);
   }
+  if (!existingProfileCols.has('media_stars')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_stars TEXT`);
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS profile_reactions (
@@ -666,6 +669,11 @@ function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
   } catch {
     obj.media_status = {};
   }
+  try {
+    obj.media_stars = obj.media_stars ? JSON.parse(obj.media_stars) : {};
+  } catch {
+    obj.media_stars = {};
+  }
 
   // ASIGNACIÓN POR DEFECTO: Todo archivo multimedia sin estatus explícito queda con Status = 2 ("Para Publicar")
   if (Array.isArray(obj.photos)) {
@@ -761,10 +769,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedMediaStatus = profile.media_status !== undefined
       ? JSON.stringify(profile.media_status)
       : (existing.media_status ? JSON.stringify(existing.media_status) : '{}');
+    const updatedMediaStars = profile.media_stars !== undefined
+      ? JSON.stringify(profile.media_stars)
+      : (existing.media_stars ? JSON.stringify(existing.media_stars) : '{}');
 
     database.run(`
       UPDATE profiles
-      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?
+      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?, media_stars = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -781,15 +792,17 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedReactions,
       updatedMediaDesc,
       updatedMediaStatus,
+      updatedMediaStars,
       profile.id
     ]);
   } else {
     const initialReactions = JSON.stringify(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 });
     const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
     const initialMediaStatus = JSON.stringify(profile.media_status || {});
+    const initialMediaStars = JSON.stringify(profile.media_stars || {});
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status, media_stars)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -807,7 +820,8 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       profile.priority_order || 0,
       initialReactions,
       initialMediaDesc,
-      initialMediaStatus
+      initialMediaStatus,
+      initialMediaStars
     ]);
   }
 
@@ -826,13 +840,16 @@ export async function removeMediaFromProfile(profileId: string, mediaUrl: string
   delete updatedDescriptions[mediaUrl];
   const updatedEphemeral = { ...(profile.ephemeral_config || {}) };
   delete updatedEphemeral[mediaUrl];
+  const updatedMediaStars = { ...(profile.media_stars || {}) };
+  delete updatedMediaStars[mediaUrl];
 
   return await saveProfile({
     id: profileId,
     photos: updatedPhotos,
     media_status: updatedMediaStatus,
     media_descriptions: updatedDescriptions,
-    ephemeral_config: updatedEphemeral
+    ephemeral_config: updatedEphemeral,
+    media_stars: updatedMediaStars
   });
 }
 

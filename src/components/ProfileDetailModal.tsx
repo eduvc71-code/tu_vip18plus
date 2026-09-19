@@ -167,6 +167,14 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               />
             )}
 
+            {profile.media_stars?.[currentMediaUrl] && (
+              <div className="absolute top-4 left-4 z-20 pointer-events-none">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-amber-500 text-zinc-950 shadow-xl shadow-amber-500/30 uppercase tracking-wide">
+                  ⭐ {profile.media_stars[currentMediaUrl]} Estrellas
+                </span>
+              </div>
+            )}
+
 
 
             {media.length > 1 && (

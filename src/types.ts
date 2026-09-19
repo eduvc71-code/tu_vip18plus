@@ -63,6 +63,7 @@ export interface Profile {
   ephemeral_config?: EphemeralMediaConfig;
   media_descriptions?: Record<string, string>;
   media_status?: Record<string, 1 | 2>; // 1=Activa (visible en mini app/canal), 2=Para Publicar (oculta/borrador)
+  media_stars?: Record<string, number>; // Precio en Estrellas de Telegram para contenido de pago
   status: ProfileStatus;
   created_at: string;
   updated_at: string;

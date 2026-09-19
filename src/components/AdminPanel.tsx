@@ -34,7 +34,8 @@ import {
   BarChart2,
   ExternalLink,
   Sliders,
-  CreditCard
+  CreditCard,
+  Star
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -129,6 +130,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
   const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
+
+  // Paid media with Telegram Stars state
+  const [paidModalMediaUrl, setPaidModalMediaUrl] = useState<string | null>(null);
+  const [paidModalStarCount, setPaidModalStarCount] = useState<number>(50);
+  const [paidModalCaption, setPaidModalCaption] = useState<string>('');
+  const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
 
   // Custom buttons state
   const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
@@ -700,6 +707,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       setMessage({ type: 'error', text: 'Error de conexión al actualizar status masivo' });
+    }
+  };
+
+  const handleOpenPublishPaidModal = (photoUrl: string) => {
+    setPaidModalMediaUrl(photoUrl);
+    setPaidModalStarCount(editingProfile?.media_stars?.[photoUrl] || 50);
+    setPaidModalCaption(editingProfile?.media_descriptions?.[photoUrl] || '');
+  };
+
+  const handlePublishPaidMediaSubmit = async () => {
+    if (!editingProfile || !paidModalMediaUrl) return;
+    setPublishingPaidMedia(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${editingProfile.id}/publish-paid-media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          media_url: paidModalMediaUrl,
+          star_count: paidModalStarCount,
+          caption: paidModalCaption
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: data.message });
+        if (data.profile) setEditingProfile(data.profile);
+        setPaidModalMediaUrl(null);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al publicar contenido de pago' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión con el servidor al publicar con estrellas' });
+    } finally {
+      setPublishingPaidMedia(false);
     }
   };
 
@@ -1852,6 +1894,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                             <Flame className="w-2.5 h-2.5" /> {duration}s
                                           </span>
                                         )}
+                                        {editingProfile?.media_stars?.[photoUrl] && (
+                                          <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-black text-[9px] flex items-center gap-0.5 shadow">
+                                            ⭐ {editingProfile.media_stars[photoUrl]} Stars
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
 
@@ -1878,6 +1925,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                             {isEphemeral ? `${duration} segundos` : 'Desactivado'}
                                           </span>
                                         </div>
+                                        {editingProfile?.media_stars?.[photoUrl] && (
+                                          <div className="flex items-center justify-between text-[10px]">
+                                            <span className="text-amber-400 font-semibold flex items-center gap-1">
+                                              <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Cobro en Canal:
+                                            </span>
+                                            <span className="text-amber-300 font-bold text-[9px]">
+                                              ⭐ {editingProfile.media_stars[photoUrl]} Estrellas
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
 
                                       {/* Botones de Acción Individuales */}
@@ -1891,7 +1948,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                               : 'bg-emerald-600 hover:bg-emerald-500 text-white'
                                           }`}
                                         >
-                                          {isActive ? '⏸️ Ocultar (Status 2)' : '🚀 Activar (Status 1)'}
+                                          {isActive ? '⏸️ Ocultar' : '🚀 Activar'}
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenPublishPaidModal(photoUrl)}
+                                          className="p-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer flex items-center gap-1"
+                                          title="Publicar de Pago en Canal VIP (Cobro con Telegram Stars)"
+                                        >
+                                          <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                          <span className="text-[10px] font-bold hidden sm:inline">⭐ Pago</span>
                                         </button>
 
                                         <button
@@ -1908,9 +1975,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                                         <button
                                           type="button"
-                                          onClick={() => handleRemovePhoto(photoUrl)}
+                                          onClick={() => handleDeleteMediaPermanently(photoUrl)}
                                           className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 text-rose-400 border border-rose-800/40 transition-colors cursor-pointer"
-                                          title="Eliminar archivo"
+                                          title="Eliminar definitivamente del servidor"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -2568,6 +2635,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <Trash2 className="w-3.5 h-3.5" />
                                   Borrar del Servidor
                                 </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (enlargedMediaUrl) {
+                                      handleOpenPublishPaidModal(enlargedMediaUrl);
+                                      setEnlargedMediaUrl(null);
+                                    }
+                                  }}
+                                  className="py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  title="Publicar de Pago en Canal con Cobro de Telegram Stars"
+                                >
+                                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                  Publicar con Estrellas ⭐
+                                </button>
                               </div>
 
                               <button
@@ -2578,6 +2660,152 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 Cerrar Vista
                               </button>
                             </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* MODAL PUBLICAR CONTENIDO DE PAGO CON TELEGRAM STARS */}
+                    {paidModalMediaUrl && (
+                      <div
+                        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
+                        onClick={() => !publishingPaidMedia && setPaidModalMediaUrl(null)}
+                      >
+                        <div
+                          className="relative w-full max-w-lg bg-zinc-900 border border-amber-500/50 rounded-3xl overflow-hidden shadow-2xl shadow-amber-500/20 flex flex-col my-auto"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* Header */}
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                <Star className="w-5 h-5 fill-amber-400" />
+                              </div>
+                              <div>
+                                <h4 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 font-serif">
+                                  Publicar con Telegram Stars ⭐
+                                </h4>
+                                <p className="text-[11px] text-amber-300/80">
+                                  Contenido exclusivo de pago bloqueado con candado
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={publishingPaidMedia}
+                              onClick={() => setPaidModalMediaUrl(null)}
+                              className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+
+                          {/* Body */}
+                          <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+                            {/* Preview Container */}
+                            <div className="flex items-center gap-3 p-3 bg-zinc-950/80 rounded-2xl border border-zinc-800">
+                              <div className="w-20 h-20 rounded-xl overflow-hidden bg-black shrink-0 relative border border-zinc-800">
+                                {isVideoUrl(paidModalMediaUrl) ? (
+                                  <video src={paidModalMediaUrl} className="w-full h-full object-cover" muted playsInline />
+                                ) : (
+                                  <img src={paidModalMediaUrl} alt="Preview" className="w-full h-full object-cover" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                                  <Lock className="w-5 h-5 text-amber-400" />
+                                </div>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
+                                  {isVideoUrl(paidModalMediaUrl) ? '🎥 Video de Pago' : '📸 Fotografía de Pago'}
+                                </span>
+                                <p className="text-xs text-zinc-300 mt-0.5">
+                                  Telegram mostrará este contenido <strong>desenfocado</strong> en el Canal VIP hasta que el suscriptor pague las estrellas.
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Selector de Precio en Estrellas */}
+                            <div className="space-y-2">
+                              <label className="block text-xs font-bold text-zinc-200">
+                                Precio en Telegram Stars (⭐ Estrellas):
+                              </label>
+                              {/* Presets */}
+                              <div className="grid grid-cols-5 gap-1.5">
+                                {[10, 25, 50, 100, 250].map((stars) => (
+                                  <button
+                                    key={stars}
+                                    type="button"
+                                    onClick={() => setPaidModalStarCount(stars)}
+                                    className={`py-2 px-1 rounded-xl font-black text-xs transition-all cursor-pointer flex flex-col items-center justify-center border ${
+                                      paidModalStarCount === stars
+                                        ? 'bg-amber-500 text-zinc-950 border-amber-400 shadow-md shadow-amber-500/30 scale-105'
+                                        : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-750 hover:text-white'
+                                    }`}
+                                  >
+                                    <span>⭐ {stars}</span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="relative flex-1">
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    max="2500"
+                                    value={paidModalStarCount}
+                                    onChange={(e) => setPaidModalStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                    className="w-full pl-9 pr-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-white font-mono font-bold text-sm focus:outline-none focus:border-amber-500"
+                                  />
+                                  <Star className="w-4 h-4 text-amber-400 fill-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                </div>
+                                <span className="text-xs text-zinc-400 font-semibold">Estrellas (1 - 2500)</span>
+                              </div>
+                            </div>
+
+                            {/* Descripción / Mensaje Opcional */}
+                            <div className="space-y-1.5">
+                              <label className="block text-xs font-bold text-zinc-200">
+                                Descripción o Mensaje del Post (Opcional):
+                              </label>
+                              <textarea
+                                value={paidModalCaption}
+                                onChange={(e) => setPaidModalCaption(e.target.value)}
+                                placeholder="Ej: 🔥 Desbloquea este contenido exclusivo con estrellas..."
+                                rows={3}
+                                className="w-full p-3 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-amber-500 resize-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Footer Actions */}
+                          <div className="p-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-end gap-2.5">
+                            <button
+                              type="button"
+                              disabled={publishingPaidMedia}
+                              onClick={() => setPaidModalMediaUrl(null)}
+                              className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold text-xs cursor-pointer transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={publishingPaidMedia || paidModalStarCount <= 0}
+                              onClick={handlePublishPaidMediaSubmit}
+                              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
+                            >
+                              {publishingPaidMedia ? (
+                                <>
+                                  <RefreshCw className="w-4 h-4 animate-spin" />
+                                  <span>Publicando en Canal...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="w-4 h-4" />
+                                  <span>Publicar por ⭐ {paidModalStarCount} Estrellas</span>
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
                       </div>

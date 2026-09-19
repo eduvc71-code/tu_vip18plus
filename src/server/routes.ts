@@ -58,7 +58,8 @@ import {
   onReactionUpdated,
   verifyChannel,
   sendChannelPoll,
-  publishPaymentMethodsToChannel
+  publishPaymentMethodsToChannel,
+  sendPaidMediaToChannel
 } from './telegram.js';
 
 export const router = express.Router();
@@ -805,6 +806,108 @@ router.put('/admin/profiles/:id/media-status', requireAdminAuth, async (req: Req
     res.json({ success: true, profile: updated, media_status: updated.media_status });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al actualizar status de multimedia', details: err?.message });
+  }
+});
+
+// POST Publish Paid Media with Telegram Stars
+router.post('/admin/profiles/:id/publish-paid-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count, caption } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo multimedia es requerida' });
+      return;
+    }
+
+    const stars = Math.max(1, Math.min(2500, Math.round(Number(star_count) || 1)));
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+
+    // 1. Enviar a Telegram vía sendPaidMedia
+    const telegramRes = await sendPaidMediaToChannel({
+      mediaUrl: media_url,
+      starCount: stars,
+      caption: caption || (profile.media_descriptions?.[media_url] || '')
+    });
+
+    if (!telegramRes.ok) {
+      res.status(400).json({ error: telegramRes.error || 'Error al publicar contenido de pago en Telegram' });
+      return;
+    }
+
+    // 2. Guardar en perfil: actualizar media_stars y fijar media_status en 1 (activa/publicada)
+    const updatedStars: Record<string, number> = { ...(profile.media_stars || {}) };
+    updatedStars[media_url] = stars;
+
+    const updatedStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    updatedStatus[media_url] = 1;
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars,
+      media_status: updatedStatus
+    });
+
+    await addAuditLog(
+      'PUBLISH_PAID_MEDIA',
+      adminId,
+      `Contenido de pago publicado en Canal VIP por ⭐ ${stars} Estrellas (Mensaje #${telegramRes.messageId})`,
+      profileId
+    );
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+
+    res.json({
+      success: true,
+      message: `🎉 Contenido publicado exitosamente en el Canal VIP por ⭐ ${stars} Estrellas.`,
+      telegramMessageId: telegramRes.messageId,
+      profile: updated
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar la publicación con estrellas', details: err?.message });
+  }
+});
+
+// PUT Update media stars price
+router.put('/admin/profiles/:id/media-stars', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo es requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const updatedStars: Record<string, number> = { ...(profile.media_stars || {}) };
+    if (star_count === null || Number(star_count) <= 0) {
+      delete updatedStars[media_url];
+    } else {
+      updatedStars[media_url] = Math.max(1, Math.min(2500, Math.round(Number(star_count))));
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars
+    });
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, media_stars: updated.media_stars });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar precio en estrellas', details: err?.message });
   }
 });
 

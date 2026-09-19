@@ -171,6 +171,14 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               />
             )}
 
+            {profile.media_stars?.[selectedMedia] && (
+              <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/30 uppercase tracking-wide">
+                  ⭐ {profile.media_stars[selectedMedia]} Estrellas
+                </span>
+              </div>
+            )}
+
             <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity">
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-950/80 text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-md">
                 <Eye className="w-3.5 h-3.5 text-amber-400" /> Toca para ampliar

@@ -2365,3 +2365,53 @@ _Favor responder directamente al cliente por mensaje privado._
     }
   }
 }
+
+export async function sendPaidMediaToChannel(params: {
+  mediaUrl: string;
+  starCount: number;
+  caption?: string;
+  channelId?: string;
+}): Promise<{ ok: boolean; messageId?: number; error?: string }> {
+  const { channelId, username } = getBotConfig();
+  const targetChannel = params.channelId || channelId;
+  if (!targetChannel) {
+    return { ok: false, error: 'No se ha configurado un ID o @canal en el sistema.' };
+  }
+
+  const starCount = Math.max(1, Math.min(2500, Math.round(Number(params.starCount) || 1)));
+  const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(params.mediaUrl) || params.mediaUrl.includes('/video');
+
+  const mediaItem: any = {
+    type: isVideo ? 'video' : 'photo',
+    media: params.mediaUrl
+  };
+
+  const payload: any = {
+    chat_id: targetChannel,
+    star_count: starCount,
+    media: [mediaItem]
+  };
+
+  if (params.caption && params.caption.trim()) {
+    payload.caption = params.caption.trim();
+    payload.parse_mode = 'Markdown';
+  }
+
+  const res = await callTelegramApi('sendPaidMedia', payload);
+  if (res && res.ok && res.result) {
+    const messageId = res.result.message_id;
+    return { ok: true, messageId };
+  }
+
+  let errorMsg = res?.description || 'Error al enviar contenido de pago a Telegram';
+  if (errorMsg.toLowerCase().includes('chat not found')) {
+    errorMsg = `Canal (${targetChannel}) no encontrado por Telegram. Verifica que @${username} sea Administrador en el canal con permiso para publicar mensajes.`;
+  } else if (errorMsg.toLowerCase().includes('not enough rights')) {
+    errorMsg = `El bot no tiene permisos suficientes para publicar contenido de pago en el canal. Asegúrate de que el bot sea Administrador con permiso para "Publicar mensajes".`;
+  }
+
+  return {
+    ok: false,
+    error: errorMsg
+  };
+}
