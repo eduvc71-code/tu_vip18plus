@@ -72,10 +72,9 @@ function Invoke-FlyWithRetry {
             Write-Host "`nPara verificar tu cuenta en Fly.io, ingresa aqui:" -ForegroundColor Green
             Write-Host "   https://fly.io/dashboard/personal/billing" -ForegroundColor Cyan
             Write-Host "`n------------------------------------------------------------------------" -ForegroundColor Yellow
-            Write-Host " PREFIERES PUBLICAR SIN TARJETA DE CREDITO NI CUENTAS?" -ForegroundColor Green
-            Write-Host " Puedes poner tu catalogo online AHORA MISMO y 100% GRATIS usando la" -ForegroundColor White
-            Write-Host " Alternativa 1 (Cloudflare Tunnel). Ejecuta en tu PowerShell:" -ForegroundColor White
-            Write-Host "`n   .\iniciar_cloudflare.ps1" -ForegroundColor Cyan
+            Write-Host " SERVIDOR EN PRODUCCIÓN RECOMENDADO:" -ForegroundColor Green
+            Write-Host " Tu proyecto se despliega automáticamente en Render." -ForegroundColor White
+            Write-Host " Revisa el estado del servicio en tu panel de Render." -ForegroundColor Cyan
             Write-Host "========================================================================`n" -ForegroundColor Yellow
             exit 1
         }
