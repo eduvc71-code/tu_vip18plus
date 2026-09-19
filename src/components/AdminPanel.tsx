@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod } from '../types';
+import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
 import {
   X,
@@ -51,10 +52,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   botUsername,
   channelId
 }) => {
-  const [token, setToken] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>('profiles');
+
+  const {
+    token,
+    isAuthenticated,
+    authChecked,
+    pinInput,
+    loginError,
+    loading: authLoading,
+    setPinInput,
+    handleLoginWithPin,
+    handleLogout
+  } = useAdminAuth({
+    isOpen,
+    onLoginSuccess: (tok) => {
+      void fetchData(tok);
+    }
+  });
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
@@ -102,9 +117,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [replyText, setReplyText] = useState('');
   const [replyStatus, setReplyStatus] = useState<string>('confirmado');
   const [sendingReply, setSendingReply] = useState(false);
-
-  const [pinInput, setPinInput] = useState('');
-  const [loginError, setLoginError] = useState('');
 
   const [channelIdInput, setChannelIdInput] = useState(channelId || '');
   const [channelVerified, setChannelVerified] = useState<boolean | null>(null);
@@ -195,75 +207,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   }, [profiles, editingProfile]);
 
-
-  useEffect(() => {
-    if (isOpen) {
-      const magicToken = new URLSearchParams(window.location.search).get('admin_token') || '';
-      const savedToken = localStorage.getItem('danii_admin_token') || '';
-      const tokenToTry = magicToken || savedToken;
-
-      if (tokenToTry) {
-        void verifyAndAuthenticate(tokenToTry);
-      } else {
-        setIsAuthenticated(false);
-        setAuthChecked(true);
-      }
-    }
-  }, [isOpen]);
-
-  const verifyAndAuthenticate = async (tok: string) => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/admin/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tok })
-      });
-      const data = await res.json();
-      if (res.ok && data.valid) {
-        setToken(tok);
-        setIsAuthenticated(true);
-        try { localStorage.setItem('danii_admin_token', tok); } catch {}
-        await fetchData(tok);
-      } else {
-        setIsAuthenticated(false);
-        try { localStorage.removeItem('danii_admin_token'); } catch {}
-      }
-    } catch {
-      setIsAuthenticated(false);
-    } finally {
-      setAuthChecked(true);
-      setLoading(false);
-    }
-  };
-
-  const handleLoginWithPin = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!pinInput.trim()) return;
-    setLoading(true);
-    setLoginError('');
-    try {
-      const res = await fetch('/api/admin/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: pinInput.trim() })
-      });
-      const data = await res.json();
-      if (res.ok && data.valid && data.token) {
-        setToken(data.token);
-        setIsAuthenticated(true);
-        try { localStorage.setItem('danii_admin_token', data.token); } catch {}
-        await fetchData(data.token);
-      } else {
-        setLoginError(data.error || 'Credenciales incorrectas');
-      }
-    } catch {
-      setLoginError('Error de conexión con el servidor');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const fetchData = async (tok: string = token) => {
     setLoading(true);
     try {
@@ -347,12 +290,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch {
       // ignore
     }
-  };
-
-  const handleLogout = () => {
-    setToken('');
-    setIsAuthenticated(false);
-    window.location.href = '/';
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -1096,10 +1033,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             <button
               type="submit"
-              disabled={loading || !pinInput.trim()}
+              disabled={authLoading || !pinInput.trim()}
               className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
-              {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+              {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
               <span>Entrar al Panel Admin</span>
             </button>
           </form>
@@ -1156,7 +1093,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {loading && (
+            {(loading || authLoading) && (
               <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
             )}
             {isAuthenticated && (
