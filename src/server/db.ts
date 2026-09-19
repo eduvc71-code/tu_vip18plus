@@ -332,7 +332,6 @@ function seedInitialData(database: Database): void {
       {
         id: 'prof_vip_main',
         name: modelName,
-        age: 21,
         zone: 'Contenido +18 VIP',
         description: 'Holis, te doy la bienvenida a mi espacio privado y oficial.\n\nAcá podrás explorar información exclusiva y detalles de lo que desees saber de mí o si quieres ver más de mí 🙈\n\nPresiona cualquiera de las opciones que te salen abajo ‼️',
         rate_bs: 100,
@@ -354,7 +353,7 @@ function seedInitialData(database: Database): void {
       stmt.run([
         p.id!,
         p.name!,
-        p.age!,
+        p.age || null,
         p.zone!,
         p.description!,
         p.rate_bs!,

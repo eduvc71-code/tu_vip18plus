@@ -496,8 +496,8 @@ router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Respo
   try {
     const { name, age, zone, description, rate_bs, photos, status, priority_order, ephemeral_config } = req.body;
 
-    if (!name || !age || age < 18) {
-      res.status(400).json({ error: 'El nombre es obligatorio y la edad debe ser igual o mayor a 18 años.' });
+    if (!name) {
+      res.status(400).json({ error: 'El nombre es obligatorio.' });
       return;
     }
 
@@ -505,7 +505,7 @@ router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Respo
     const profile = await saveProfile({
       id: newId,
       name,
-      age: Number(age),
+      age: age !== undefined ? Number(age) : 18,
       zone: zone || 'Contenido +18 VIP',
       description: description || '',
       rate_bs: Number(rate_bs) || 0,

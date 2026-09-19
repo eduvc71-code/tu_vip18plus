@@ -460,8 +460,8 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     return { success: true, message: 'Publicado exitosamente en el Canal VIP Free (Modo Solo Bot: guardado sin publicar en canal público).' };
   }
 
-  // Safety constraint: strictly >= 18
-  if (profile.age < 18) {
+  // Safety constraint: strictly >= 18 if specified
+  if (profile.age && profile.age < 18) {
     const errMsg = 'REGLA PROHIBITIVA: No se permite publicar perfiles menores de 18 años.';
     await addSyncError(profileId, 'PUBLISH_CHANNEL', errMsg);
     return { success: false, message: errMsg };
@@ -1178,23 +1178,11 @@ async function handleConversationStep(chatId: string | number, userId: string, m
         return;
       }
       state.draft_data.name = text;
-      state.step = 'NEW_AGE';
-      await setConversationState(userId, 'NEW_AGE', state.draft_data);
-      await sendMessage(chatId, `✅ Nombre: *${text}*\n\n🔞 *(Paso 2/8)* Ingrese la *Edad* (debe ser mayor o igual a 18 años):`);
-      break;
-    }
-
-    case 'NEW_AGE': {
-      const age = parseInt(text, 10);
-      if (isNaN(age) || age < 18) {
-        await sendMessage(chatId, '❌ *ERROR DE VALIDACIÓN Y REGLA LEGAL*: La edad debe ser un número mayor o igual a 18 años. Inténtelo de nuevo:');
-        return;
-      }
-      state.draft_data.age = age;
       state.draft_data.zone = 'Contenido +18 VIP';
+      state.draft_data.age = 18;
       state.step = 'NEW_RATE';
       await setConversationState(userId, 'NEW_RATE', state.draft_data);
-      await sendMessage(chatId, `✅ Edad: *${age} años*\n\n💰 *(Paso 3/5)* Ingrese el *PRECIO SUSCRIPCIÓN / PACK en Bolivianos (Bs.)* (ej. 150):`);
+      await sendMessage(chatId, `✅ Nombre: *${text}*\n\n💰 *(Paso 2/4)* Ingrese el *PRECIO SUSCRIPCIÓN / PACK en Bolivianos (Bs.)* (ej. 100):`);
       break;
     }
 
@@ -1254,10 +1242,9 @@ async function handleConversationStep(chatId: string | number, userId: string, m
 
       // Show preview
       const previewCard = `
-📋 *VISTA PREVIA DE NUEVO PERFIL (Paso 8/8)*
+📋 *VISTA PREVIA DE NUEVO PERFIL*
 
 👤 *Nombre*: ${state.draft_data.name}
-🔞 *Edad*: ${state.draft_data.age} años
 📍 *Zona*: ${state.draft_data.zone}
 💰 *Precio VIP*: Bs. ${state.draft_data.rate_bs}
 📷 *Fotos*: ${existingPhotos.length} adjunta(s)
@@ -1960,7 +1947,7 @@ async function handleListProfiles(chatId: string | number) {
   let text = '📋 *LISTADO DE PERFILES DEL CANAL VIP FREE*:\n\n';
   profiles.forEach(p => {
     const badge = p.status === 'disponible' ? '🟢 Disponible' : p.status === 'ocupada' ? '🔴 Ocupada' : p.status === 'pausada' ? '⏸️ Pausada' : p.status === 'retirada' ? '🗑️ Retirada' : '📁 Borrador';
-    text += `• *${p.name}* (${p.age}a) - ${badge}\n  ID: \`${p.id}\` | Zona: ${p.zone} | Tarifa: Bs. ${p.rate_bs}\n\n`;
+    text += `• *${p.name}* - ${badge}\n  ID: \`${p.id}\` | Zona: ${p.zone} | Tarifa: Bs. ${p.rate_bs}\n\n`;
   });
 
   text += '_Usa /ver ID o /editar ID para administrar cada uno._';
@@ -1978,7 +1965,6 @@ async function handleShowProfileDetail(chatId: string | number, id: string) {
 👤 *FICHA DEL PERFIL*: ${profile.name}
 
 🆔 *ID*: \`${profile.id}\`
-🔞 *Edad*: ${profile.age} años
 📍 *Zona*: ${profile.zone}
 💰 *Precio VIP*: Bs. ${profile.rate_bs}
 📌 *Estado*: ${profile.status.toUpperCase()}
@@ -2019,7 +2005,6 @@ async function handleStartEditProfile(chatId: string | number, _userId: string, 
       inline_keyboard: [
         [
           { text: 'Nombre', callback_data: `edit_field_name_${id}` },
-          { text: 'Edad (+18)', callback_data: `edit_field_age_${id}` },
           { text: 'Zona', callback_data: `edit_field_zone_${id}` }
         ],
         [

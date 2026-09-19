@@ -54,7 +54,7 @@ export interface DynamicPoll {
 export interface Profile {
   id: string;
   name: string;
-  age: number; // Always >= 18
+  age?: number;
   zone: string; // 'Contenido +18 VIP'
   description: string;
   rate_bs: number; // Precio suscripción / pack VIP en Bs.
