@@ -131,6 +131,9 @@ function initTables(database: Database): void {
   if (!existingProfileCols.has('media_descriptions')) {
     database.run(`ALTER TABLE profiles ADD COLUMN media_descriptions TEXT`);
   }
+  if (!existingProfileCols.has('media_status')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_status TEXT`);
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS profile_reactions (
@@ -379,7 +382,48 @@ function parseReactions(raw: any) {
   }
 }
 
-// Data Access Methods
+// Data Access Methods & Hydration Helper
+function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
+  const obj = { ...raw };
+  try {
+    obj.photos = normalizePhotoUrls(JSON.parse(obj.photos || '[]'));
+  } catch {
+    obj.photos = [];
+  }
+  try {
+    obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
+  } catch {
+    obj.ephemeral_config = {};
+  }
+  try {
+    obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
+  } catch {
+    obj.media_descriptions = {};
+  }
+  try {
+    obj.media_status = obj.media_status ? JSON.parse(obj.media_status) : {};
+  } catch {
+    obj.media_status = {};
+  }
+
+  // ASIGNACIÓN POR DEFECTO: Todo archivo multimedia sin estatus explícito queda con Status = 2 ("Para Publicar")
+  if (Array.isArray(obj.photos)) {
+    obj.photos.forEach((url: string) => {
+      if (obj.media_status[url] === undefined) {
+        obj.media_status[url] = 2; // 2 = Para Publicar
+      }
+    });
+  }
+
+  // Para clientes públicos (Mini App), filtrar para mostrar solo fotos con Status = 1 ("Activa")
+  if (filterPublic && Array.isArray(obj.photos)) {
+    obj.photos = obj.photos.filter((url: string) => obj.media_status[url] === 1);
+  }
+
+  obj.reactions = parseReactions(obj.reactions);
+  return obj as Profile;
+}
+
 export async function getAllProfiles(): Promise<Profile[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
@@ -387,27 +431,11 @@ export async function getAllProfiles(): Promise<Profile[]> {
   
   const columns = res[0].columns;
   return res[0].values.map(row => {
-    const obj: any = {};
+    const raw: any = {};
     columns.forEach((col, idx) => {
-      obj[col] = row[idx];
+      raw[col] = row[idx];
     });
-    try {
-      obj.photos = normalizePhotoUrls(JSON.parse(obj.photos || '[]'));
-    } catch {
-      obj.photos = [];
-    }
-    try {
-      obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
-    } catch {
-      obj.ephemeral_config = {};
-    }
-    try {
-      obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
-    } catch {
-      obj.media_descriptions = {};
-    }
-    obj.reactions = parseReactions(obj.reactions);
-    return obj as Profile;
+    return hydrateProfile(raw, false);
   });
 }
 
@@ -418,31 +446,15 @@ export async function getPublicProfiles(): Promise<Profile[]> {
   
   const columns = res[0].columns;
   return res[0].values.map(row => {
-    const obj: any = {};
+    const raw: any = {};
     columns.forEach((col, idx) => {
-      obj[col] = row[idx];
+      raw[col] = row[idx];
     });
-    try {
-      obj.photos = normalizePhotoUrls(JSON.parse(obj.photos || '[]'));
-    } catch {
-      obj.photos = [];
-    }
-    try {
-      obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
-    } catch {
-      obj.ephemeral_config = {};
-    }
-    try {
-      obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
-    } catch {
-      obj.media_descriptions = {};
-    }
-    obj.reactions = parseReactions(obj.reactions);
-    return obj as Profile;
+    return hydrateProfile(raw, true);
   });
 }
 
-export async function getProfileById(id: string): Promise<Profile | null> {
+export async function getProfileById(id: string, filterPublic: boolean = false): Promise<Profile | null> {
   const database = await getDb();
   const stmt = database.prepare("SELECT * FROM profiles WHERE id = ?");
   stmt.bind([id]);
@@ -450,31 +462,7 @@ export async function getProfileById(id: string): Promise<Profile | null> {
   if (stmt.step()) {
     const row = stmt.getAsObject() as Record<string, any>;
     stmt.free();
-    let photosParsed: string[] = [];
-    try {
-      photosParsed = normalizePhotoUrls(JSON.parse(row.photos || '[]'));
-    } catch {
-      photosParsed = [];
-    }
-    let ephemeralParsed: any = {};
-    try {
-      ephemeralParsed = row.ephemeral_config ? JSON.parse(row.ephemeral_config) : {};
-    } catch {
-      ephemeralParsed = {};
-    }
-    let mediaDescParsed: any = {};
-    try {
-      mediaDescParsed = row.media_descriptions ? JSON.parse(row.media_descriptions) : {};
-    } catch {
-      mediaDescParsed = {};
-    }
-    return {
-      ...row,
-      photos: photosParsed,
-      ephemeral_config: ephemeralParsed,
-      media_descriptions: mediaDescParsed,
-      reactions: parseReactions(row.reactions)
-    } as unknown as Profile;
+    return hydrateProfile(row, filterPublic);
   }
   stmt.free();
   return null;
@@ -482,7 +470,7 @@ export async function getProfileById(id: string): Promise<Profile | null> {
 
 export async function saveProfile(profile: Partial<Profile> & { id: string }): Promise<Profile> {
   const database = await getDb();
-  const existing = await getProfileById(profile.id);
+  const existing = await getProfileById(profile.id, false);
   const now = new Date().toISOString();
 
   // Strict safety check: Age >= 18
@@ -510,10 +498,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedMediaDesc = profile.media_descriptions !== undefined
       ? JSON.stringify(profile.media_descriptions)
       : (existing.media_descriptions ? JSON.stringify(existing.media_descriptions) : '{}');
+    const updatedMediaStatus = profile.media_status !== undefined
+      ? JSON.stringify(profile.media_status)
+      : (existing.media_status ? JSON.stringify(existing.media_status) : '{}');
 
     database.run(`
       UPDATE profiles
-      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?
+      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -530,14 +521,16 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedPriority,
       updatedReactions,
       updatedMediaDesc,
+      updatedMediaStatus,
       profile.id
     ]);
   } else {
     const initialReactions = JSON.stringify(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 });
     const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
+    const initialMediaStatus = JSON.stringify(profile.media_status || {});
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -554,12 +547,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       profile.telegram_message_id || null,
       profile.priority_order || 0,
       initialReactions,
-      initialMediaDesc
+      initialMediaDesc,
+      initialMediaStatus
     ]);
   }
 
   saveDb();
-  return (await getProfileById(profile.id))!;
+  return (await getProfileById(profile.id, false))!;
 }
 
 export async function toggleProfileReaction(

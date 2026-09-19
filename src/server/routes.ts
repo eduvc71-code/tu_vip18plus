@@ -199,7 +199,7 @@ router.post('/telegram/access/verify', (req: Request, res: Response) => {
 // GET Public Profile Detail
 router.get('/profiles/:id', async (req: Request, res: Response) => {
   try {
-    const profile = await getProfileById(req.params.id);
+    const profile = await getProfileById(req.params.id, true);
     if (!profile || profile.status === 'retirada' || profile.status === 'borrador') {
       res.status(404).json({ error: 'Perfil no encontrado o no disponible' });
       return;
@@ -607,6 +607,20 @@ router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request
   try {
     const profileId = req.params.id;
     const adminId = (req as any).adminUserId || 'Admin Web';
+    const profile = await getProfileById(profileId, false);
+    if (profile && profile.photos) {
+      const currentStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+      if (Array.isArray(req.body.photo_urls) && req.body.photo_urls.length > 0) {
+        req.body.photo_urls.forEach((u: string) => {
+          currentStatus[u] = 1;
+        });
+      } else {
+        profile.photos.forEach(u => {
+          currentStatus[u] = 1;
+        });
+      }
+      await saveProfile({ id: profileId, media_status: currentStatus });
+    }
     const result = await syncProfileToChannel(profileId, adminId);
     broadcastEvent('PROFILE_UPDATED', { id: profileId });
     res.json(result);
@@ -619,7 +633,7 @@ router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request
 router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos', 8), async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
-    const profile = await getProfileById(profileId);
+    const profile = await getProfileById(profileId, false);
     if (!profile) {
       res.status(404).json({ error: 'Perfil no encontrado' });
       return;
@@ -667,21 +681,74 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
       }
     }
 
+    // Status = 2 (Para Publicar) por defecto para todo contenido nuevo subido
+    let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    for (const url of uploadedUrls) {
+      mediaStatus[url] = 2; // 2 = Para Publicar
+    }
+
     const updated = await saveProfile({
       id: profileId,
       photos: updatedPhotos,
       media_descriptions: mediaDescriptions,
-      ephemeral_config: ephemeralConfig
+      ephemeral_config: ephemeralConfig,
+      media_status: mediaStatus
     });
 
     const adminId = (req as any).adminUserId || 'Admin Web';
-    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name}`, profileId);
+    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name} (Status = 2: Para Publicar)`, profileId);
 
     // No auto-sync to channel: Content is stored safely in B2 as draft until admin clicks publish
     broadcastEvent('PROFILE_UPDATED', updated);
     res.json({ success: true, profile: updated, new_media: uploadedUrls });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al subir imágenes o videos', details: err?.message });
+  }
+});
+
+// PUT Update media status (1=Activa, 2=Para Publicar)
+router.put('/admin/profiles/:id/media-status', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { photo_url, photo_urls, status } = req.body;
+    const numStatus: 1 | 2 = Number(status) === 1 ? 1 : 2;
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const currentStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    if (Array.isArray(photo_urls)) {
+      photo_urls.forEach((url: string) => {
+        currentStatus[url] = numStatus;
+      });
+    } else if (photo_url) {
+      currentStatus[photo_url] = numStatus;
+    } else if (req.body.all === true) {
+      (profile.photos || []).forEach((url: string) => {
+        currentStatus[url] = numStatus;
+      });
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_status: currentStatus
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog(
+      'UPDATE_MEDIA_STATUS',
+      adminId,
+      `Multimedia actualizada a Status ${numStatus} (${numStatus === 1 ? 'Activa' : 'Para Publicar'})`,
+      profileId
+    );
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, media_status: updated.media_status });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar status de multimedia', details: err?.message });
   }
 });
 

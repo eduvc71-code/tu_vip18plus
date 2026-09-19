@@ -62,6 +62,7 @@ export interface Profile {
   photos: string[]; // URLs or paths to uploaded images and videos
   ephemeral_config?: EphemeralMediaConfig;
   media_descriptions?: Record<string, string>;
+  media_status?: Record<string, 1 | 2>; // 1=Activa (visible en mini app/canal), 2=Para Publicar (oculta/borrador)
   status: ProfileStatus;
   created_at: string;
   updated_at: string;
