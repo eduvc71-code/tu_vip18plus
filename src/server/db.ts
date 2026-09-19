@@ -70,6 +70,52 @@ function ensureDefaultSettings(database: Database): void {
   }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
   database.run(`UPDATE system_settings SET value = 'IAM_Danii_VIP_bot' WHERE key = 'bot_username' AND (value LIKE '%ruti%' OR value LIKE '%flavia%' OR value = 'Danii_Catalogo_SCZ_bot')`);
+  consolidateToSingleVipProfile(database);
+}
+
+function consolidateToSingleVipProfile(database: Database): void {
+  const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
+  if (!res || res.length === 0 || !res[0].values || res[0].values.length <= 1) return;
+
+  const cols = res[0].columns;
+  const rows = res[0].values.map(v => Object.fromEntries(cols.map((c, i) => [c, v[i]])));
+  const target = rows.find(r => String(r.name).includes('🧸') || String(r.name).toLowerCase().includes('dani')) || rows[0];
+
+  const allPhotosSet = new Set<string>();
+  const mergedStatus: Record<string, number> = {};
+  const mergedDescriptions: Record<string, string> = {};
+  const mergedEphemeral: Record<string, any> = {};
+
+  for (const r of rows) {
+    let pPhotos: string[] = [];
+    try { pPhotos = JSON.parse(String(r.photos || '[]')); } catch {}
+    for (const url of pPhotos) {
+      allPhotosSet.add(url);
+      if (mergedStatus[url] === undefined) mergedStatus[url] = 2;
+    }
+    try { Object.assign(mergedDescriptions, JSON.parse(String(r.media_descriptions || '{}'))); } catch {}
+    try { Object.assign(mergedStatus, JSON.parse(String(r.media_status || '{}'))); } catch {}
+    try { Object.assign(mergedEphemeral, JSON.parse(String(r.ephemeral_config || '{}'))); } catch {}
+  }
+
+  const finalPhotos = Array.from(allPhotosSet);
+  for (const url of finalPhotos) {
+    if (mergedStatus[url] === undefined) mergedStatus[url] = 2;
+  }
+
+  const now = new Date().toISOString();
+  database.run(
+    "UPDATE profiles SET photos = ?, media_status = ?, media_descriptions = ?, ephemeral_config = ?, updated_at = ? WHERE id = ?",
+    [
+      JSON.stringify(finalPhotos),
+      JSON.stringify(mergedStatus),
+      JSON.stringify(mergedDescriptions),
+      JSON.stringify(mergedEphemeral),
+      now,
+      target.id
+    ]
+  );
+  database.run("DELETE FROM profiles WHERE id != ?", [target.id]);
 }
 
 export function saveDb(): void {
