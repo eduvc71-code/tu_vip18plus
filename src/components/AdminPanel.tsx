@@ -167,6 +167,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (channelId) setChannelIdInput(channelId);
   }, [channelId]);
 
+  // Sincronizar automáticamente el perfil activo para que nunca aparezca en blanco
+  useEffect(() => {
+    if (profiles.length > 0 && !editingProfile) {
+      const p = profiles[0];
+      setEditingProfile(p);
+      setFormData({
+        name: p.name,
+        age: p.age,
+        zone: p.zone,
+        description: p.description,
+        rate_bs: p.rate_bs,
+        commission_bs: 0,
+        status: p.status,
+        priority_order: p.priority_order || 0
+      });
+    }
+  }, [profiles, editingProfile]);
+
+
   useEffect(() => {
     if (isOpen) {
       const magicToken = new URLSearchParams(window.location.search).get('admin_token') || '';
@@ -252,13 +271,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const fetchedProfiles = await resP.json();
         setProfiles(fetchedProfiles);
         if (fetchedProfiles.length > 0) {
-          const p = fetchedProfiles[0];
-          setEditingProfile(p);
-          setFormData({
-            name: p.name, age: p.age, zone: p.zone,
-            description: p.description, rate_bs: p.rate_bs,
-            commission_bs: 0, status: p.status,
-            priority_order: p.priority_order || 0
+          setEditingProfile(prev => {
+            const chosen = prev
+              ? (fetchedProfiles.find((x: Profile) => x.id === prev.id) || fetchedProfiles[0])
+              : fetchedProfiles[0];
+            setFormData({
+              name: chosen.name, age: chosen.age, zone: chosen.zone,
+              description: chosen.description, rate_bs: chosen.rate_bs,
+              commission_bs: 0, status: chosen.status,
+              priority_order: chosen.priority_order || 0
+            });
+            return chosen;
           });
         }
       }
@@ -1097,8 +1120,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {activeTab === 'profiles' && (
               <div className="max-w-xl mx-auto space-y-5">
                 <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                    {editingProfile ? `Perfil VIP: ${editingProfile.name}` : 'Crear Perfil VIP'}
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <User className="w-4 h-4 text-amber-400" />
+                    <span>{editingProfile ? `Perfil VIP: ${editingProfile.name}` : 'Perfil VIP'}</span>
                   </h3>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {profiles.map(p => (
@@ -1127,23 +1151,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setEditingProfile(null);
-                        setFormData({
-                          name: '', age: 18, zone: 'Contenido +18 VIP',
-                          description: '', rate_bs: 0,
-                          commission_bs: 0, status: 'borrador',
-                          priority_order: 0
+                        const target = editingProfile || (profiles.length > 0 ? profiles[0] : null);
+                        if (target && !editingProfile) {
+                          setEditingProfile(target);
+                          setFormData({
+                            name: target.name, age: target.age, zone: target.zone,
+                            description: target.description, rate_bs: target.rate_bs,
+                            commission_bs: 0, status: target.status,
+                            priority_order: target.priority_order || 0
+                          });
+                        }
+                        setMessage({
+                          type: 'success',
+                          text: 'ℹ️ Modo Carga Directa: Todo el contenido que subas aquí se guardará exclusivamente en el servidor (Status 2: Borrador). Para publicarlo en la Mini App y Canal VIP, pasa al Paso 3 ("Ver para Publicar") y pulsa "🚀 Activar Todo y Publicar".'
                         });
-                        setProfileStep(1);
+                        setProfileStep(2);
                       }}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1 ${
-                        !editingProfile
-                          ? 'bg-amber-500 text-zinc-950 shadow-md'
-                          : 'bg-zinc-800 hover:bg-zinc-750 text-amber-400 border border-zinc-700'
-                      }`}
-                      title="Crear un nuevo perfil manualmente"
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 font-sans"
+                      title="Carga directa de contenido al servidor"
                     >
-                      <Plus className="w-3 h-3" /> Nuevo Perfil
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>⚡ Carga Directa de Contenido</span>
                     </button>
                   </div>
                 </div>
