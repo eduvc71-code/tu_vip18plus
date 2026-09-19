@@ -11,6 +11,7 @@ interface ProfileCardProps {
   modelVipLink: string;
   onSelectProfile: (profile: Profile) => void;
   onRequestAvailability: (profile: Profile) => void;
+  onOpenPaymentMethods?: () => void;
 }
 
 export const ProfileCard: React.FC<ProfileCardProps> = ({
@@ -18,7 +19,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   modelName,
   modelVipLink,
   onSelectProfile,
-  onRequestAvailability
+  onRequestAvailability,
+  onOpenPaymentMethods
 }) => {
   const [seenEphemeralUrls, setSeenEphemeralUrls] = useState<Set<string>>(() => {
     const seen = new Set<string>();
@@ -226,11 +228,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               </span>
             </div>
 
-            <div className="my-4 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-4">
-              <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-amber-200/70">Precio suscripción VIP</span>
-              <div className="mt-1 flex items-end gap-2">
-                <strong className="text-3xl font-black text-amber-400">Bs. {profile.rate_bs}</strong>
-                <span className="pb-1 text-xs text-zinc-400">/ mes</span>
+            {/* Contenedor de precio ultra-compacto */}
+            <div className="my-2.5 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200/80">Suscripción VIP</span>
+              <div className="flex items-baseline gap-1">
+                <strong className="text-sm font-black text-amber-400">Bs. {profile.rate_bs}</strong>
+                <span className="text-[10px] text-zinc-400">/ mes</span>
               </div>
             </div>
 
@@ -239,17 +242,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 href={modelVipLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-xs font-semibold text-zinc-200 hover:border-amber-500/40 hover:text-amber-300">
-                <Link className="h-4 w-4" /> Abrir red social
+                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-xs font-semibold text-zinc-200 hover:border-amber-500/40 hover:text-amber-300">
+                <Link className="h-3.5 w-3.5" /> Abrir red social
               </a>
             )}
           </div>
 
-          <div className="mt-6 grid grid-cols-[auto_1fr] gap-2">
+          <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
             <button
               type="button"
               onClick={() => onSelectProfile(profile)}
-              className="min-h-12 rounded-xl border border-zinc-700 bg-zinc-800/90 hover:bg-zinc-800 px-4 text-zinc-200 hover:text-amber-300 hover:border-amber-500/40 flex items-center justify-center gap-1.5 font-bold text-xs transition-colors cursor-pointer"
+              className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-800/90 hover:bg-zinc-800 px-3.5 text-zinc-200 hover:text-amber-300 hover:border-amber-500/40 flex items-center justify-center gap-1.5 font-bold text-xs transition-colors cursor-pointer"
               aria-label="Ver contenido en tamaño completo"
               title="Ver contenido en tamaño completo"
             >
@@ -260,10 +263,21 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               type="button"
               onClick={() => onRequestAvailability(profile)}
               id={`btn-request-${profile.id}`}
-              className="min-h-12 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-sm font-extrabold text-zinc-950 shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-amber-500 flex items-center justify-center gap-2">
+              className="min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-xs sm:text-sm font-extrabold text-zinc-950 shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-amber-500 flex items-center justify-center gap-2 cursor-pointer">
               <Send className="h-4 w-4" /> Adquirir Contenido
             </button>
           </div>
+
+          {onOpenPaymentMethods && (
+            <button
+              type="button"
+              onClick={onOpenPaymentMethods}
+              className="mt-2 w-full min-h-11 rounded-xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-amber-600/20 hover:from-amber-500/25 hover:to-amber-600/30 px-3 text-xs font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+            >
+              <span>💳</span>
+              <span>Métodos de Pago</span>
+            </button>
+          )}
         </div>
       </div>
     </article>

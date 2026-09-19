@@ -135,4 +135,16 @@ export interface BotStatusInfo {
   channel_id: string;
   admin_count: number;
   webhook_url?: string;
+  admin_contact_username?: string;
+}
+
+export interface PaymentMethod {
+  id: string;
+  title: string;
+  category: 'national' | 'international' | 'service';
+  image_url?: string | null;
+  description?: string;
+  is_active: boolean;
+  priority_order: number;
+  updated_at?: string;
 }

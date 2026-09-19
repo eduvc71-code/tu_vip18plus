@@ -1,7 +1,7 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll } from '../types.js';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod } from '../types.js';
 import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -70,6 +70,9 @@ function ensureDefaultSettings(database: Database): void {
   }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
   database.run(`UPDATE system_settings SET value = 'IAM_Danii_VIP_bot' WHERE key = 'bot_username' AND (value LIKE '%ruti%' OR value LIKE '%flavia%' OR value = 'Danii_Catalogo_SCZ_bot')`);
+  const defaultAdminUsername = (process.env.ADMIN_TELEGRAM_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_contact_username', ?)`, [defaultAdminUsername]);
+  seedPaymentMethods(database);
   consolidateToSingleVipProfile(database);
 }
 
@@ -318,6 +321,19 @@ function initTables(database: Database): void {
       PRIMARY KEY (poll_id, user_id)
     );
   `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS payment_methods (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      image_url TEXT,
+      description TEXT,
+      is_active INTEGER DEFAULT 1,
+      priority_order INTEGER DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+  `);
 }
 
 function seedInitialData(database: Database): void {
@@ -381,6 +397,205 @@ function seedInitialData(database: Database): void {
       'Base de datos inicializada para ' + modelName + ' Canal VIP Free (+18)',
       now
     ]);
+  }
+}
+
+function seedPaymentMethods(database: Database): void {
+  const check = database.exec("SELECT COUNT(*) as count FROM payment_methods");
+  const count = (check[0]?.values[0]?.[0] as number) || 0;
+
+  let existingQr: string | null = null;
+  const qrRes = database.exec("SELECT value FROM system_settings WHERE key = 'qr_image_url'");
+  if (qrRes && qrRes.length > 0 && qrRes[0].values.length > 0) {
+    existingQr = String(qrRes[0].values[0][0]);
+  }
+
+  if (count === 0) {
+    const now = new Date().toISOString();
+    const initialMethods: Array<{
+      id: string;
+      title: string;
+      category: 'national' | 'international' | 'service';
+      image_url: string | null;
+      description: string;
+      priority_order: number;
+    }> = [
+      {
+        id: 'qr_bolivia',
+        title: '🇧🇴 PAGO QR BOLIVIA',
+        category: 'national',
+        image_url: existingQr,
+        description: 'Escanea el código QR desde cualquier banco boliviano o app de pagos para realizar tu transferencia inmediata en Bs. Envía el comprobante para habilitar tu acceso.',
+        priority_order: 1
+      },
+      {
+        id: 'peru',
+        title: '🇵🇪 PERU',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Perú disponibles mediante Yape, Plin o transferencia bancaria local (BCP, BBVA, Interbank). Envía tu comprobante a la administradora.',
+        priority_order: 2
+      },
+      {
+        id: 'chile',
+        title: '🇨🇱 CHILE',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Chile disponibles mediante CuentaRUT (BancoEstado) o transferencia electrónica bancaria en pesos chilenos.',
+        priority_order: 3
+      },
+      {
+        id: 'argentina',
+        title: '🇦🇷 ARGENTINA',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias disponibles en Argentina mediante Mercado Pago (alias/CVU), Ualá o transferencia bancaria en pesos argentinos.',
+        priority_order: 4
+      },
+      {
+        id: 'espana',
+        title: '🇪🇸 ESPAÑA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (€).',
+        priority_order: 5
+      },
+      {
+        id: 'mexico',
+        title: '🇲🇽 MEXICO',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en México mediante transferencia interbancaria SPEI (CLABE), OXXO Pay o Spin by OXXO.',
+        priority_order: 6
+      },
+      {
+        id: 'paraguay',
+        title: '🇵🇾 PARAGUAY',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias locales en Paraguay mediante SIPAP, Tigo Money o bancos en Guaraníes (PYG).',
+        priority_order: 7
+      },
+      {
+        id: 'brasil',
+        title: '🇧🇷 BRASIL',
+        category: 'international',
+        image_url: null,
+        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferência bancária local.',
+        priority_order: 8
+      },
+      {
+        id: 'uruguay',
+        title: '🇺🇾 URUGUAY',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Uruguay mediante Prex, Brou o transferencia local en pesos uruguayos o dólares.',
+        priority_order: 9
+      },
+      {
+        id: 'colombia',
+        title: '🇨🇴 COLOMBIA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Colombia disponibles mediante Nequi, Daviplata, Bancolombia o PSE.',
+        priority_order: 10
+      },
+      {
+        id: 'rusia',
+        title: '🇷🇺 RUSIA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos y transferencias internacionales / criptomonedas (USDT) para Rusia.',
+        priority_order: 11
+      },
+      {
+        id: 'ecuador',
+        title: '🇪🇨 ECUADOR',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias directas en Ecuador (USD) mediante Banco Pichincha, Banco Guayaquil o app DeUna.',
+        priority_order: 12
+      },
+      {
+        id: 'venezuela',
+        title: '🇻🇪 VENEZUELA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Venezuela mediante Pago Móvil (Bs), Zinli o Binance Pay USDT.',
+        priority_order: 13
+      },
+      {
+        id: 'cripto',
+        title: '🪙 CRIPTOMONEDA',
+        category: 'service',
+        image_url: null,
+        description: 'Aceptamos USDT (TRC-20, BEP-20, TON, Polygon), Bitcoin (BTC), Ethereum (ETH) o Binance Pay ID sin comisiones.',
+        priority_order: 14
+      },
+      {
+        id: 'tigo_money',
+        title: '☎️ TIGO MONEY',
+        category: 'service',
+        image_url: null,
+        description: 'Envío directo por Tigo Money Bolivia al número de la administradora.',
+        priority_order: 15
+      },
+      {
+        id: 'paypal',
+        title: '💸 PAYPAL',
+        category: 'service',
+        image_url: null,
+        description: 'Pagos internacionales seguros mediante PayPal (saldo o tarjeta de débito/crédito internacional).',
+        priority_order: 16
+      },
+      {
+        id: 'telegram_stars',
+        title: '⭐ ESTRELLAS TELEGRAM',
+        category: 'service',
+        image_url: null,
+        description: 'Paga directamente con Telegram Stars dentro de Telegram de manera 100% anónima, instantánea y segura.',
+        priority_order: 17
+      },
+      {
+        id: 'western_remitly',
+        title: '🌐 WESTER Y REMITLY',
+        category: 'service',
+        image_url: null,
+        description: 'Giros internacionales directos mediante Western Union, Remitly, MoneyGram o WorldRemit.',
+        priority_order: 18
+      },
+      {
+        id: 'zelle',
+        title: '💳 ZELLE',
+        category: 'service',
+        image_url: null,
+        description: 'Transferencia instantánea en USD mediante Zelle desde cualquier cuenta bancaria de Estados Unidos.',
+        priority_order: 19
+      }
+    ];
+
+    const stmt = database.prepare(`
+      INSERT INTO payment_methods (id, title, category, image_url, description, is_active, priority_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    `);
+
+    for (const m of initialMethods) {
+      stmt.run([
+        m.id,
+        m.title,
+        m.category,
+        m.image_url,
+        m.description,
+        m.priority_order,
+        now
+      ]);
+    }
+    stmt.free();
+  } else if (existingQr) {
+    database.run(
+      "UPDATE payment_methods SET image_url = ? WHERE id = 'qr_bolivia' AND (image_url IS NULL OR image_url = '')",
+      [existingQr]
+    );
   }
 }
 
@@ -1131,4 +1346,64 @@ export async function getSubscribersCount(): Promise<number> {
     return Number(res[0].values[0][0]) || 0;
   }
   return 0;
+}
+
+// ==========================================
+// Payment Methods Management
+// ==========================================
+export async function getAllPaymentMethods(): Promise<PaymentMethod[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM payment_methods ORDER BY priority_order ASC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      title: String(obj.title || ''),
+      category: obj.category as 'national' | 'international' | 'service',
+      image_url: obj.image_url ? String(obj.image_url) : null,
+      description: String(obj.description || ''),
+      is_active: Boolean(obj.is_active),
+      priority_order: Number(obj.priority_order || 0),
+      updated_at: String(obj.updated_at || '')
+    };
+  });
+}
+
+export async function getPublicPaymentMethods(): Promise<PaymentMethod[]> {
+  const all = await getAllPaymentMethods();
+  return all.filter(m => m.is_active);
+}
+
+export async function getPaymentMethodById(id: string): Promise<PaymentMethod | null> {
+  const all = await getAllPaymentMethods();
+  return all.find(m => m.id === id) || null;
+}
+
+export async function savePaymentMethod(method: Partial<PaymentMethod> & { id: string }): Promise<PaymentMethod> {
+  const database = await getDb();
+  const existing = await getPaymentMethodById(method.id);
+  const now = new Date().toISOString();
+
+  const title = method.title !== undefined ? method.title : (existing?.title ?? '');
+  const category = method.category !== undefined ? method.category : (existing?.category ?? 'service');
+  const imageUrl = method.image_url !== undefined ? method.image_url : (existing?.image_url ?? null);
+  const description = method.description !== undefined ? method.description : (existing?.description ?? '');
+  const isActive = method.is_active !== undefined ? (method.is_active ? 1 : 0) : (existing?.is_active ? 1 : 0);
+  const priorityOrder = method.priority_order !== undefined ? method.priority_order : (existing?.priority_order ?? 0);
+
+  database.run(`
+    INSERT OR REPLACE INTO payment_methods (id, title, category, image_url, description, is_active, priority_order, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `, [method.id, title, category, imageUrl, description, isActive, priorityOrder, now]);
+
+  // If this is qr_bolivia and an image_url is provided, also sync it to system_settings qr_image_url
+  if (method.id === 'qr_bolivia' && imageUrl) {
+    saveSystemSetting('qr_image_url', imageUrl);
+  }
+
+  saveDb();
+  return (await getPaymentMethodById(method.id))!;
 }

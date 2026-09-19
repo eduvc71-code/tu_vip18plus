@@ -36,7 +36,11 @@ import {
   savePoll,
   votePoll,
   deletePoll,
-  syncDbToB2Now
+  syncDbToB2Now,
+  getAllPaymentMethods,
+  getPublicPaymentMethods,
+  getPaymentMethodById,
+  savePaymentMethod
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -51,7 +55,8 @@ import {
   updateTelegramMessageReactions,
   onReactionUpdated,
   verifyChannel,
-  sendChannelPoll
+  sendChannelPoll,
+  publishPaymentMethodsToChannel
 } from './telegram.js';
 
 export const router = express.Router();
@@ -163,6 +168,7 @@ router.get('/info', (_req: Request, res: Response) => {
     telegram_only_access: telegramOnly,
     auto_reply_delay_minutes: autoReplyDelay,
     qr_image_url: getSystemSetting('qr_image_url') || '',
+    admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'IAM_Danii_VIP_bot',
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
     model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
@@ -854,10 +860,14 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res:
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
+    }
+    if (admin_contact_username !== undefined) {
+      const cleanAdminContact = String(admin_contact_username).replace(/^@/, '').trim();
+      saveSystemSetting('admin_contact_username', cleanAdminContact);
     }
     if (channel_id !== undefined) {
       const cleanChannel = String(channel_id).trim();
@@ -898,6 +908,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       telegram_only_access: isTelegramOnly,
       auto_reply_delay_minutes: autoReplyDelay,
       qr_image_url: getSystemSetting('qr_image_url') || '',
+      admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'IAM_Danii_VIP_bot',
       model_display_name: getSystemSetting('model_display_name') || 'Tú',
       model_vip_link: getSystemSetting('model_vip_link') || ''
     });
@@ -1205,5 +1216,110 @@ router.post('/admin/sync-db', requireAdminAuth, async (req: Request, res: Respon
     res.json({ success: true, message: 'Base de datos respaldada exitosamente en Backblaze B2', key: objectKey });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al respaldar base de datos en B2', details: err?.message });
+  }
+});
+
+// ==========================================
+// Payment Methods Endpoints
+// ==========================================
+
+// GET Public Active Payment Methods (Mini App & Clients)
+router.get('/payment-methods', async (_req: Request, res: Response) => {
+  try {
+    const methods = await getPublicPaymentMethods();
+    res.json(methods);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener métodos de pago', details: err?.message });
+  }
+});
+
+// GET All Payment Methods (Admin)
+router.get('/admin/payment-methods', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const methods = await getAllPaymentMethods();
+    res.json(methods);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener métodos de pago para administración', details: err?.message });
+  }
+});
+
+// PUT Update Payment Method (Admin)
+router.put('/admin/payment-methods/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await getPaymentMethodById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Método de pago no encontrado' });
+      return;
+    }
+
+    const { title, description, is_active, priority_order, image_url, category } = req.body;
+    const updated = await savePaymentMethod({
+      id,
+      title,
+      description,
+      is_active,
+      priority_order,
+      image_url,
+      category
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_PAYMENT_METHOD', adminId, `Método de pago actualizado: ${updated.title}`, id);
+    broadcastEvent('PAYMENT_METHOD_UPDATED', updated);
+    res.json({ success: true, payment_method: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar método de pago', details: err?.message });
+  }
+});
+
+// POST Upload Image/QR for Payment Method (Admin)
+router.post('/admin/payment-methods/:id/image', requireAdminAuth, upload.single('image'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await getPaymentMethodById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Método de pago no encontrado' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se envió ninguna imagen' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const imageUrl = isB2Configured()
+      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'qr'))
+      : saveLocalUpload(req.file, config.baseUrl);
+
+    const updated = await savePaymentMethod({
+      id,
+      image_url: imageUrl
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_PAYMENT_METHOD_IMAGE', adminId, `Imagen/QR subida para método: ${updated.title}`, id);
+    broadcastEvent('PAYMENT_METHOD_UPDATED', updated);
+    res.json({ success: true, payment_method: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al subir imagen del método de pago', details: err?.message });
+  }
+});
+
+// POST Publish Payment Methods to VIP Telegram Channel (Admin)
+router.post('/admin/payment-methods/publish-channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await publishPaymentMethodsToChannel();
+    if (!result.ok) {
+      res.status(400).json({ error: result.message });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('PUBLISH_PAYMENT_METHODS', adminId, 'Menú interactivo de métodos de pago publicado en el canal Telegram');
+    res.json({ success: true, message: result.message });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al publicar métodos de pago en el canal', details: err?.message });
   }
 });

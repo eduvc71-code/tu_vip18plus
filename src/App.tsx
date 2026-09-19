@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Profile, CustomButton, DynamicPoll } from './types';
+import { Profile, CustomButton, DynamicPoll, PaymentMethod } from './types';
 import { Header } from './components/Header';
 import { ProfileCard } from './components/ProfileCard';
 import { ProfileDetailModal } from './components/ProfileDetailModal';
@@ -7,13 +7,17 @@ import { RequestModal, TelegramUserContext } from './components/RequestModal';
 import { AgeModal } from './components/AgeModal';
 import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
-import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2 } from 'lucide-react';
+import { PaymentMethodsModal } from './components/PaymentMethodsModal';
+import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2, CreditCard } from 'lucide-react';
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
   const [activePolls, setActivePolls] = useState<DynamicPoll[]>([]);
   const [userVotedPolls, setUserVotedPolls] = useState<Record<string, number>>({});
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [adminContactUsername, setAdminContactUsername] = useState('IAM_Danii_VIP_bot');
   const [loading, setLoading] = useState(true);
 
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -107,11 +111,12 @@ export default function App() {
   const fetchProfiles = async () => {
     setLoading(true);
     try {
-      const [resProfiles, resInfo, resButtons, resPolls] = await Promise.all([
+      const [resProfiles, resInfo, resButtons, resPolls, resPay] = await Promise.all([
         fetch('/api/profiles'),
         fetch('/api/info'),
         fetch('/api/buttons/public?target=miniapp'),
-        fetch('/api/polls/active')
+        fetch('/api/polls/active'),
+        fetch('/api/payment-methods')
       ]);
 
       if (resProfiles.ok) {
@@ -124,11 +129,17 @@ export default function App() {
       if (resPolls.ok) {
         setActivePolls(await resPolls.json());
       }
+      if (resPay && resPay.ok) {
+        setPaymentMethods(await resPay.json());
+      }
       if (resInfo.ok) {
         const info = await resInfo.json();
         if (info.bot_username) {
           const safeBot = info.bot_username.replace(/^@/, '').trim();
           setBotUsername(safeBot || 'IAM_Danii_VIP_bot');
+        }
+        if (info.admin_contact_username) {
+          setAdminContactUsername(info.admin_contact_username.replace(/^@/, '').trim());
         }
         if (info.channel_id) setChannelId(info.channel_id);
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);
@@ -180,6 +191,7 @@ export default function App() {
     eventSource.addEventListener('PROFILE_UPDATED', () => fetchProfiles());
     eventSource.addEventListener('PROFILE_DELETED', () => fetchProfiles());
     eventSource.addEventListener('TELEGRAM_UPDATE', () => fetchProfiles());
+    eventSource.addEventListener('PAYMENT_METHOD_UPDATED', () => fetchProfiles());
     eventSource.addEventListener('REACTION_UPDATED', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data);
@@ -365,6 +377,7 @@ export default function App() {
                     modelVipLink={modelVipLink}
                     onSelectProfile={(prof: Profile) => setSelectedProfile(prof)}
                     onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
+                    onOpenPaymentMethods={() => setShowPaymentModal(true)}
                   />
                 ))}
               </div>
@@ -478,6 +491,14 @@ export default function App() {
         modelName={displayName}
         tgUserContext={tgUser}
         onClose={() => setRequestProfile(null)}
+      />
+
+      {/* Payment Methods Modal */}
+      <PaymentMethodsModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        adminContactUsername={adminContactUsername}
+        paymentMethods={paymentMethods}
       />
 
     </div>

@@ -30,9 +30,12 @@ import {
   getPublicCustomButtons,
   getAllCustomButtons,
   getAllPolls,
-  registerSubscriber
+  registerSubscriber,
+  getAllPaymentMethods,
+  getPublicPaymentMethods,
+  getPaymentMethodById
 } from './db.js';
-import { Profile, ProfileStatus } from '../types.js';
+import { Profile, ProfileStatus, PaymentMethod } from '../types.js';
 import { uploadBufferToB2, isB2Configured, mediaUrl } from './b2Storage.js';
 
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
@@ -603,7 +606,8 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
       reactionRow1,
       reactionRow2,
       [
-        { text: '📱 Solicitar Disponibilidad', url: reqUrl }
+        { text: '📱 Solicitar Disponibilidad', url: reqUrl },
+        { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
       ],
       [
         { text: '💎 Abrir en Canal VIP Free', url: botAppUrl }
@@ -805,6 +809,19 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
+  // Deep Link Pagos / Métodos de Pago
+  if (text.startsWith('/start pagos') || text.startsWith('/start metodos')) {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Abre el chat privado para ver los métodos de pago.');
+      return;
+    }
+    if (fromId) {
+      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
+    }
+    await sendClientPagos(chatId);
+    return;
+  }
+
   const normText = text.toLowerCase().trim();
 
   // 1.2. Client Commands & Menus (Interactive for all users)
@@ -838,6 +855,20 @@ export async function processTelegramUpdate(update: any) {
 
   if (normText === '/precios' || normText === '/precio' || normText === '/tarifas' || normText === '/tarifa') {
     await sendClientPrecios(chatId);
+    return;
+  }
+
+  if (
+    normText === '/pagos' ||
+    normText === '/pago' ||
+    normText === '/metodos' ||
+    normText === '/metodosdepago' ||
+    normText === '/metodos_pago' ||
+    normText === '💳 métodos de pago' ||
+    normText === '💳 metodos de pago' ||
+    normText === 'metodos de pago'
+  ) {
+    await sendClientPagos(chatId);
     return;
   }
 
@@ -1484,6 +1515,9 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
+    { text: '💳 Métodos de Pago', callback_data: 'client_cmd_pagos' }
+  ]);
+  inlineKeyboard.push([
     { text: btnPrecios, callback_data: 'client_cmd_precios' },
     { text: btnInfo, callback_data: 'client_cmd_info' }
   ]);
@@ -1570,12 +1604,168 @@ export async function sendClientPrecios(chatId: string | number) {
           { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
         ],
         [
+          { text: '💳 Ver Métodos de Pago', callback_data: 'client_cmd_pagos' }
+        ],
+        [
           { text: btnInfo, callback_data: 'client_cmd_info' },
           { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
         ]
       ]
     }
   });
+}
+
+export async function buildPaymentMethodsKeyboard(publicMethods?: PaymentMethod[]): Promise<any[][]> {
+  const methods = publicMethods || (await getPublicPaymentMethods());
+  const activeIds = new Set(methods.map(m => m.id));
+
+  const rows: any[][] = [];
+
+  // 1. Top full-width: QR Bolivia
+  if (activeIds.has('qr_bolivia')) {
+    const m = methods.find(x => x.id === 'qr_bolivia')!;
+    rows.push([{ text: m.title, callback_data: `pay_method_${m.id}` }]);
+  }
+
+  // 2. 2-column grid pairs for countries
+  const pairs: [string, string][] = [
+    ['peru', 'chile'],
+    ['argentina', 'espana'],
+    ['mexico', 'paraguay'],
+    ['brasil', 'uruguay'],
+    ['colombia', 'rusia'],
+    ['ecuador', 'venezuela']
+  ];
+
+  for (const [id1, id2] of pairs) {
+    const row: any[] = [];
+    if (activeIds.has(id1)) {
+      const m1 = methods.find(x => x.id === id1)!;
+      row.push({ text: m1.title, callback_data: `pay_method_${m1.id}` });
+    }
+    if (activeIds.has(id2)) {
+      const m2 = methods.find(x => x.id === id2)!;
+      row.push({ text: m2.title, callback_data: `pay_method_${m2.id}` });
+    }
+    if (row.length > 0) rows.push(row);
+  }
+
+  // 3. Full-width payment services
+  const services = ['cripto', 'tigo_money', 'paypal', 'telegram_stars', 'western_remitly', 'zelle'];
+  for (const sId of services) {
+    if (activeIds.has(sId)) {
+      const m = methods.find(x => x.id === sId)!;
+      rows.push([{ text: m.title, callback_data: `pay_method_${m.id}` }]);
+    }
+  }
+
+  // 4. Back button
+  rows.push([{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
+
+  return rows;
+}
+
+export async function sendClientPagos(chatId: string | number) {
+  const kbd = await buildPaymentMethodsKeyboard();
+  const text = `HOLI 💖🔥\n` +
+    `*TODOS MIS METODOS DE PAGO* 🥰💖\n\n` +
+    `📌 BOLIVIA: 🇧🇴\n` +
+    `📌 PERU: 🇵🇪\n` +
+    `📌 EXTRANJERO: 🇲🇽 🇦🇷 🇺🇸 🌍\n\n` +
+    `_Toca en cualquiera de los botones abajo para ver los datos de transferencia y enviar tu comprobante:_`;
+
+  return await sendMessage(chatId, text, {
+    reply_markup: {
+      inline_keyboard: kbd
+    }
+  });
+}
+
+export async function showPaymentMethodDetail(chatId: string | number, methodId: string) {
+  const method = await getPaymentMethodById(methodId);
+  if (!method) {
+    await sendMessage(chatId, '⚠️ Método de pago no disponible.');
+    return;
+  }
+
+  const rawAdminUsername = getSystemSetting('admin_contact_username') || getBotConfig().username || 'IAM_Danii_VIP_bot';
+  const adminUsername = rawAdminUsername.replace(/^@/, '').trim();
+  const adminContactUrl = `https://t.me/${adminUsername}`;
+  const { baseUrl } = getBotConfig();
+
+  const caption = `✨ *${method.title}* ✨\n\n` +
+    `${method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'}\n\n` +
+    `📲 *Envía tu comprobante a:* [@${adminUsername}](${adminContactUrl})\n\n` +
+    `_Una vez recibido y verificado tu comprobante, la Administradora te enviará el acceso privado a nuestro contenido VIP._`;
+
+  const inlineKeyboard = [
+    [
+      { text: `📲 Enviar Comprobante a @${adminUsername}`, url: adminContactUrl }
+    ],
+    [
+      { text: '💳 Ver Todos los Métodos', callback_data: 'client_cmd_pagos' },
+      { text: '💎 Abrir Mini App', web_app: { url: baseUrl } }
+    ],
+    [
+      { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
+    ]
+  ];
+
+  if (method.image_url) {
+    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
+    const apiMethod = isVideo ? 'sendVideo' : 'sendPhoto';
+    const payloadKey = isVideo ? 'video' : 'photo';
+    const res = await callTelegramApi(apiMethod, {
+      chat_id: chatId,
+      [payloadKey]: method.image_url,
+      caption: caption,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+    if (res && res.ok) return res;
+  }
+
+  return await sendMessage(chatId, caption, {
+    reply_markup: {
+      inline_keyboard: inlineKeyboard
+    }
+  });
+}
+
+export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; message: string }> {
+  const { channelId, username } = getBotConfig();
+  if (!channelId) {
+    return { ok: false, message: 'No hay canal configurado en el sistema.' };
+  }
+
+  const text = `HOLI 💖🔥\n` +
+    `*TODOS MIS METODOS DE PAGO* 🥰💖\n\n` +
+    `📌 BOLIVIA: 🇧🇴\n` +
+    `📌 PERU: 🇵🇪\n` +
+    `📌 EXTRANJERO: 🇲🇽 🇦🇷 🇺🇸 🌍\n\n` +
+    `_Toca el botón abajo para abrir la lista interactiva de métodos de pago en el bot:_`;
+
+  const botUsername = username || 'IAM_Danii_VIP_bot';
+  const inlineKeyboard = [
+    [
+      { text: '💳 Ver Métodos de Pago', url: `https://t.me/${botUsername}?start=pagos` }
+    ],
+    [
+      { text: '💎 Abrir Canal VIP Free', url: `https://t.me/${botUsername}` }
+    ]
+  ];
+
+  const res = await sendMessage(channelId, text, {
+    reply_markup: {
+      inline_keyboard: inlineKeyboard
+    }
+  });
+
+  if (res && res.ok) {
+    return { ok: true, message: 'Menú de métodos de pago publicado en el canal exitosamente.' };
+  } else {
+    return { ok: false, message: res?.description || 'Error al publicar en el canal.' };
+  }
 }
 
 export async function sendClientInfo(chatId: string | number) {
@@ -1647,6 +1837,8 @@ async function handleCallbackQuery(cb: any) {
       await sendClientCanal(chatId);
     } else if (data === 'client_cmd_precios') {
       await sendClientPrecios(chatId);
+    } else if (data === 'client_cmd_pagos') {
+      await sendClientPagos(chatId);
     } else if (data === 'client_cmd_info') {
       await sendClientInfo(chatId);
     } else if (data === 'client_cmd_ayuda') {
@@ -1654,6 +1846,14 @@ async function handleCallbackQuery(cb: any) {
     } else if (data === 'client_cmd_menu') {
       await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
     }
+    return;
+  }
+
+  // 1.05 Payment Method Selection Callback
+  if (data.startsWith('pay_method_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const methodId = data.replace('pay_method_', '');
+    await showPaymentMethodDetail(chatId, methodId);
     return;
   }
 

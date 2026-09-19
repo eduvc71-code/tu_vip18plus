@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod } from '../types';
 import { isVideoUrl } from './ProtectedMedia';
 import {
   X,
@@ -32,7 +32,8 @@ import {
   Maximize2,
   BarChart2,
   ExternalLink,
-  Sliders
+  Sliders,
+  CreditCard
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -42,7 +43,7 @@ interface AdminPanelProps {
   channelId: string;
 }
 
-type AdminTab = 'profiles' | 'requests' | 'buttons' | 'polls' | 'telegram' | 'audit';
+type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'telegram' | 'audit';
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
@@ -81,12 +82,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
+  const [adminContactUsername, setAdminContactUsername] = useState('');
   const [autoReplyDelay, setAutoReplyDelay] = useState('10');
   const [modelDisplayName, setModelDisplayName] = useState('');
   const [modelVipLink, setModelVipLink] = useState('');
   const [qrImageUrl, setQrImageUrl] = useState('');
   const [pinnedMessageText, setPinnedMessageText] = useState('');
   const [pinnedMessageActive, setPinnedMessageActive] = useState(false);
+
+  // Payment Methods state
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
+  const [paymentImageFile, setPaymentImageFile] = useState<File | null>(null);
+  const [uploadingPaymentImage, setUploadingPaymentImage] = useState(false);
+  const [publishingPaymentsToChannel, setPublishingPaymentsToChannel] = useState(false);
   
   // Reply state for customer requests
   const [replyingRequestId, setReplyingRequestId] = useState<string | null>(null);
@@ -258,13 +267,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${tok}` };
-      const [resP, resR, resL, resI, resB, resPolls] = await Promise.all([
+      const [resP, resR, resL, resI, resB, resPolls, resPay] = await Promise.all([
         fetch('/api/admin/profiles', { headers }),
         fetch('/api/admin/requests', { headers }),
         fetch('/api/admin/logs', { headers }),
         fetch('/api/info'),
         fetch('/api/admin/buttons', { headers }),
-        fetch('/api/admin/polls', { headers })
+        fetch('/api/admin/polls', { headers }),
+        fetch('/api/admin/payment-methods', { headers })
       ]);
 
       if (resP.ok) {
@@ -293,10 +303,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       if (resB.ok) setCustomButtons(await resB.json());
       if (resPolls.ok) setDynamicPolls(await resPolls.json());
+      if (resPay && resPay.ok) {
+        const payData = await resPay.json();
+        setPaymentMethods(payData);
+      }
       if (resI.ok) {
         const infoData = await resI.json();
         if (infoData.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(infoData.auto_reply_delay_minutes));
         if (infoData.qr_image_url !== undefined) setQrImageUrl(infoData.qr_image_url);
+        if (infoData.admin_contact_username !== undefined) setAdminContactUsername(infoData.admin_contact_username || '');
         if (infoData.pinned_message_text !== undefined) setPinnedMessageText(infoData.pinned_message_text);
         if (infoData.pinned_message_active !== undefined) setPinnedMessageActive(Boolean(infoData.pinned_message_active));
         if (infoData.channel_id) setChannelIdInput(infoData.channel_id);
@@ -907,6 +922,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           bot_username: newBotUsername,
+          admin_contact_username: adminContactUsername,
           channel_id: channelIdInput,
           telegram_only_access: true,
           auto_reply_delay_minutes: autoReplyDelay,
@@ -918,6 +934,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({ type: 'success', text: 'Configuración de Telegram y privacidad guardada.' });
         if (data.bot_username) setNewBotUsername(data.bot_username);
+        if (data.admin_contact_username) setAdminContactUsername(data.admin_contact_username);
         if (data.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(data.auto_reply_delay_minutes));
         if (data.model_display_name !== undefined) setModelDisplayName(data.model_display_name || '');
         if (data.model_vip_link !== undefined) setModelVipLink(data.model_vip_link || '');
@@ -929,6 +946,83 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de conexión al guardar configuración' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Payment Methods Actions
+  const handleSavePaymentMethod = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingPaymentMethod) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/payment-methods/${editingPaymentMethod.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(editingPaymentMethod)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage({ type: 'success', text: `Método de pago "${data.payment_method.title}" actualizado con éxito.` });
+        setEditingPaymentMethod(null);
+        setPaymentImageFile(null);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al actualizar método de pago' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al guardar método de pago' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUploadPaymentMethodImage = async (methodId: string) => {
+    if (!paymentImageFile) return;
+    setUploadingPaymentImage(true);
+    try {
+      const fd = new FormData();
+      fd.append('image', paymentImageFile);
+      const res = await fetch(`/api/admin/payment-methods/${methodId}/image`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessage({ type: 'success', text: 'Imagen/QR subido y guardado exitosamente.' });
+        setPaymentImageFile(null);
+        if (editingPaymentMethod && editingPaymentMethod.id === methodId) {
+          setEditingPaymentMethod(data.payment_method);
+        }
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al subir imagen/QR' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al subir imagen' });
+    } finally {
+      setUploadingPaymentImage(false);
+    }
+  };
+
+  const handlePublishPaymentsToChannel = async () => {
+    if (!confirm('¿Deseas publicar el menú interactivo de métodos de pago en el canal oficial de Telegram?')) return;
+    setPublishingPaymentsToChannel(true);
+    try {
+      const res = await fetch('/api/admin/payment-methods/publish-channel', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: data.message || 'Métodos de pago publicados en el canal con éxito.' });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al publicar en el canal' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión con el servidor' });
+    } finally {
+      setPublishingPaymentsToChannel(false);
     }
   };
 
@@ -1006,6 +1100,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const tabs: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
     { id: 'profiles', icon: <Users className="w-4 h-4" />, label: 'Mi Perfil' },
     { id: 'requests', icon: <Inbox className="w-4 h-4" />, label: 'Solicitudes', badge: requests.length },
+    { id: 'payments', icon: <CreditCard className="w-4 h-4" />, label: 'Métodos de Pago', badge: paymentMethods.length },
     { id: 'buttons', icon: <Sparkles className="w-4 h-4" />, label: 'Botones', badge: customButtons.length },
     { id: 'polls', icon: <BarChart2 className="w-4 h-4" />, label: 'Encuestas', badge: dynamicPolls.length },
     { id: 'telegram', icon: <QrCode className="w-4 h-4" />, label: 'Telegram' },
@@ -2745,7 +2840,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
 
-                {/* PERSONALIZACIÓN */}
+                {/* PERSONALIZACIÓN DE LA MINI APP */}
                 <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Send className="w-4 h-4 text-amber-400" /> Personalización de la Mini App
@@ -2755,12 +2850,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </p>
 
                   <div className="space-y-2">
-                    <label className="block text-zinc-400 font-semibold">Nombre / Alias / Usuario Telegram</label>
+                    <label className="block text-zinc-400 font-semibold">Nombre / Alias para la Mini App</label>
                     <input
                       type="text"
                       value={modelDisplayName}
                       onChange={(e) => setModelDisplayName(e.target.value)}
-                      placeholder="Ej: Maya, @maya_vip o Mi Alias"
+                      placeholder="Ej: IAM Danii 🧸🩷"
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
@@ -2776,6 +2871,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                   </div>
 
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-xl transition-all cursor-pointer shrink-0 disabled:opacity-60"
+                  >
+                    Guardar Personalización
+                  </button>
+                </form>
+
+                {/* BOT USERNAME */}
+                <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Send className="w-4 h-4 text-amber-400" /> Nombre de Usuario del Bot en Telegram
+                  </h4>
+                  <p className="text-zinc-400">
+                    Username oficial del Bot sin @. Los enlaces de la Mini App y el canal redirigirán a este bot.
+                  </p>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <span className="absolute left-3 top-2.5 text-zinc-500 font-bold text-xs">@</span>
@@ -2783,7 +2895,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         type="text"
                         value={newBotUsername.replace(/^@/, '')}
                         onChange={(e) => setNewBotUsername(e.target.value)}
-                        placeholder="Ej. catalogovipscz"
+                        placeholder="Ej. IAM_Danii_VIP_bot"
                         className="w-full pl-7 pr-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
                       />
                     </div>
@@ -2797,14 +2909,33 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </form>
 
-                {/* BOT USERNAME */}
+                {/* ADMIN TELEGRAM USERNAME */}
                 <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Send className="w-4 h-4 text-amber-400" /> Nombre de Usuario del Bot en Telegram
+                    <User className="w-4 h-4 text-amber-400" /> Usuario de Telegram de la Administradora (@usuario)
                   </h4>
                   <p className="text-zinc-400">
-                    Username exacto de Telegram sin @. Los enlaces del Canal VIP Free redirigirán a este usuario.
+                    Usuario de Telegram (@usuario) que los clientes verán en todos los métodos de pago para enviar comprobantes de transferencia de forma directa y privada.
                   </p>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-3 top-2.5 text-zinc-500 font-bold text-xs">@</span>
+                      <input
+                        type="text"
+                        value={adminContactUsername.replace(/^@/, '')}
+                        onChange={(e) => setAdminContactUsername(e.target.value)}
+                        placeholder="Ej. mi_usuario_telegram"
+                        className="w-full pl-7 pr-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold rounded-xl transition-all cursor-pointer shrink-0 disabled:opacity-60"
+                    >
+                      Guardar
+                    </button>
+                  </div>
                 </form>
 
                 {/* AUTO REPLY DELAY */}
@@ -3059,6 +3190,218 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* TAB: MÉTODOS DE PAGO */}
+            {activeTab === 'payments' && (
+              <div className="space-y-5 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-amber-400" /> Métodos de Pago
+                    </h3>
+                    <p className="text-[11px] text-zinc-400">
+                      Sincronizados en Mini App, Bot de Telegram (/pagos) y Canal VIP. Sube imágenes/QR y escribe las instrucciones para cada país o servicio.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePublishPaymentsToChannel}
+                      disabled={publishingPaymentsToChannel}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-bold transition-all shadow-md shadow-pink-500/20 cursor-pointer disabled:opacity-60"
+                      title="Publicar menú interactivo de métodos de pago en el canal de Telegram"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{publishingPaymentsToChannel ? 'Publicando...' : '📢 Publicar en Canal'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fetchData()}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Formulario de Edición de Método de Pago */}
+                {editingPaymentMethod && (
+                  <div className="p-4 bg-zinc-950 border border-amber-500/40 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
+                      <h4 className="font-bold text-white text-xs flex items-center gap-2">
+                        <Edit className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Editar: {editingPaymentMethod.title}</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingPaymentMethod(null); setPaymentImageFile(null); }}
+                        className="text-zinc-400 hover:text-white text-xs font-semibold cursor-pointer"
+                      >
+                        ✕ Cancelar
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSavePaymentMethod} className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-zinc-400 mb-1 font-semibold">Título / Nombre del Método *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editingPaymentMethod.title || ''}
+                            onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, title: e.target.value })}
+                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-zinc-400 mb-1 font-semibold">Estado de Visibilidad</label>
+                          <select
+                            value={editingPaymentMethod.is_active ? '1' : '0'}
+                            onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, is_active: e.target.value === '1' })}
+                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                          >
+                            <option value="1">🟢 Activo (Visible para clientes)</option>
+                            <option value="0">🔴 Inactivo (Oculto)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-zinc-400 mb-1 font-semibold">
+                          Instrucciones, Coordenadas y Cuentas Bancarias
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={editingPaymentMethod.description || ''}
+                          onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, description: e.target.value })}
+                          placeholder="Escribe aquí el número de cuenta, CI, titular, banco, correo electrónico o dirección de billetera que verá el cliente..."
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 resize-none font-sans"
+                        />
+                      </div>
+
+                      {/* Subida de Imagen o Código QR */}
+                      <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
+                        <label className="block text-zinc-300 font-bold">
+                          Imagen o Código QR del Método
+                        </label>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                          {editingPaymentMethod.image_url ? (
+                            <img
+                              src={editingPaymentMethod.image_url}
+                              alt={editingPaymentMethod.title}
+                              className="w-16 h-16 object-contain rounded-lg border border-zinc-700 bg-zinc-950 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-lg border border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 shrink-0">
+                              <QrCode className="w-6 h-6" />
+                            </div>
+                          )}
+                          <div className="flex-1 w-full space-y-1.5">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setPaymentImageFile(e.target.files?.[0] || null)}
+                              className="w-full text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                            />
+                            {paymentImageFile && (
+                              <button
+                                type="button"
+                                disabled={uploadingPaymentImage}
+                                onClick={() => handleUploadPaymentMethodImage(editingPaymentMethod.id!)}
+                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-60"
+                              >
+                                {uploadingPaymentImage ? 'Subiendo imagen...' : '⬆️ Subir imagen ahora'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => { setEditingPaymentMethod(null); setPaymentImageFile(null); }}
+                          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs cursor-pointer transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold rounded-xl text-xs cursor-pointer transition-colors disabled:opacity-60"
+                        >
+                          Guardar Método
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Lista de Métodos de Pago */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {paymentMethods.map((method) => (
+                    <div
+                      key={method.id}
+                      className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                        method.is_active
+                          ? 'bg-zinc-950 border-zinc-800 hover:border-amber-500/40'
+                          : 'bg-zinc-950/40 border-zinc-800/40 opacity-60'
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-extrabold text-sm text-white flex items-center gap-1.5">
+                            {method.title}
+                          </h4>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
+                            method.is_active
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-zinc-800 text-zinc-400'
+                          }`}>
+                            {method.is_active ? 'Activo' : 'Inactivo'}
+                          </span>
+                        </div>
+
+                        {method.image_url ? (
+                          <div className="w-full h-24 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center p-1">
+                            <img
+                              src={method.image_url}
+                              alt={method.title}
+                              className="w-full h-full object-contain rounded-lg"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-full h-16 bg-zinc-900/40 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center text-zinc-600 text-[11px]">
+                            Sin imagen / QR subido
+                          </div>
+                        )}
+
+                        <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                          {method.description || 'Sin instrucciones adicionales configuradas.'}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-zinc-900 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-zinc-500 uppercase">
+                          {method.category === 'national' ? '🇧🇴 Nacional' : method.category === 'international' ? '🌎 Internacional' : '⚡ Servicio'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPaymentMethod(method);
+                            setPaymentImageFile(null);
+                          }}
+                          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-amber-200 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" /> Editar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
