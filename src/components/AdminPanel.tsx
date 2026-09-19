@@ -125,6 +125,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [operatingMode, setOperatingMode] = useState<'solo_bot' | 'bot_and_channel'>('solo_bot');
   const [updatingMode, setUpdatingMode] = useState(false);
 
+  // Previsualizador de Pantallas state (Mini App y Telegram)
+  const [previewModeModal, setPreviewModeModal] = useState<null | 'miniapp' | 'telegram'>(null);
+  const [previewIncludeDrafts, setPreviewIncludeDrafts] = useState(true);
+
   // Auto-dismiss floating toast notification after 3.5s
   useEffect(() => {
     if (!message) return;
@@ -1537,6 +1541,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                         </div>
 
+                        {/* Previsualizar Pantallas antes de Publicar */}
+                        <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                          <div className="space-y-0.5">
+                            <h5 className="font-bold text-white text-xs flex items-center gap-1.5">
+                              <Eye className="w-4 h-4 text-amber-400" /> Previsualizar Pantallas antes de Publicar
+                            </h5>
+                            <p className="text-[11px] text-zinc-400">
+                              Mira exactamente cómo verán los clientes este perfil en la Mini App y cómo saldrá el post en Telegram.
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModeModal('miniapp')}
+                              className="flex-1 sm:flex-initial py-2 px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-amber-300 font-bold text-xs border border-amber-500/40 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow"
+                            >
+                              <span>📱 Ver Mini App</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModeModal('telegram')}
+                              className="flex-1 sm:flex-initial py-2 px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-750 text-sky-400 font-bold text-xs border border-sky-500/40 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow"
+                            >
+                              <span>📢 Ver Telegram</span>
+                            </button>
+                          </div>
+                        </div>
+
                         {/* Pestañas de Filtrado de Estado */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
@@ -1794,6 +1826,282 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         >
                           <HardDrive className="w-4 h-4 text-zinc-400" /> Guardar como Borrador
                         </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* MODAL SIMULADOR PREVISUALIZADOR DE PANTALLAS (MINI APP & TELEGRAM) */}
+                {previewModeModal && (() => {
+                  const pPhotos = editingProfile?.photos || [];
+                  const pActivePhotos = pPhotos.filter(u => (editingProfile?.media_status?.[u] || 2) === 1);
+                  const displayList = previewIncludeDrafts ? pPhotos : pActivePhotos;
+                  const coverMedia = pPhotos[0] || null;
+
+                  return (
+                    <div
+                      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
+                      onClick={() => setPreviewModeModal(null)}
+                    >
+                      <div
+                        className="relative w-full max-w-lg bg-zinc-950 border border-amber-500/40 rounded-3xl overflow-hidden shadow-2xl shadow-amber-500/10 flex flex-col my-auto max-h-[92vh]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Header del Simulador */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-900/90 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <Eye className="w-4 h-4 text-amber-400" />
+                              Simulador de Pantallas
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-xl border border-zinc-800">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModeModal('miniapp')}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                previewModeModal === 'miniapp'
+                                  ? 'bg-amber-500 text-zinc-950 shadow'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              📱 Mini App
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPreviewModeModal('telegram')}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                previewModeModal === 'telegram'
+                                  ? 'bg-sky-500 text-zinc-950 shadow'
+                                  : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              📢 Telegram
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModeModal(null)}
+                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Contenido según pestaña */}
+                        <div className="p-4 overflow-y-auto space-y-4 flex-1">
+                          {previewModeModal === 'miniapp' ? (
+                            /* VISTA MINI APP */
+                            <div className="space-y-3">
+                              <div className="p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                                <span>Simulador: Vista en el celular del cliente</span>
+                                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-semibold text-zinc-300">
+                                  <input
+                                    type="checkbox"
+                                    checked={previewIncludeDrafts}
+                                    onChange={(e) => setPreviewIncludeDrafts(e.target.checked)}
+                                    className="rounded border-zinc-700 bg-zinc-900 text-amber-500"
+                                  />
+                                  Simular con todo activado
+                                </label>
+                              </div>
+
+                              {/* Mobile Card */}
+                              <div className="border border-zinc-800 rounded-2xl bg-zinc-900 overflow-hidden shadow-xl space-y-0">
+                                {/* Portada */}
+                                <div className="relative aspect-video w-full bg-zinc-950 overflow-hidden">
+                                  {coverMedia ? (
+                                    isVideoUrl(coverMedia) ? (
+                                      <video src={coverMedia} className="w-full h-full object-cover" controls playsInline />
+                                    ) : (
+                                      <img src={coverMedia} alt="Portada" className="w-full h-full object-cover" />
+                                    )
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-zinc-600 text-xs">Sin multimedia cargada</div>
+                                  )}
+                                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
+                                    Canal VIP Free
+                                  </span>
+                                </div>
+
+                                {/* Info Perfil */}
+                                <div className="p-3.5 space-y-2.5">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <h3 className="text-base font-extrabold text-white flex items-center gap-1.5">
+                                        {formData.name || 'Perfil VIP'}
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">VIP</span>
+                                      </h3>
+                                      <p className="text-[10px] text-zinc-400">Contenido Exclusivo • Acceso Total</p>
+                                    </div>
+                                    <div className="text-right">
+                                      <span className="text-sm font-black text-amber-400">Bs. {formData.rate_bs || 0}</span>
+                                      <span className="block text-[9px] text-zinc-500 font-medium">Suscripción</span>
+                                    </div>
+                                  </div>
+
+                                  {formData.description ? (
+                                    <p className="text-[11px] text-zinc-300 bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800/80 whitespace-pre-line leading-relaxed">
+                                      {formData.description}
+                                    </p>
+                                  ) : (
+                                    <p className="text-[10px] text-zinc-500 italic">Sin descripción general</p>
+                                  )}
+
+                                  {/* Reacciones */}
+                                  <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-800 text-[11px] text-zinc-400">
+                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
+                                      ❤️ {editingProfile?.reactions?.hearts || 0}
+                                    </span>
+                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
+                                      ⭐ {editingProfile?.reactions?.stars || 0}
+                                    </span>
+                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
+                                      🔥 {editingProfile?.reactions?.fires || 0}
+                                    </span>
+                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
+                                      👍 {editingProfile?.reactions?.likes || 0}
+                                    </span>
+                                  </div>
+
+                                  {/* Galería visible */}
+                                  <div className="pt-2 border-t border-zinc-800 space-y-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                      Galería ({displayList.length} archivos):
+                                    </span>
+                                    {displayList.length > 0 ? (
+                                      <div className="grid grid-cols-3 gap-1.5">
+                                        {displayList.map((u, i) => (
+                                          <div key={u} className="relative aspect-square rounded-lg overflow-hidden bg-zinc-950 border border-zinc-800">
+                                            {isVideoUrl(u) ? (
+                                              <video src={u} className="w-full h-full object-cover" muted />
+                                            ) : (
+                                              <img src={u} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" />
+                                            )}
+                                            {editingProfile?.ephemeral_config?.[u]?.enabled && (
+                                              <span className="absolute bottom-1 left-1 px-1 py-0.2 rounded bg-rose-600 text-white font-black text-[8px] flex items-center gap-0.5 shadow">
+                                                <Flame className="w-2 h-2" /> {editingProfile?.ephemeral_config?.[u]?.duration_seconds || 5}s
+                                              </span>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-zinc-500 italic text-[10px]">No hay archivos en Status 1 para mostrar al cliente.</p>
+                                    )}
+                                  </div>
+
+                                  {/* Botón de Suscripción */}
+                                  <button
+                                    type="button"
+                                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 pointer-events-none"
+                                  >
+                                    💎 Suscribirse a {formData.name || 'Perfil VIP'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            /* VISTA TELEGRAM */
+                            <div className="space-y-3">
+                              <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-[11px] text-sky-300">
+                                {operatingMode === 'solo_bot' ? (
+                                  <>
+                                    🔒 <strong>Modo A: Solo Bot (100% Privado)</strong>: En este modo confidencial, no se publica en canales públicos. Todo queda activo únicamente en la Mini App para los suscriptores.
+                                  </>
+                                ) : (
+                                  <>
+                                    📢 <strong>Modo B: Híbrido (Bot + Canal)</strong>: Así aparecerá el post publicado en el Canal VIP Free oficial de Telegram.
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Telegram Box */}
+                              <div className="bg-[#182533] border border-[#2b394a] rounded-2xl overflow-hidden shadow-2xl space-y-0 text-white">
+                                <div className="px-3.5 py-2.5 bg-[#17212b] border-b border-[#2b394a] flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-zinc-950 font-bold text-xs">
+                                      VIP
+                                    </div>
+                                    <div>
+                                      <span className="font-bold text-xs text-white block leading-tight">Canal VIP Free Oficial</span>
+                                      <span className="text-[9px] text-zinc-400">Canal de Telegram</span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] text-zinc-400 font-mono">Ahora</span>
+                                </div>
+
+                                {/* Portada Post */}
+                                <div className="aspect-video w-full bg-black overflow-hidden relative">
+                                  {coverMedia ? (
+                                    isVideoUrl(coverMedia) ? (
+                                      <video src={coverMedia} className="w-full h-full object-cover" controls playsInline />
+                                    ) : (
+                                      <img src={coverMedia} alt="Post Telegram" className="w-full h-full object-cover" />
+                                    )
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-xs">Sin imagen de portada</div>
+                                  )}
+                                </div>
+
+                                {/* Caption Post */}
+                                <div className="p-3.5 space-y-2 text-xs">
+                                  <p className="font-bold text-amber-300">
+                                    ✨ {formData.name || 'IAM Danii VIP'} • Contenido Exclusivo ✨
+                                  </p>
+                                  <p className="text-zinc-200 text-[11px] whitespace-pre-line leading-relaxed">
+                                    {coverMedia && editingProfile?.media_descriptions?.[coverMedia]
+                                      ? editingProfile.media_descriptions[coverMedia]
+                                      : formData.description || '🔥 Nueva actualización exclusiva disponible. Toca el botón de abajo para entrar al Canal VIP Free.'}
+                                  </p>
+                                  <p className="text-[10px] text-amber-400/90 font-mono">
+                                    Tarifa VIP: Bs. {formData.rate_bs || 0}
+                                  </p>
+
+                                  {/* Inline buttons Telegram */}
+                                  <div className="pt-2 space-y-1.5">
+                                    <button
+                                      type="button"
+                                      className="w-full py-2 px-3 rounded-lg bg-[#2b5278] text-white font-bold text-[11px] flex items-center justify-center gap-1.5 pointer-events-none"
+                                    >
+                                      🔥 Abrir Canal VIP Free (Mini App)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="w-full py-2 px-3 rounded-lg bg-[#243447] text-[#64b5f6] font-semibold text-[10px] flex items-center justify-center gap-1.5 pointer-events-none"
+                                    >
+                                      💎 Solicitar Suscripción (Bs. {formData.rate_bs || 0})
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer Modal */}
+                        <div className="p-3 border-t border-zinc-800 bg-zinc-900/90 flex items-center justify-between gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModeModal(null)}
+                            className="py-2 px-3.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs cursor-pointer transition-all"
+                          >
+                            Cerrar Vista Previa
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreviewModeModal(null);
+                              handlePublishToChannel(editingProfile?.id);
+                            }}
+                            disabled={publishing || loading}
+                            className="py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs cursor-pointer transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            {publishing ? 'Publicando...' : '🚀 Todo Listo: Publicar Ahora'}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
