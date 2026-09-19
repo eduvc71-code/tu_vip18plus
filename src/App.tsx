@@ -33,6 +33,15 @@ export default function App() {
   const [pinnedActive, setPinnedActive] = useState(false);
 
   const [showIntroBanner, setShowIntroBanner] = useState(false);
+  const [isAdminView, setIsAdminView] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return Boolean(
+      params.get('admin_token') ||
+      params.get('admin') === 'true' ||
+      params.get('panel') === 'true'
+    );
+  });
 
   // Telegram User Context state
   const [tgUser, setTgUser] = useState<TelegramUserContext | null>(null);
@@ -47,6 +56,7 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('admin_token') || params.get('admin') === 'true' || params.get('panel') === 'true') {
+      setIsAdminView(true);
       setAccessChecking(false);
       return;
     }
@@ -220,19 +230,25 @@ export default function App() {
 
   const displayName = modelDisplayName?.trim() || 'IAM Danii';
 
-  const adminRequested = typeof window !== 'undefined' && Boolean(
-    new URLSearchParams(window.location.search).get('admin_token') ||
-    new URLSearchParams(window.location.search).get('admin') === 'true' ||
-    new URLSearchParams(window.location.search).get('panel') === 'true'
-  );
   const isAccessAllowed = telegramAuthorized && Boolean(tgUser);
 
-  if (adminRequested) {
+  if (isAdminView) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
         <AdminPanel
           isOpen={true}
-          onClose={() => { window.location.href = '/'; }}
+          onClose={() => {
+            setIsAdminView(false);
+            try {
+              const urlParams = new URLSearchParams(window.location.search);
+              urlParams.delete('admin');
+              urlParams.delete('panel');
+              urlParams.delete('admin_token');
+              const newQuery = urlParams.toString();
+              const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
+              window.history.replaceState({}, document.title, newUrl);
+            } catch {}
+          }}
           botUsername={botUsername}
           channelId={channelId}
         />
@@ -249,6 +265,7 @@ export default function App() {
       <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
         <TelegramGate
           botUsername={botUsername}
+          onOpenAdmin={() => setIsAdminView(true)}
           onContinue={() => {
             setTelegramAuthorized(true);
             setTgUser({ id: 'guest', first_name: 'Visitante VIP' });
@@ -270,6 +287,7 @@ export default function App() {
         modelName={displayName}
         onRefresh={fetchProfiles}
         loading={loading}
+        onOpenAdmin={() => setIsAdminView(true)}
       />
 
       {/* Main Catalog View */}

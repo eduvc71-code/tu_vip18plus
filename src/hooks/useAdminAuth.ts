@@ -104,6 +104,13 @@ export const useAdminAuth = ({
         setAuthChecked(true);
         setLoginError('');
         try { localStorage.setItem('danii_admin_token', data.token); } catch {}
+        try {
+          const urlParams = new URLSearchParams(window.location.search);
+          urlParams.set('admin', 'true');
+          const newQuery = urlParams.toString();
+          const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
+          window.history.replaceState({}, document.title, newUrl);
+        } catch {}
         if (onLoginSuccessRef.current) {
           void onLoginSuccessRef.current(data.token);
         }
@@ -127,6 +134,15 @@ export const useAdminAuth = ({
     setPinInput('');
     setLoginError('');
     try { localStorage.removeItem('danii_admin_token'); } catch {}
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      urlParams.delete('admin');
+      urlParams.delete('panel');
+      urlParams.delete('admin_token');
+      const newQuery = urlParams.toString();
+      const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
+      window.history.replaceState({}, document.title, newUrl);
+    } catch {}
     window.location.href = '/';
   }, []);
 
@@ -153,6 +169,7 @@ export const useAdminAuth = ({
       void verifyAndAuthenticate(tokenToTry).then(valid => {
         if (valid && magicToken) {
           urlParams.delete('admin_token');
+          urlParams.set('admin', 'true');
           const newQuery = urlParams.toString();
           const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
           window.history.replaceState({}, document.title, newUrl);

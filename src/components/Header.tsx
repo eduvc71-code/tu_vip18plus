@@ -1,14 +1,15 @@
 import React from 'react';
-import { Shield, Send, RefreshCw } from 'lucide-react';
+import { Shield, Send, RefreshCw, Lock } from 'lucide-react';
 
 interface HeaderProps {
   botUsername: string;
   modelName: string;
   onRefresh: () => void;
   loading: boolean;
+  onOpenAdmin?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefresh, loading }) => {
+export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefresh, loading, onOpenAdmin }) => {
   const safeBot = (botUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
 
   return (
@@ -28,6 +29,16 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                title="Panel de Control VIP (Administradora)"
+                aria-label="Panel de Control VIP"
+                className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-amber-400 transition-colors hover:bg-amber-500/20 hover:border-amber-500/50 cursor-pointer"
+              >
+                <Lock className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
               onClick={onRefresh}
               disabled={loading}

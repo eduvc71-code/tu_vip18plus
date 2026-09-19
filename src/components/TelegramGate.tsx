@@ -4,9 +4,10 @@ import { Lock, Send } from 'lucide-react';
 interface TelegramGateProps {
   botUsername: string;
   onContinue?: () => void;
+  onOpenAdmin?: () => void;
 }
 
-export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onContinue }) => {
+export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onContinue, onOpenAdmin }) => {
   const cleanUsername = (botUsername || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
   const botUrl = `https://t.me/${cleanUsername}`;
 
@@ -42,6 +43,19 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
             <Send className="h-4 w-4 text-sky-400" />
             Abrir en Telegram VIP (@{cleanUsername})
           </a>
+
+          {onOpenAdmin && (
+            <div className="pt-2 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-amber-400/80 hover:text-amber-300 transition-colors cursor-pointer"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>¿Eres la Administradora? Entrar con tu PIN</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

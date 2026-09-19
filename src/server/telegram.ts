@@ -656,6 +656,11 @@ export function generateAdminMagicToken(telegramUserId: string | number): string
   );
 }
 
+export function buildAdminWebLink(baseUrl: string, adminToken: string): string {
+  const cleanBase = baseUrl.replace(/\/+$/, '');
+  return `${cleanBase}/?admin=true&admin_token=${encodeURIComponent(adminToken)}`;
+}
+
 export function verifyAdminToken(token: string): { valid: boolean; userId?: string } {
   const { signingSecret, adminIds } = getBotConfig();
   try {
@@ -936,7 +941,7 @@ export async function processTelegramUpdate(update: any) {
       addAdminTelegramId(fromId);
       const { baseUrl, brandName } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
-      const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+      const adminLink = buildAdminWebLink(baseUrl, adminToken);
       await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y Canal VIP Free.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
         reply_markup: {
           inline_keyboard: [
@@ -975,7 +980,7 @@ export async function processTelegramUpdate(update: any) {
   if (text === '/panel' || text === '/admin' || text.toLowerCase() === 'admin') {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
-    const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+    const adminLink = buildAdminWebLink(baseUrl, adminToken);
     await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nEste enlace personal vence en 4 horas y solo habilita el panel administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`, {
       reply_markup: {
         inline_keyboard: [
@@ -995,7 +1000,7 @@ export async function processTelegramUpdate(update: any) {
   const adminText = text.trim();
   const { baseUrl } = getBotConfig();
   const adminToken = generateAdminMagicToken(String(fromId));
-  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+  const adminLink = buildAdminWebLink(baseUrl, adminToken);
 
   if (adminText === '📢 Canal VIP' || adminText.includes('Canal') || (cachedCommandsMap?.['canal'] && adminText.includes(cachedCommandsMap['canal']))) {
     const { channelId, username } = getBotConfig();
@@ -1463,7 +1468,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
     await addAuditLog('UPLOAD_MEDIA_TELEGRAM', userId, `Foto/video agregada al perfil ${targetProfile.name}: ${fileName} (${sizeFormatted})`, targetProfile.id);
 
     const adminToken = generateAdminMagicToken(String(userId));
-    const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+    const adminLink = buildAdminWebLink(baseUrl, adminToken);
 
     const reply = `✅ *¡Contenido Agregado con Éxito al Canal VIP Free!* 📸\n\n` +
       `👤 *Perfil*: *${targetProfile.name}*\n` +
@@ -2065,7 +2070,7 @@ async function handleCallbackQuery(cb: any) {
 async function sendAdminWelcome(chatId: string | number, name: string) {
   const { baseUrl, brandName } = getBotConfig();
   const adminToken = generateAdminMagicToken(String(chatId));
-  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+  const adminLink = buildAdminWebLink(baseUrl, adminToken);
 
   const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
   const btnListar = await getBotCommandText('listar', '📋 Listar Perfiles', '📋');
@@ -2108,7 +2113,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
 async function sendAdminHelp(chatId: string | number) {
   const { baseUrl, brandName } = getBotConfig();
   const adminToken = generateAdminMagicToken(String(chatId));
-  const adminLink = `${baseUrl}/?admin_token=${encodeURIComponent(adminToken)}`;
+  const adminLink = buildAdminWebLink(baseUrl, adminToken);
 
   const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
   const btnListar = await getBotCommandText('listar', '📋 Listar Perfiles', '📋');
