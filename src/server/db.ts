@@ -332,7 +332,7 @@ function seedInitialData(database: Database): void {
       {
         id: 'prof_vip_main',
         name: modelName,
-        zone: 'Contenido +18 VIP',
+        zone: 'CANAL FREE VIP',
         description: 'Holis, te doy la bienvenida a mi espacio privado y oficial.\n\nAcá podrás explorar información exclusiva y detalles de lo que desees saber de mí o si quieres ver más de mí 🙈\n\nPresiona cualquiera de las opciones que te salen abajo ‼️',
         rate_bs: 100,
         commission_bs: 0,
@@ -528,7 +528,6 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
 
   if (existing) {
     const updatedName = profile.name ?? existing.name;
-    const updatedAge = profile.age ?? existing.age;
     const updatedZone = profile.zone ?? existing.zone;
     const updatedDesc = profile.description ?? existing.description;
     const updatedRate = profile.rate_bs ?? existing.rate_bs;
@@ -552,11 +551,10 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
 
     database.run(`
       UPDATE profiles
-      SET name = ?, age = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?
+      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?
       WHERE id = ?
     `, [
       updatedName,
-      updatedAge,
       updatedZone,
       updatedDesc,
       updatedRate,
