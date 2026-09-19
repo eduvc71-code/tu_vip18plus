@@ -336,3 +336,4 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     </div>
   );
 };
+
