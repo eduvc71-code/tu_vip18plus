@@ -521,12 +521,18 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     }
   }
 
-  // Publish new message (photo or text)
+  // Publish new message (photo, video or text)
   let sendRes;
   if (primaryPhoto) {
-    sendRes = await callTelegramApi('sendPhoto', {
+    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(primaryPhoto) || primaryPhoto.includes('/video');
+    const tgMatch = primaryPhoto.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+    const mediaTarget = profile.telegram_media_file_ids?.[primaryPhoto] || (tgMatch ? tgMatch[1] : primaryPhoto);
+    const method = isVideo ? 'sendVideo' : 'sendPhoto';
+    const field = isVideo ? 'video' : 'photo';
+
+    sendRes = await callTelegramApi(method, {
       chat_id: channelId,
-      photo: primaryPhoto,
+      [field]: mediaTarget,
       caption,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup
@@ -674,6 +680,90 @@ export function verifyAdminToken(token: string): { valid: boolean; userId?: stri
     // invalid token
   }
   return { valid: false };
+}
+
+const telegramFilePathCache = new Map<string, { path: string; expiresAt: number }>();
+
+export async function getTelegramFilePath(fileId: string): Promise<string | null> {
+  const cached = telegramFilePathCache.get(fileId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.path;
+  }
+
+  const res = await callTelegramApi('getFile', { file_id: fileId });
+  if (res && res.ok && res.result?.file_path) {
+    const filePath = res.result.file_path;
+    telegramFilePathCache.set(fileId, {
+      path: filePath,
+      expiresAt: Date.now() + 6 * 3600 * 1000 // 6 hours
+    });
+    return filePath;
+  }
+  return null;
+}
+
+export async function uploadBufferToTelegram(
+  buffer: Buffer,
+  fileName: string,
+  mimeType: string,
+  chatId?: string | number,
+  caption?: string
+): Promise<{ ok: boolean; fileId?: string; messageId?: number; isVideo: boolean; error?: string }> {
+  const { token, adminIds, channelId } = getBotConfig();
+  if (!token) {
+    return { ok: false, isVideo: false, error: 'Telegram BOT_TOKEN no configurado' };
+  }
+
+  const targetChatId = chatId || adminIds[0] || channelId;
+  if (!targetChatId) {
+    return { ok: false, isVideo: false, error: 'No se encontró chat o canal de Telegram para almacenar el archivo' };
+  }
+
+  const isVideo = mimeType.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(fileName);
+  const endpoint = isVideo ? 'sendVideo' : 'sendPhoto';
+  const fieldName = isVideo ? 'video' : 'photo';
+
+  const formData = new FormData();
+  formData.append('chat_id', String(targetChatId));
+  formData.append('disable_notification', 'true');
+  if (caption) {
+    formData.append('caption', caption);
+    formData.append('parse_mode', 'Markdown');
+  }
+
+  const blob = new Blob([buffer], { type: mimeType });
+  formData.append(fieldName, blob, fileName);
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/${endpoint}`, {
+      method: 'POST',
+      body: formData
+    });
+    const data: any = await res.json();
+    if (!res.ok || !data.ok) {
+      console.error(`[Telegram Upload Error] ${endpoint}:`, data);
+      return { ok: false, isVideo, error: data.description || 'Error al subir a Telegram' };
+    }
+
+    let fileId = '';
+    if (data.result.photo && data.result.photo.length > 0) {
+      fileId = data.result.photo[data.result.photo.length - 1].file_id;
+    } else if (data.result.video) {
+      fileId = data.result.video.file_id;
+    } else if (data.result.document) {
+      fileId = data.result.document.file_id;
+    }
+
+    return {
+      ok: true,
+      fileId,
+      messageId: data.result.message_id,
+      isVideo
+    };
+  } catch (err: any) {
+    console.error('[Telegram Upload Exception]:', err);
+    return { ok: false, isVideo, error: err?.message || 'Error de conexión con Telegram API' };
+  }
 }
 
 
@@ -2385,10 +2475,12 @@ export async function sendPaidMediaToChannel(params: {
 
   const starCount = Math.max(1, Math.min(2500, Math.round(Number(params.starCount) || 1)));
   const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(params.mediaUrl) || params.mediaUrl.includes('/video');
+  const tgMatch = params.mediaUrl.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+  const mediaTarget = tgMatch ? tgMatch[1] : params.mediaUrl;
 
   const mediaItem: any = {
     type: isVideo ? 'video' : 'photo',
-    media: params.mediaUrl
+    media: mediaTarget
   };
 
   const payload: any = {

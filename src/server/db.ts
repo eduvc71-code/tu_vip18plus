@@ -1,7 +1,7 @@
 import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod } from '../types.js';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
 import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -188,6 +188,21 @@ function initTables(database: Database): void {
   if (!existingProfileCols.has('media_stars')) {
     database.run(`ALTER TABLE profiles ADD COLUMN media_stars TEXT`);
   }
+  if (!existingProfileCols.has('telegram_media_file_ids')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN telegram_media_file_ids TEXT`);
+  }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS bot_media_queue (
+      id TEXT PRIMARY KEY,
+      media_url TEXT NOT NULL,
+      telegram_file_id TEXT,
+      caption TEXT,
+      category TEXT DEFAULT 'general',
+      is_published INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+  `);
 
   database.run(`
     CREATE TABLE IF NOT EXISTS profile_reactions (
@@ -674,6 +689,11 @@ function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
   } catch {
     obj.media_stars = {};
   }
+  try {
+    obj.telegram_media_file_ids = obj.telegram_media_file_ids ? JSON.parse(obj.telegram_media_file_ids) : {};
+  } catch {
+    obj.telegram_media_file_ids = {};
+  }
 
   // ASIGNACIÓN POR DEFECTO: Todo archivo multimedia sin estatus explícito queda con Status = 2 ("Para Publicar")
   if (Array.isArray(obj.photos)) {
@@ -772,10 +792,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedMediaStars = profile.media_stars !== undefined
       ? JSON.stringify(profile.media_stars)
       : (existing.media_stars ? JSON.stringify(existing.media_stars) : '{}');
+    const updatedTgFileIds = profile.telegram_media_file_ids !== undefined
+      ? JSON.stringify(profile.telegram_media_file_ids)
+      : (existing.telegram_media_file_ids ? JSON.stringify(existing.telegram_media_file_ids) : '{}');
 
     database.run(`
       UPDATE profiles
-      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?, media_stars = ?
+      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?, media_stars = ?, telegram_media_file_ids = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -793,6 +816,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedMediaDesc,
       updatedMediaStatus,
       updatedMediaStars,
+      updatedTgFileIds,
       profile.id
     ]);
   } else {
@@ -800,9 +824,10 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
     const initialMediaStatus = JSON.stringify(profile.media_status || {});
     const initialMediaStars = JSON.stringify(profile.media_stars || {});
+    const initialTgFileIds = JSON.stringify(profile.telegram_media_file_ids || {});
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status, media_stars)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status, media_stars, telegram_media_file_ids)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -821,7 +846,8 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       initialReactions,
       initialMediaDesc,
       initialMediaStatus,
-      initialMediaStars
+      initialMediaStars,
+      initialTgFileIds
     ]);
   }
 
@@ -842,6 +868,8 @@ export async function removeMediaFromProfile(profileId: string, mediaUrl: string
   delete updatedEphemeral[mediaUrl];
   const updatedMediaStars = { ...(profile.media_stars || {}) };
   delete updatedMediaStars[mediaUrl];
+  const updatedTgFiles = { ...(profile.telegram_media_file_ids || {}) };
+  delete updatedTgFiles[mediaUrl];
 
   return await saveProfile({
     id: profileId,
@@ -849,7 +877,8 @@ export async function removeMediaFromProfile(profileId: string, mediaUrl: string
     media_status: updatedMediaStatus,
     media_descriptions: updatedDescriptions,
     ephemeral_config: updatedEphemeral,
-    media_stars: updatedMediaStars
+    media_stars: updatedMediaStars,
+    telegram_media_file_ids: updatedTgFiles
   });
 }
 
@@ -1443,3 +1472,80 @@ export async function savePaymentMethod(method: Partial<PaymentMethod> & { id: s
   saveDb();
   return (await getPaymentMethodById(method.id))!;
 }
+
+// ── Bot Media Queue Methods ───────────────────────────────────────────────
+
+export async function getBotMediaQueue(): Promise<BotMediaItem[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM bot_media_queue ORDER BY created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const raw: any = {};
+    columns.forEach((col, idx) => { raw[col] = row[idx]; });
+    return {
+      id: String(raw.id),
+      media_url: String(raw.media_url),
+      telegram_file_id: raw.telegram_file_id ? String(raw.telegram_file_id) : undefined,
+      caption: String(raw.caption || ''),
+      category: (raw.category || 'general') as any,
+      is_published: Boolean(raw.is_published),
+      created_at: String(raw.created_at)
+    };
+  });
+}
+
+export async function addBotMediaItem(item: Omit<BotMediaItem, 'id' | 'created_at'>): Promise<BotMediaItem> {
+  const database = await getDb();
+  const id = `bot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO bot_media_queue (id, media_url, telegram_file_id, caption, category, is_published, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id,
+    item.media_url,
+    item.telegram_file_id || null,
+    item.caption || '',
+    item.category || 'general',
+    item.is_published ? 1 : 0,
+    now
+  ]);
+  saveDb();
+  return {
+    id,
+    media_url: item.media_url,
+    telegram_file_id: item.telegram_file_id,
+    caption: item.caption,
+    category: item.category,
+    is_published: item.is_published,
+    created_at: now
+  };
+}
+
+export async function deleteBotMediaItem(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM bot_media_queue WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+export async function updateBotMediaItem(id: string, updates: Partial<BotMediaItem>): Promise<BotMediaItem | null> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM bot_media_queue WHERE id = ?", [id]);
+  if (!res || res.length === 0 || res[0].values.length === 0) return null;
+  
+  if (updates.caption !== undefined) {
+    database.run("UPDATE bot_media_queue SET caption = ? WHERE id = ?", [updates.caption, id]);
+  }
+  if (updates.category !== undefined) {
+    database.run("UPDATE bot_media_queue SET category = ? WHERE id = ?", [updates.category, id]);
+  }
+  if (updates.is_published !== undefined) {
+    database.run("UPDATE bot_media_queue SET is_published = ? WHERE id = ?", [updates.is_published ? 1 : 0, id]);
+  }
+  saveDb();
+  const all = await getBotMediaQueue();
+  return all.find(x => x.id === id) || null;
+}
+

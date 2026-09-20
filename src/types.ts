@@ -64,12 +64,25 @@ export interface Profile {
   media_descriptions?: Record<string, string>;
   media_status?: Record<string, 1 | 2>; // 1=Activa (visible en mini app/canal), 2=Para Publicar (oculta/borrador)
   media_stars?: Record<string, number>; // Precio en Estrellas de Telegram para contenido de pago
+  telegram_media_file_ids?: Record<string, string>; // Mapeo de mediaUrl a telegram file_id
   status: ProfileStatus;
   created_at: string;
   updated_at: string;
   telegram_message_id?: number | null;
   priority_order: number;
   reactions?: ProfileReactions;
+}
+
+export type BotMediaCategory = 'bienvenida' | 'auto_reply' | 'drip' | 'vip_privado' | 'general';
+
+export interface BotMediaItem {
+  id: string;
+  media_url: string;
+  telegram_file_id?: string;
+  caption: string;
+  category: BotMediaCategory;
+  is_published: boolean;
+  created_at: string;
 }
 
 export type RequestStatus = 'pendiente' | 'qr_enviado' | 'auto_respondida' | 'confirmado' | 'rechazado' | 'completado' | 'fallida' | 'comision_pagada';

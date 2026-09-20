@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'stream';
 import {
   isB2Configured,
   mediaUrl,
@@ -42,7 +43,11 @@ import {
   getAllPaymentMethods,
   getPublicPaymentMethods,
   getPaymentMethodById,
-  savePaymentMethod
+  savePaymentMethod,
+  getBotMediaQueue,
+  addBotMediaItem,
+  deleteBotMediaItem,
+  updateBotMediaItem
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -59,7 +64,9 @@ import {
   verifyChannel,
   sendChannelPoll,
   publishPaymentMethodsToChannel,
-  sendPaidMediaToChannel
+  sendPaidMediaToChannel,
+  getTelegramFilePath,
+  uploadBufferToTelegram
 } from './telegram.js';
 
 export const router = express.Router();
@@ -139,6 +146,78 @@ router.get('/media', (req: Request, res: Response) => {
     }
   }
   return streamB2Object(req, res);
+});
+
+// Telegram Media Streaming Proxy with HTTP Range support for video seeking
+router.get('/telegram-media/:fileIdWithExt', async (req: Request, res: Response) => {
+  try {
+    const fileIdWithExt = req.params.fileIdWithExt;
+    const dotIdx = fileIdWithExt.lastIndexOf('.');
+    const fileId = dotIdx !== -1 ? fileIdWithExt.substring(0, dotIdx) : fileIdWithExt;
+    const ext = dotIdx !== -1 ? fileIdWithExt.substring(dotIdx).toLowerCase() : '';
+
+    const filePath = await getTelegramFilePath(fileId);
+    if (!filePath) {
+      res.status(404).json({ error: 'Archivo no encontrado en Telegram' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const token = config.token || process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      res.status(500).json({ error: 'Telegram BOT_TOKEN no configurado' });
+      return;
+    }
+
+    const tgUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+
+    const headers: Record<string, string> = {};
+    if (req.headers.range) {
+      headers['Range'] = req.headers.range;
+    }
+
+    const tgRes = await fetch(tgUrl, { headers });
+    if (!tgRes.ok && tgRes.status !== 206) {
+      res.status(tgRes.status).send('Error al obtener archivo de Telegram');
+      return;
+    }
+
+    let contentType = tgRes.headers.get('content-type');
+    if (!contentType || contentType === 'application/octet-stream') {
+      if (ext === '.mp4') contentType = 'video/mp4';
+      else if (ext === '.webm') contentType = 'video/webm';
+      else if (ext === '.mov') contentType = 'video/quicktime';
+      else if (ext === '.png') contentType = 'image/png';
+      else if (ext === '.gif') contentType = 'image/gif';
+      else if (ext === '.webp') contentType = 'image/webp';
+      else contentType = 'image/jpeg';
+    }
+
+    res.status(tgRes.status);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+
+    const acceptRanges = tgRes.headers.get('accept-ranges') || 'bytes';
+    res.setHeader('Accept-Ranges', acceptRanges);
+
+    const contentRange = tgRes.headers.get('content-range');
+    if (contentRange) res.setHeader('Content-Range', contentRange);
+
+    const contentLength = tgRes.headers.get('content-length');
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+
+    if (tgRes.body) {
+      const nodeStream = Readable.fromWeb(tgRes.body as any);
+      nodeStream.pipe(res);
+    } else {
+      res.end();
+    }
+  } catch (err: any) {
+    console.error('Error in /telegram-media proxy:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al transmitir archivo de Telegram' });
+    }
+  }
 });
 
 // SSE Live Events Stream
@@ -908,6 +987,317 @@ router.put('/admin/profiles/:id/media-stars', requireAdminAuth, async (req: Requ
     res.json({ success: true, profile: updated, media_stars: updated.media_stars });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al actualizar precio en estrellas', details: err?.message });
+  }
+});
+
+// POST Subir Contenido Free (Guarda en Telegram y en la base de datos)
+router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('photos', 10), async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const files = req.files as Express.Multer.File[];
+    const uploadedUrls: string[] = [];
+    const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
+
+    const comment = req.body.description || req.body.comment || '';
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        let finalUrl = '';
+        let fileId = '';
+
+        // Intentar subir directamente a los servidores de Telegram
+        const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, comment);
+        if (tgRes.ok && tgRes.fileId) {
+          fileId = tgRes.fileId;
+          const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+          finalUrl = `${config.baseUrl}/api/telegram-media/${fileId}${ext}`;
+          tgFileIds[finalUrl] = fileId;
+        } else {
+          // Fallback a B2 o almacenamiento local
+          if (isB2Configured()) {
+            const objectKey = await uploadToB2(file, 'profiles');
+            finalUrl = mediaUrl(config.baseUrl, objectKey);
+          } else {
+            finalUrl = saveLocalUpload(file, config.baseUrl);
+          }
+        }
+        uploadedUrls.push(finalUrl);
+      }
+    }
+
+    const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
+
+    // Merge descriptions
+    let mediaDescriptions = { ...(profile.media_descriptions || {}) };
+    if (comment && uploadedUrls.length > 0) {
+      for (const url of uploadedUrls) {
+        mediaDescriptions[url] = String(comment).trim();
+      }
+    }
+
+    // Merge ephemeral config
+    let ephemeralConfig = { ...(profile.ephemeral_config || {}) };
+    if (req.body.is_ephemeral === 'true' || req.body.is_ephemeral === true) {
+      const dur = Number(req.body.ephemeral_duration) || 10;
+      for (const url of uploadedUrls) {
+        ephemeralConfig[url] = { enabled: true, duration: dur, duration_seconds: dur };
+      }
+    }
+
+    // Initial status (1: Activa/Publicada, 2: Borrador/Para Publicar)
+    const chosenStatus: 1 | 2 = Number(req.body.initial_status) === 1 ? 1 : 2;
+    let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    for (const url of uploadedUrls) {
+      mediaStatus[url] = chosenStatus;
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      media_descriptions: mediaDescriptions,
+      ephemeral_config: ephemeralConfig,
+      media_status: mediaStatus,
+      telegram_media_file_ids: tgFileIds
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog(
+      'UPLOAD_CONTENT_FREE',
+      adminId,
+      `${uploadedUrls.length} archivo(s) Free guardados en Telegram para ${profile.name} (Status = ${chosenStatus === 1 ? '1: Publicada' : '2: Borrador'})`,
+      profileId
+    );
+
+    if (req.body.publish_to_channel === 'true' || req.body.publish_to_channel === true || chosenStatus === 1) {
+      await syncProfileToChannel(profileId, adminId);
+    }
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, new_media: uploadedUrls });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al subir contenido Free a Telegram', details: err?.message });
+  }
+});
+
+// POST Subir Contenido VIP (Guarda en Telegram y en la base de datos con Estrellas)
+router.post('/admin/profiles/:id/content/vip', requireAdminAuth, upload.single('photo'), async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'Debes seleccionar una foto o video para el contenido VIP' });
+      return;
+    }
+
+    const stars = Math.max(1, Math.min(2500, Math.round(Number(req.body.star_count) || 50)));
+    const caption = req.body.caption || req.body.description || '';
+    const publishNow = req.body.publish_now === 'true' || req.body.publish_now === true;
+
+    const config = getBotConfig();
+    const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
+
+    // Subir a Telegram
+    const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, caption);
+    let finalUrl = '';
+    if (tgRes.ok && tgRes.fileId) {
+      const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+      finalUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+      tgFileIds[finalUrl] = tgRes.fileId;
+    } else {
+      if (isB2Configured()) {
+        const objectKey = await uploadToB2(file, 'profiles');
+        finalUrl = mediaUrl(config.baseUrl, objectKey);
+      } else {
+        finalUrl = saveLocalUpload(file, config.baseUrl);
+      }
+    }
+
+    // Actualizar fotos, estrellas, descripciones y estado
+    const updatedPhotos = [finalUrl, ...(profile.photos || [])];
+    const updatedStars = { ...(profile.media_stars || {}) };
+    updatedStars[finalUrl] = stars;
+
+    const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+    if (caption) {
+      updatedDescriptions[finalUrl] = caption.trim();
+    }
+
+    const updatedStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    updatedStatus[finalUrl] = publishNow ? 1 : 2;
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      media_stars: updatedStars,
+      media_descriptions: updatedDescriptions,
+      media_status: updatedStatus,
+      telegram_media_file_ids: tgFileIds
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    let telegramMessageId: number | undefined;
+
+    if (publishNow) {
+      const publishRes = await sendPaidMediaToChannel({
+        mediaUrl: finalUrl,
+        starCount: stars,
+        caption: caption
+      });
+      if (publishRes.ok) {
+        telegramMessageId = publishRes.messageId;
+        await addAuditLog(
+          'PUBLISH_PAID_MEDIA',
+          adminId,
+          `Contenido VIP publicado inmediatamente en Canal VIP por ⭐ ${stars} Estrellas (Mensaje #${publishRes.messageId})`,
+          profileId
+        );
+      }
+    } else {
+      await addAuditLog(
+        'UPLOAD_CONTENT_VIP_DRAFT',
+        adminId,
+        `Contenido VIP guardado en Telegram para ${profile.name} (⭐ ${stars} Estrellas, Borrador)`,
+        profileId
+      );
+    }
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({
+      success: true,
+      profile: updated,
+      media_url: finalUrl,
+      file_id: tgFileIds[finalUrl] || null,
+      star_count: stars,
+      telegramMessageId
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar contenido VIP', details: err?.message });
+  }
+});
+
+// PUT Editar contenido VIP (Actualiza Estrellas y Descripción)
+router.put('/admin/profiles/:id/content/vip', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count, caption } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo multimedia es requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const updatedStars = { ...(profile.media_stars || {}) };
+    if (star_count !== undefined) {
+      updatedStars[media_url] = Math.max(1, Math.min(2500, Math.round(Number(star_count) || 1)));
+    }
+
+    const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+    if (caption !== undefined) {
+      if (caption.trim()) {
+        updatedDescriptions[media_url] = caption.trim();
+      } else {
+        delete updatedDescriptions[media_url];
+      }
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars,
+      media_descriptions: updatedDescriptions
+    });
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al editar contenido VIP', details: err?.message });
+  }
+});
+
+// BOT MEDIA QUEUE ENDPOINTS (/admin/bot-queue)
+router.get('/admin/bot-queue', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const queue = await getBotMediaQueue();
+    res.json(queue);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener cola de multimedia del bot', details: err?.message });
+  }
+});
+
+router.post('/admin/bot-queue', requireAdminAuth, upload.single('media'), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'Debes seleccionar una foto o video para el bot' });
+      return;
+    }
+
+    const caption = req.body.caption || '';
+    const category = req.body.category || 'general';
+
+    const config = getBotConfig();
+    let mediaUrlVal = '';
+    let tgFileId = '';
+
+    const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, caption);
+    if (tgRes.ok && tgRes.fileId) {
+      tgFileId = tgRes.fileId;
+      const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+      mediaUrlVal = `${config.baseUrl}/api/telegram-media/${tgFileId}${ext}`;
+    } else {
+      if (isB2Configured()) {
+        const objectKey = await uploadToB2(file, 'bot');
+        mediaUrlVal = mediaUrl(config.baseUrl, objectKey);
+      } else {
+        mediaUrlVal = saveLocalUpload(file, config.baseUrl);
+      }
+    }
+
+    const item = await addBotMediaItem({
+      media_url: mediaUrlVal,
+      telegram_file_id: tgFileId || undefined,
+      caption: caption.trim() || undefined,
+      category
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('ADD_BOT_MEDIA', adminId, `Multimedia añadida a biblioteca del Bot (Categoría: ${category})`);
+
+    res.json({ success: true, item });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar multimedia del bot', details: err?.message });
+  }
+});
+
+router.delete('/admin/bot-queue/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    await deleteBotMediaItem(id);
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_BOT_MEDIA', adminId, `Multimedia eliminada de biblioteca del bot (${id})`);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar multimedia del bot', details: err?.message });
   }
 });
 

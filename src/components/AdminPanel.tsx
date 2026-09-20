@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
 import {
@@ -36,7 +36,8 @@ import {
   ExternalLink,
   Sliders,
   CreditCard,
-  Star
+  Star,
+  Bot
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -134,6 +135,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadDuration, setUploadDuration] = useState(10);
   const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
 
+  // Step 2 Sub-Tabs ('free': Subir Contenido Free, 'vip': Subir Contenido VIP, 'bot': Contenido / Bot)
+  const [step2Tab, setStep2Tab] = useState<'free' | 'vip' | 'bot'>('free');
+
+  // VIP Upload State (4-step linear flow: Guardar -> Previsualizar -> Editar -> Publicar)
+  const [vipFile, setVipFile] = useState<File | null>(null);
+  const [vipStarCount, setVipStarCount] = useState<number>(50);
+  const [vipCaption, setVipCaption] = useState<string>('');
+  const [vipDraftMediaUrl, setVipDraftMediaUrl] = useState<string | null>(null);
+  const [vipPhase, setVipPhase] = useState<'upload' | 'preview' | 'edit'>('upload');
+  const [uploadingVip, setUploadingVip] = useState(false);
+  const [publishingVip, setPublishingVip] = useState(false);
+
+  // Bot Library / Queue State (upload without publishing)
+  const [botQueue, setBotQueue] = useState<BotMediaItem[]>([]);
+  const [botFile, setBotFile] = useState<File | null>(null);
+  const [botCategory, setBotCategory] = useState<BotMediaCategory>('general');
+  const [botCaption, setBotCaption] = useState<string>('');
+  const [uploadingBotMedia, setUploadingBotMedia] = useState(false);
+
   // Paid media with Telegram Stars state
   const [paidModalMediaUrl, setPaidModalMediaUrl] = useState<string | null>(null);
   const [paidModalStarCount, setPaidModalStarCount] = useState<number>(50);
@@ -221,14 +241,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${tok}` };
-      const [resP, resR, resL, resI, resB, resPolls, resPay] = await Promise.all([
+      const [resP, resR, resL, resI, resB, resPolls, resPay, resBot] = await Promise.all([
         fetch('/api/admin/profiles', { headers }),
         fetch('/api/admin/requests', { headers }),
         fetch('/api/admin/logs', { headers }),
         fetch('/api/info'),
         fetch('/api/admin/buttons', { headers }),
         fetch('/api/admin/polls', { headers }),
-        fetch('/api/admin/payment-methods', { headers })
+        fetch('/api/admin/payment-methods', { headers }),
+        fetch('/api/admin/bot-queue', { headers })
       ]);
 
       if (resP.ok) {
@@ -260,6 +281,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (resPay && resPay.ok) {
         const payData = await resPay.json();
         setPaymentMethods(payData);
+      }
+      if (resBot && resBot.ok) {
+        setBotQueue(await resBot.json());
       }
       if (resI.ok) {
         const infoData = await resI.json();
@@ -374,7 +398,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body.append('ephemeral_duration', String(uploadDuration || 10));
       }
       body.append('initial_status', String(uploadInitialStatus));
-      const res = await fetch(`/api/admin/profiles/${profileId}/photos`, {
+      if (uploadInitialStatus === 1) {
+        body.append('publish_to_channel', 'true');
+      }
+      const res = await fetch(`/api/admin/profiles/${profileId}/content/free`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body
@@ -384,8 +411,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setMessage({
           type: 'success',
           text: uploadInitialStatus === 1
-            ? '🚀 Multimedia subida y publicada como ACTIVA exitosamente en la Mini App y servidor.'
-            : '✅ Multimedia subida y guardada como BORRADOR (Para Publicar) en el servidor.'
+            ? '🚀 Contenido Free guardado en Telegram y publicado como ACTIVO en la Mini App y Canal.'
+            : '✅ Contenido Free guardado en Telegram como BORRADOR (Para Publicar).'
         });
         setSelectedPhotoFiles(null);
         setUploadComment('');
@@ -393,12 +420,177 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (editingProfile && data.profile) setEditingProfile(data.profile);
         fetchData();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Error al subir fotos' });
+        setMessage({ type: 'error', text: data.error || 'Error al subir fotos a Telegram' });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Error de red al subir imágenes' });
+      setMessage({ type: 'error', text: 'Error de red al subir imágenes a Telegram' });
     } finally {
       setUploadingPhotos(false);
+    }
+  };
+
+  const handleUploadVipMedia = async (profileId: string) => {
+    if (!vipFile) {
+      setMessage({ type: 'error', text: 'Selecciona una foto o video para el contenido VIP' });
+      return;
+    }
+    setUploadingVip(true);
+    try {
+      const body = new FormData();
+      body.append('photo', vipFile);
+      body.append('star_count', String(vipStarCount || 50));
+      if (vipCaption.trim()) {
+        body.append('caption', vipCaption.trim());
+      }
+      body.append('publish_now', 'false'); // Guardar primero como borrador
+
+      const res = await fetch(`/api/admin/profiles/${profileId}/content/vip`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: `⭐ Contenido VIP guardado en Telegram y Base de Datos (⭐ ${data.star_count} Estrellas). Revisa la previsualización antes de publicar.`
+        });
+        setVipDraftMediaUrl(data.media_url);
+        setVipPhase('preview');
+        if (editingProfile && data.profile) setEditingProfile(data.profile);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar contenido VIP' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al subir contenido VIP' });
+    } finally {
+      setUploadingVip(false);
+    }
+  };
+
+  const handleEditVipMedia = async (profileId: string) => {
+    if (!vipDraftMediaUrl) return;
+    setUploadingVip(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${profileId}/content/vip`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          media_url: vipDraftMediaUrl,
+          star_count: vipStarCount,
+          caption: vipCaption
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: '✏️ Cambios guardados para este contenido VIP.' });
+        setVipPhase('preview');
+        if (editingProfile && data.profile) setEditingProfile(data.profile);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al editar contenido VIP' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al editar contenido VIP' });
+    } finally {
+      setUploadingVip(false);
+    }
+  };
+
+  const handlePublishVipMedia = async (profileId: string) => {
+    if (!vipDraftMediaUrl) return;
+    setPublishingVip(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${profileId}/publish-paid-media`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          media_url: vipDraftMediaUrl,
+          star_count: vipStarCount,
+          caption: vipCaption
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: `🎉 ¡Contenido VIP publicado con éxito en el Canal por ⭐ ${vipStarCount} Estrellas!`
+        });
+        setVipDraftMediaUrl(null);
+        setVipFile(null);
+        setVipCaption('');
+        setVipPhase('upload');
+        if (editingProfile && data.profile) setEditingProfile(data.profile);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al publicar contenido VIP en el canal' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al publicar contenido VIP' });
+    } finally {
+      setPublishingVip(false);
+    }
+  };
+
+  const handleUploadBotMedia = async () => {
+    if (!botFile) {
+      setMessage({ type: 'error', text: 'Selecciona una foto o video para la biblioteca del Bot' });
+      return;
+    }
+    setUploadingBotMedia(true);
+    try {
+      const fd = new FormData();
+      fd.append('media', botFile);
+      fd.append('category', botCategory);
+      if (botCaption.trim()) {
+        fd.append('caption', botCaption.trim());
+      }
+      const res = await fetch('/api/admin/bot-queue', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: '🤖 Archivo guardado con éxito en la biblioteca del Bot (sin publicar al canal ni a clientes).'
+        });
+        setBotFile(null);
+        setBotCaption('');
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar archivo en biblioteca del bot' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al guardar multimedia del bot' });
+    } finally {
+      setUploadingBotMedia(false);
+    }
+  };
+
+  const handleDeleteBotMedia = async (id: string) => {
+    if (!window.confirm('¿Deseas eliminar este archivo de la biblioteca del bot?')) return;
+    try {
+      const res = await fetch(`/api/admin/bot-queue/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setMessage({ type: 'success', text: '🗑️ Archivo eliminado de la biblioteca del bot.' });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: 'Error al eliminar archivo del bot' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar archivo' });
     }
   };
 
@@ -1434,132 +1626,569 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                         </div>
 
-                        {/* Selector de Estado al Subir Contenido */}
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3 bg-zinc-900/90 rounded-xl border border-zinc-800">
-                          <div className="space-y-0.5">
-                            <span className="text-[11px] font-bold text-zinc-200 flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                              Al subir nuevo contenido, guardarlo como:
-                            </span>
-                            <p className="text-[10px] text-zinc-400">
-                              {uploadInitialStatus === 1
-                                ? 'Se publicará inmediatamente en la Mini App para los clientes.'
-                                : 'Se guardará en el servidor en modo borrador, oculto a clientes hasta que decidas publicarlo.'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => setUploadInitialStatus(1)}
-                              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                uploadInitialStatus === 1
-                                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
-                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              <span>🟢 Publicada (Activa)</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setUploadInitialStatus(2)}
-                              className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                uploadInitialStatus === 2
-                                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
-                                  : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                              }`}
-                            >
-                              <span>🟡 Borrador (Oculto)</span>
-                            </button>
-                          </div>
+                        {/* Selector de Pestañas de Carga: Free / VIP / Bot */}
+                        <div className="flex items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
+                          <button
+                            type="button"
+                            onClick={() => setStep2Tab('free')}
+                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              step2Tab === 'free'
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🟢 Subir Contenido Free</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStep2Tab('vip')}
+                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              step2Tab === 'vip'
+                                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black shadow-md shadow-amber-500/20'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <Star className="w-3.5 h-3.5 fill-current" />
+                            <span>⭐ Subir Contenido VIP</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStep2Tab('bot')}
+                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              step2Tab === 'bot'
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                                : 'text-zinc-400 hover:text-white'
+                            }`}
+                          >
+                            <Bot className="w-3.5 h-3.5" />
+                            <span>🤖 Contenido / Bot</span>
+                          </button>
                         </div>
 
-                        {/* Entrada opcional rápida para comentar o activar sugestivo al subir */}
-                        <div className="p-3.5 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
-                          <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
-                            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                            Comentario / Descripción para este material (Opcional):
-                          </label>
-                          <input
-                            type="text"
-                            value={uploadComment}
-                            onChange={(e) => setUploadComment(e.target.value)}
-                            placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda..."
-                            className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
-                          />
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={uploadSugestiva}
-                                onChange={(e) => setUploadSugestiva(e.target.checked)}
-                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                              />
-                              <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
-                                <Flame className={`w-3.5 h-3.5 ${uploadSugestiva ? 'text-rose-400' : 'text-zinc-500'}`} />
-                                Marcar como Sugestiva / Efímera
+                        {/* ── SUB-PESTAÑA 1: SUBIR CONTENIDO FREE ── */}
+                        {step2Tab === 'free' && (
+                          <div className="space-y-3.5 bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-850">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
+                                <span>🟢</span> Subir Fotos o Videos Gratuitos a Servidores de Telegram
                               </span>
-                            </label>
+                              <span className="text-[10px] text-zinc-500">Guardado en la nube de Telegram</span>
+                            </div>
 
-                            {uploadSugestiva && (
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-[10px] text-zinc-400 font-semibold">Revelar por:</span>
-                                {[5, 10, 15, 30].map((sec) => (
+                            {/* Selector de Estado al Subir Contenido */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3 bg-zinc-900/90 rounded-xl border border-zinc-800">
+                              <div className="space-y-0.5">
+                                <span className="text-[11px] font-bold text-zinc-200 flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                  Al subir, guardar como:
+                                </span>
+                                <p className="text-[10px] text-zinc-400">
+                                  {uploadInitialStatus === 1
+                                    ? 'Se publicará de inmediato en la Mini App y Canal para clientes.'
+                                    : 'Se guardará en Telegram en modo borrador, oculto a clientes hasta que decidas publicarlo.'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadInitialStatus(1)}
+                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                    uploadInitialStatus === 1
+                                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
+                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟢 Publicada (Activa)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadInitialStatus(2)}
+                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                    uploadInitialStatus === 2
+                                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
+                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟡 Borrador (Oculto)</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Entrada opcional rápida para comentar o activar sugestivo al subir */}
+                            <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
+                              <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                                Comentario / Descripción guardada en Telegram (Opcional):
+                              </label>
+                              <input
+                                type="text"
+                                value={uploadComment}
+                                onChange={(e) => setUploadComment(e.target.value)}
+                                placeholder="Ej: 🔥 Nueva sesión de adelanto exclusivo..."
+                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
+                              />
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={uploadSugestiva}
+                                    onChange={(e) => setUploadSugestiva(e.target.checked)}
+                                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 cursor-pointer"
+                                  />
+                                  <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
+                                    <Flame className={`w-3.5 h-3.5 ${uploadSugestiva ? 'text-rose-400' : 'text-zinc-500'}`} />
+                                    Marcar como Sugestiva / Efímera
+                                  </span>
+                                </label>
+
+                                {uploadSugestiva && (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[10px] text-zinc-400 font-semibold">Revelar por:</span>
+                                    {[5, 10, 15, 30].map((sec) => (
+                                      <button
+                                        key={sec}
+                                        type="button"
+                                        onClick={() => setUploadDuration(sec)}
+                                        className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
+                                          uploadDuration === sec
+                                            ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
+                                            : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                        }`}
+                                      >
+                                        {sec}s
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Selector de archivos para subir */}
+                            <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                              <label className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 text-emerald-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
+                                <Upload className="w-4 h-4 shrink-0" />
+                                <span>
+                                  {selectedPhotoFiles && selectedPhotoFiles.length > 0
+                                    ? `${selectedPhotoFiles.length} archivo(s) seleccionado(s)`
+                                    : 'Seleccionar fotos o videos Free para Telegram'}
+                                </span>
+                                <input
+                                  type="file"
+                                  multiple
+                                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,image/*,video/*"
+                                  onChange={(e) => setSelectedPhotoFiles(e.target.files)}
+                                  className="hidden"
+                                />
+                              </label>
+
+                              {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUploadPhotos(editingProfile.id)}
+                                  disabled={uploadingPhotos}
+                                  className={`py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
+                                    uploadInitialStatus === 1
+                                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                                      : 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-amber-500/20'
+                                  }`}
+                                >
+                                  <HardDrive className="w-4 h-4" />
+                                  {uploadingPhotos
+                                    ? 'Subiendo a Telegram...'
+                                    : uploadInitialStatus === 1
+                                    ? '🚀 Subir y Publicar'
+                                    : '💾 Guardar en Telegram'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── SUB-PESTAÑA 2: SUBIR CONTENIDO VIP (4 FASES: GUARDAR -> PREVISUALIZAR -> EDITAR -> PUBLICAR) ── */}
+                        {step2Tab === 'vip' && (
+                          <div className="space-y-4 bg-gradient-to-br from-amber-500/10 via-zinc-900/60 to-zinc-950 p-4 rounded-xl border border-amber-500/30">
+                            {/* Flujo Lineal Indicador */}
+                            <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                              <span className="text-[11px] font-black text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <Star className="w-3.5 h-3.5 fill-current" /> Flujo VIP Telegram Stars
+                              </span>
+                              <div className="flex items-center gap-1 text-[10px] font-bold">
+                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'upload' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                                  1. Guardar
+                                </span>
+                                <span className="text-zinc-600">➔</span>
+                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'preview' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                                  2. Previsualizar
+                                </span>
+                                <span className="text-zinc-600">➔</span>
+                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'edit' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
+                                  3. Editar
+                                </span>
+                                <span className="text-zinc-600">➔</span>
+                                <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
+                                  4. Publicar
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* FASE A: GUARDAR (SUBIR) */}
+                            {vipPhase === 'upload' && (
+                              <div className="space-y-3.5">
+                                <p className="text-[11px] text-zinc-300">
+                                  Sube un archivo de pago (uno por uno). Se almacenará en Telegram y en la base de datos con su precio en estrellas.
+                                </p>
+
+                                {/* Selector de Estrellas */}
+                                <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                                      <Star className="w-3.5 h-3.5 fill-current" /> Precio en Estrellas de Telegram:
+                                    </label>
+                                    <span className="font-mono text-xs font-black text-amber-300">⭐ {vipStarCount}</span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    {[10, 25, 50, 100, 250, 500].map((stars) => (
+                                      <button
+                                        key={stars}
+                                        type="button"
+                                        onClick={() => setVipStarCount(stars)}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                          vipStarCount === stars
+                                            ? 'bg-amber-500 text-zinc-950 font-black shadow-md shadow-amber-500/20 scale-105'
+                                            : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                        }`}
+                                      >
+                                        ⭐ {stars}
+                                      </button>
+                                    ))}
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={2500}
+                                      value={vipStarCount}
+                                      onChange={(e) => setVipStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                      placeholder="Otro"
+                                      className="w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded-lg text-white font-mono text-xs text-center focus:outline-none focus:border-amber-500"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Descripción / Leyenda VIP */}
+                                <div className="space-y-1">
+                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                                    <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                                    Descripción o Leyenda Exclusiva del Contenido VIP:
+                                  </label>
+                                  <textarea
+                                    rows={2}
+                                    value={vipCaption}
+                                    onChange={(e) => setVipCaption(e.target.value)}
+                                    placeholder="Ej: 💎 Video VIP sin censura en ultra alta definición... Desbloquea ahora con Telegram Stars."
+                                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500 resize-none"
+                                  />
+                                </div>
+
+                                {/* Selector de 1 archivo VIP */}
+                                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                                  <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
+                                    <Upload className="w-4 h-4 shrink-0" />
+                                    <span>
+                                      {vipFile ? `Archivo: ${vipFile.name}` : 'Seleccionar Foto o Video VIP (uno por uno)'}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,image/*,video/*"
+                                      onChange={(e) => setVipFile(e.target.files ? e.target.files[0] : null)}
+                                      className="hidden"
+                                    />
+                                  </label>
+
+                                  {editingProfile && vipFile && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUploadVipMedia(editingProfile.id)}
+                                      disabled={uploadingVip}
+                                      className="py-3 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all"
+                                    >
+                                      <HardDrive className="w-4 h-4" />
+                                      {uploadingVip ? 'Guardando en Telegram...' : '💾 Guardar en Telegram y DB ➔'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* FASE B: PREVISUALIZAR Y EDITAR */}
+                            {(vipPhase === 'preview' || vipPhase === 'edit') && vipDraftMediaUrl && (
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-zinc-300 flex items-center gap-1.5">
+                                    <Eye className="w-3.5 h-3.5 text-amber-400" />
+                                    Previsualización del Paywall de Telegram (Lo que verá el cliente)
+                                  </span>
                                   <button
-                                    key={sec}
                                     type="button"
-                                    onClick={() => setUploadDuration(sec)}
-                                    className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                                      uploadDuration === sec
-                                        ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 scale-105'
-                                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                    }`}
+                                    onClick={() => {
+                                      setVipDraftMediaUrl(null);
+                                      setVipFile(null);
+                                      setVipCaption('');
+                                      setVipPhase('upload');
+                                    }}
+                                    className="text-[10px] text-zinc-400 hover:text-white cursor-pointer"
                                   >
-                                    {sec}s
+                                    + Subir otro archivo
                                   </button>
-                                ))}
+                                </div>
+
+                                {/* Tarjeta Simulada con Blur y Candado */}
+                                <div className="max-w-md mx-auto rounded-2xl overflow-hidden border-2 border-amber-500/40 bg-zinc-950 shadow-2xl relative">
+                                  <div className="relative aspect-video w-full overflow-hidden bg-black flex items-center justify-center">
+                                    {isVideoUrl(vipDraftMediaUrl) ? (
+                                      <video src={vipDraftMediaUrl} className="w-full h-full object-cover filter blur-md scale-110" />
+                                    ) : (
+                                      <img src={vipDraftMediaUrl} alt="VIP Preview" className="w-full h-full object-cover filter blur-md scale-110" />
+                                    )}
+
+                                    {/* Overlay Candado y Estrellas */}
+                                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                      <div className="w-12 h-12 rounded-full bg-amber-500/90 flex items-center justify-center text-zinc-950 shadow-xl shadow-amber-500/30">
+                                        <Lock className="w-6 h-6 stroke-[2.5]" />
+                                      </div>
+                                      <span className="text-white font-extrabold text-sm drop-shadow">
+                                        Contenido VIP Exclusivo
+                                      </span>
+                                      <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg flex items-center gap-1.5">
+                                        <Star className="w-4 h-4 fill-current" /> Desbloquear por ⭐ {vipStarCount} Estrellas
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Leyenda y Detalles */}
+                                  <div className="p-3 bg-zinc-900/90 border-t border-zinc-800 space-y-1">
+                                    <p className="text-xs text-zinc-200">
+                                      {vipCaption || <span className="text-zinc-500 italic">Sin descripción</span>}
+                                    </p>
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-400 pt-1 border-t border-zinc-800">
+                                      <span>Canal: {channelTitle || channelIdInput || 'Canal VIP'}</span>
+                                      <span className="text-amber-400 font-bold">⭐ {vipStarCount} Estrellas</span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* FASE C: EDITAR INLINE */}
+                                {vipPhase === 'edit' ? (
+                                  <div className="p-3.5 bg-zinc-950 border border-amber-500/40 rounded-xl space-y-3">
+                                    <h5 className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                                      <Edit className="w-3.5 h-3.5" /> Editar Precio y Descripción
+                                    </h5>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <label className="text-[11px] font-semibold text-zinc-300">Estrellas:</label>
+                                        <input
+                                          type="number"
+                                          min={1}
+                                          max={2500}
+                                          value={vipStarCount}
+                                          onChange={(e) => setVipStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                          className="w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
+                                        />
+                                        {[25, 50, 100, 250].map((s) => (
+                                          <button
+                                            key={s}
+                                            type="button"
+                                            onClick={() => setVipStarCount(s)}
+                                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                              vipStarCount === s ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-800 text-zinc-400'
+                                            }`}
+                                          >
+                                            ⭐{s}
+                                          </button>
+                                        ))}
+                                      </div>
+                                      <div>
+                                        <label className="text-[11px] font-semibold text-zinc-300">Descripción:</label>
+                                        <textarea
+                                          rows={2}
+                                          value={vipCaption}
+                                          onChange={(e) => setVipCaption(e.target.value)}
+                                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:border-amber-500 resize-none mt-1"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleEditVipMedia(editingProfile.id)}
+                                        disabled={uploadingVip}
+                                        className="flex-1 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer shadow"
+                                      >
+                                        {uploadingVip ? 'Guardando...' : '💾 Guardar Cambios'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setVipPhase('preview')}
+                                        className="py-2 px-3 rounded-lg bg-zinc-800 text-zinc-300 font-bold text-xs cursor-pointer hover:bg-zinc-700"
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* FASE D: ACCIONES DE PREVISUALIZACIÓN Y PUBLICACIÓN */
+                                  <div className="flex flex-col sm:flex-row gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => setVipPhase('edit')}
+                                      className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs cursor-pointer flex items-center justify-center gap-1.5 transition-all"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" /> Editar Estrellas o Leyenda
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePublishVipMedia(editingProfile.id)}
+                                      disabled={publishingVip}
+                                      className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-60 transition-all"
+                                    >
+                                      <Sparkles className="w-4 h-4 fill-current" />
+                                      {publishingVip ? 'Publicando en Canal...' : `🚀 Publicar con Estrellas (⭐ ${vipStarCount}) en Canal`}
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
-                        </div>
+                        )}
 
-                        {/* Selector de archivos para subir */}
-                        <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
-                          <label className="flex-1 flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
-                            <Upload className="w-4 h-4 shrink-0" />
-                            <span>
-                              {selectedPhotoFiles && selectedPhotoFiles.length > 0
-                                ? `${selectedPhotoFiles.length} archivo(s) seleccionado(s)`
-                                : 'Toca aquí para seleccionar fotos o videos'}
-                            </span>
-                            <input
-                              type="file"
-                              multiple
-                              accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,image/*,video/*"
-                              onChange={(e) => setSelectedPhotoFiles(e.target.files)}
-                              className="hidden"
-                            />
-                          </label>
+                        {/* ── SUB-PESTAÑA 3: CONTENIDO / BOT (BIBLIOTECA SIN PUBLICAR) ── */}
+                        {step2Tab === 'bot' && (
+                          <div className="space-y-4 bg-zinc-900/50 p-4 rounded-xl border border-indigo-500/30">
+                            <div className="space-y-1">
+                              <h5 className="font-bold text-indigo-400 text-xs flex items-center gap-1.5">
+                                <Bot className="w-4 h-4" /> Biblioteca de Multimedia para el Bot
+                              </h5>
+                              <p className="text-[11px] text-zinc-300">
+                                Sube contenido multimedia directamente a los servidores de Telegram para uso del bot <strong>sin publicar al canal ni a la Mini App cliente</strong>. El bot lo despachará automáticamente cuando sea programado.
+                              </p>
+                            </div>
 
-                          {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => handleUploadPhotos(editingProfile.id)}
-                              disabled={uploadingPhotos}
-                              className={`py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
-                                uploadInitialStatus === 1
-                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                                  : 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-amber-500/20'
-                              }`}
-                            >
-                              <HardDrive className="w-4 h-4" />
-                              {uploadingPhotos
-                                ? 'Subiendo...'
-                                : uploadInitialStatus === 1
-                                ? '🚀 Subir y Publicar'
-                                : '💾 Subir como Borrador'}
-                            </button>
-                          )}
-                        </div>
+                            {/* Formulario de Subida para el Bot */}
+                            <div className="p-3.5 bg-zinc-950 border border-zinc-800 rounded-xl space-y-3">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                                    Categoría / Función del Bot:
+                                  </label>
+                                  <select
+                                    value={botCategory}
+                                    onChange={(e) => setBotCategory(e.target.value as BotMediaCategory)}
+                                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:border-indigo-500"
+                                  >
+                                    <option value="bienvenida">🎉 Mensaje de Bienvenida (/start)</option>
+                                    <option value="auto_reply">💬 Respuesta Automática a Consultas</option>
+                                    <option value="vip_privado">🔒 Contenido Privado VIP (Chat Privado)</option>
+                                    <option value="drip">⏳ Drip / Campaña Programada</option>
+                                    <option value="general">📁 General / Soporte</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-zinc-300 mb-1">
+                                    Texto / Leyenda del Bot (Opcional):
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={botCaption}
+                                    onChange={(e) => setBotCaption(e.target.value)}
+                                    placeholder="Ej: Mensaje enviado automáticamente al saludar..."
+                                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-indigo-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
+                                <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-indigo-500/50 hover:border-indigo-500 text-indigo-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
+                                  <Upload className="w-4 h-4 shrink-0" />
+                                  <span>
+                                    {botFile ? `Archivo: ${botFile.name}` : 'Seleccionar Foto o Video para el Bot'}
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,image/*,video/*"
+                                    onChange={(e) => setBotFile(e.target.files ? e.target.files[0] : null)}
+                                    className="hidden"
+                                  />
+                                </label>
+
+                                {botFile && (
+                                  <button
+                                    type="button"
+                                    onClick={handleUploadBotMedia}
+                                    disabled={uploadingBotMedia}
+                                    className="py-3 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all"
+                                  >
+                                    <HardDrive className="w-4 h-4" />
+                                    {uploadingBotMedia ? 'Subiendo a Telegram...' : '📥 Guardar en Biblioteca del Bot'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Galería de la Biblioteca del Bot */}
+                            <div className="space-y-2 pt-2">
+                              <div className="flex items-center justify-between pb-1 border-b border-zinc-800">
+                                <span className="font-bold text-white text-xs flex items-center gap-1.5">
+                                  <span>📦</span> Archivos Guardados en Biblioteca del Bot ({botQueue.length})
+                                </span>
+                                <span className="text-[10px] text-zinc-500">Listos para despachar por el bot</span>
+                              </div>
+
+                              {botQueue.length === 0 ? (
+                                <div className="p-6 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-xl text-zinc-500 text-xs">
+                                  Aún no hay archivos en la biblioteca del bot. Sube uno arriba para guardarlo.
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                  {botQueue.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 flex flex-col group"
+                                    >
+                                      <div className="relative aspect-video w-full bg-zinc-900 overflow-hidden">
+                                        {isVideoUrl(item.media_url) ? (
+                                          <video src={item.media_url} className="w-full h-full object-cover" muted playsInline />
+                                        ) : (
+                                          <img src={item.media_url} alt={item.caption || 'Bot Media'} className="w-full h-full object-cover" />
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteBotMedia(item.id)}
+                                          className="absolute top-1.5 right-1.5 p-1.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 text-white shadow transition-opacity cursor-pointer opacity-80 group-hover:opacity-100"
+                                          title="Eliminar de la biblioteca del bot"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      <div className="p-2 space-y-1 text-[10px]">
+                                        <div className="flex items-center justify-between">
+                                          <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 font-bold uppercase tracking-wider text-[9px]">
+                                            {item.category}
+                                          </span>
+                                          <span className="text-zinc-500">
+                                            {new Date(item.created_at).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        {item.caption && (
+                                          <p className="text-zinc-300 truncate" title={item.caption}>
+                                            {item.caption}
+                                          </p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Separación y Filtros de Contenido */}
                         {photos.length > 0 ? (
