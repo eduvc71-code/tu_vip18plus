@@ -134,6 +134,7 @@ export function saveDb(): void {
     fs.writeFileSync(DB_FILE, buffer);
 
     // Debounced automatic background sync to B2 (persists data across Render restarts)
+    // 30 segundos para acumular cambios y no saturar versiones en B2
     if (b2SyncTimer) clearTimeout(b2SyncTimer);
     b2SyncTimer = setTimeout(async () => {
       try {
@@ -142,7 +143,7 @@ export function saveDb(): void {
       } catch (err: any) {
         console.warn('[Database] Advertencia al sincronizar snapshot con B2:', err?.message);
       }
-    }, 2000);
+    }, 30000);
   } catch (err) {
     console.error('Error saving database file:', err);
   }
