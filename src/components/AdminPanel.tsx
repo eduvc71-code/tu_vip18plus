@@ -3935,7 +3935,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         type="text"
                         value={newBotUsername.replace(/^@/, '')}
                         onChange={(e) => setNewBotUsername(e.target.value)}
-                        placeholder="Ej. IAM_Danii_VIP_bot"
+                        placeholder="Ej. Danii_Catalogo_SCZ_bot"
                         className="w-full pl-7 pr-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
                       />
                     </div>
@@ -4062,7 +4062,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         Abre tu canal en Telegram ➡️ Ajustes del canal ➡️ <strong className="text-zinc-200">Administradores</strong> ➡️ <strong className="text-zinc-200">Añadir Administrador</strong>.
                       </li>
                       <li>
-                        Busca a <code className="text-amber-400 font-bold bg-zinc-950 px-1.5 py-0.5 rounded">@{newBotUsername || 'IAM_Danii_VIP_bot'}</code> y dale permiso para <strong className="text-zinc-200">Publicar mensajes</strong>.
+                        Busca a <code className="text-amber-400 font-bold bg-zinc-950 px-1.5 py-0.5 rounded">@{newBotUsername || 'Danii_Catalogo_SCZ_bot'}</code> y dale permiso para <strong className="text-zinc-200">Publicar mensajes</strong>.
                       </li>
                       <li>
                         <strong className="text-amber-400">Detección Automática:</strong> Al añadir el bot como admin en el canal, ¡se vinculará automáticamente! También puedes escribir arriba el nombre (@MiCanal) o reenviar cualquier post del canal al bot por privado.

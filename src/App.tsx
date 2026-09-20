@@ -17,13 +17,13 @@ export default function App() {
   const [userVotedPolls, setUserVotedPolls] = useState<Record<string, number>>({});
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [adminContactUsername, setAdminContactUsername] = useState('IAM_Danii_VIP_bot');
+  const [adminContactUsername, setAdminContactUsername] = useState('Danii_Catalogo_SCZ_bot');
   const [loading, setLoading] = useState(true);
 
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
-  const [botUsername, setBotUsername] = useState('IAM_Danii_VIP_bot');
+  const [botUsername, setBotUsername] = useState('Danii_Catalogo_SCZ_bot');
   const [channelId, setChannelId] = useState('-1004356066811');
   const [modelDisplayName, setModelDisplayName] = useState('IAM Danii');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -188,7 +188,7 @@ export default function App() {
         const info = await resInfo.json();
         if (info.bot_username) {
           const safeBot = info.bot_username.replace(/^@/, '').trim();
-          setBotUsername(safeBot || 'IAM_Danii_VIP_bot');
+          setBotUsername(safeBot || 'Danii_Catalogo_SCZ_bot');
         }
         if (info.admin_contact_username) {
           setAdminContactUsername(info.admin_contact_username.replace(/^@/, '').trim());

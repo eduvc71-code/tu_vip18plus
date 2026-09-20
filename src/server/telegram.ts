@@ -51,11 +51,11 @@ export function getBotConfig() {
     token = ACTIVE_BOT_TOKEN;
   }
   const storedUsername = getSystemSetting('bot_username');
-  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'IAM_Danii_VIP_bot';
-  if (/ruti|flavia/i.test(rawUsername)) {
-    rawUsername = 'IAM_Danii_VIP_bot';
+  let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Catalogo_SCZ_bot';
+  if (!rawUsername || /ruti|flavia|iam_danii_vip_bot/i.test(rawUsername)) {
+    rawUsername = 'Danii_Catalogo_SCZ_bot';
   }
-  let username = rawUsername.replace(/^@/, '').trim() || 'IAM_Danii_VIP_bot';
+  let username = rawUsername.replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
@@ -1178,7 +1178,11 @@ export async function processTelegramUpdate(update: any) {
 
   if (text === '/anclar' || text === '/pin') {
     const { username } = getBotConfig();
-    const cleanUsername = username || process.env.BOT_USERNAME || 'vip_bot';
+    let cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
+    if (!cleanUsername || /ruti|flavia|iam_danii_vip_bot/i.test(cleanUsername)) {
+      cleanUsername = 'Danii_Catalogo_SCZ_bot';
+    }
+    cleanUsername = cleanUsername.replace(/^@/, '').trim();
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *IAM DANII VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Bienvenido al canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +
@@ -1783,7 +1787,10 @@ export async function showPaymentMethodDetail(chatId: string | number, methodId:
     return;
   }
 
-  const rawAdminUsername = getSystemSetting('admin_contact_username') || getBotConfig().username || 'IAM_Danii_VIP_bot';
+  let rawAdminUsername = getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot';
+  if (!rawAdminUsername || /ruti|flavia|iam_danii_vip_bot/i.test(rawAdminUsername)) {
+    rawAdminUsername = 'Danii_Catalogo_SCZ_bot';
+  }
   const adminUsername = rawAdminUsername.replace(/^@/, '').trim();
   const adminContactUrl = `https://t.me/${adminUsername}`;
   const { baseUrl } = getBotConfig();
@@ -1840,13 +1847,13 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
     `📌 EXTRANJERO: 🇲🇽 🇦🇷 🇺🇸 🌍\n\n` +
     `_Toca el botón abajo para abrir la lista interactiva de métodos de pago en el bot:_`;
 
-  const botUsername = username || 'IAM_Danii_VIP_bot';
+  const botUsername = (username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
   const inlineKeyboard = [
     [
       { text: '💳 Ver Métodos de Pago', url: `https://t.me/${botUsername}?start=pagos` }
     ],
     [
-      { text: '💎 Abrir Canal VIP Free', url: `https://t.me/${botUsername}` }
+      { text: '💎 Abrir Catálogo VIP Free', url: `https://t.me/${botUsername}` }
     ]
   ];
 
@@ -2046,7 +2053,11 @@ async function handleCallbackQuery(cb: any) {
 
   if (data === 'admin_btn_pin') {
     const { username, brandName } = getBotConfig();
-    const cleanUsername = username || process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot';
+    let cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
+    if (!cleanUsername || /ruti|flavia|iam_danii_vip_bot/i.test(cleanUsername)) {
+      cleanUsername = 'Danii_Catalogo_SCZ_bot';
+    }
+    cleanUsername = cleanUsername.replace(/^@/, '').trim();
     const inviteLink = `https://t.me/${cleanUsername}?start=inv_vip`;
     const msg = `💎 *${brandName || 'IAM DANII'} VIP — CONTENIDO EXCLUSIVO (+18)* 💎\n\n` +
       `Canal oficial de acceso a galería confidencial, packs VIP y atención directa sin intermediarios.\n\n` +

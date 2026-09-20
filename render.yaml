@@ -15,7 +15,7 @@ services:
       - key: BOT_TOKEN
         sync: false
       - key: BOT_USERNAME
-        value: IAM_Danii_VIP_bot
+        value: Danii_Catalogo_SCZ_bot
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
       - key: ADMIN_SIGNING_SECRET

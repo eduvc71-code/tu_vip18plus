@@ -12,7 +12,7 @@ interface PaymentMethodsModalProps {
 export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
   isOpen,
   onClose,
-  adminContactUsername = 'IAM_Danii_VIP_bot',
+  adminContactUsername = 'Danii_Catalogo_SCZ_bot',
   paymentMethods
 }) => {
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);

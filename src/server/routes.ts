@@ -250,7 +250,7 @@ router.get('/info', (_req: Request, res: Response) => {
     telegram_only_access: telegramOnly,
     auto_reply_delay_minutes: autoReplyDelay,
     qr_image_url: getSystemSetting('qr_image_url') || '',
-    admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'IAM_Danii_VIP_bot',
+    admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'Danii_Catalogo_SCZ_bot',
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
     model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
@@ -1453,7 +1453,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       telegram_only_access: isTelegramOnly,
       auto_reply_delay_minutes: autoReplyDelay,
       qr_image_url: getSystemSetting('qr_image_url') || '',
-      admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'IAM_Danii_VIP_bot',
+      admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'Danii_Catalogo_SCZ_bot',
       model_display_name: getSystemSetting('model_display_name') || 'Tú',
       model_vip_link: getSystemSetting('model_vip_link') || ''
     });

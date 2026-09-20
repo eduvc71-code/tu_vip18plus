@@ -64,13 +64,17 @@ function ensureDefaultSettings(database: Database): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
   const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
-  let defaultBotUsername = (process.env.BOT_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
-  if (!defaultBotUsername || /ruti|flavia/i.test(defaultBotUsername)) {
-    defaultBotUsername = 'IAM_Danii_VIP_bot';
+  let defaultBotUsername = (process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  if (!defaultBotUsername || /ruti|flavia|iam_danii_vip_bot/i.test(defaultBotUsername)) {
+    defaultBotUsername = 'Danii_Catalogo_SCZ_bot';
   }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
-  const defaultAdminUsername = (process.env.ADMIN_TELEGRAM_USERNAME || 'IAM_Danii_VIP_bot').replace(/^@/, '').trim();
+  let defaultAdminUsername = (process.env.ADMIN_TELEGRAM_USERNAME || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  if (!defaultAdminUsername || /ruti|flavia|iam_danii_vip_bot/i.test(defaultAdminUsername)) {
+    defaultAdminUsername = 'Danii_Catalogo_SCZ_bot';
+  }
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_contact_username', ?)`, [defaultAdminUsername]);
+  database.run(`UPDATE system_settings SET value = ? WHERE key = 'admin_contact_username' AND (value = 'IAM_Danii_VIP_bot' OR value LIKE '%flavia%' OR value LIKE '%ruti%')`, [defaultAdminUsername]);
   seedPaymentMethods(database);
 }
 
