@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Send, RefreshCw, Lock, X } from 'lucide-react';
+import { Shield, Send, RefreshCw, Sparkles } from 'lucide-react';
 
 interface HeaderProps {
   botUsername: string;
@@ -9,21 +9,8 @@ interface HeaderProps {
   onOpenAdmin?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefresh, loading, onOpenAdmin }) => {
+export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefresh, loading }) => {
   const safeBot = (botUsername || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
-
-  const handleClose = () => {
-    const tg = (window as any).Telegram?.WebApp;
-    if (tg && typeof tg.close === 'function') {
-      try {
-        tg.close();
-      } catch {}
-    } else if (window.history.length > 1) {
-      window.history.back();
-    } else {
-      window.close();
-    }
-  };
 
   const cleanModelName = (modelName || 'Danii').trim();
   const headerTitle = `Canal Free • ${cleanModelName}`;
@@ -33,28 +20,12 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
       <div className="mx-auto max-w-7xl px-3.5 sm:px-6 lg:px-8">
         <div className="flex h-14 items-center justify-between gap-2">
           
-          {/* Left: Close Button & Admin lock */}
+          {/* Left: Balanced Brand Badge */}
           <div className="flex items-center gap-1.5 shrink-0 min-w-[70px]">
-            <button
-              type="button"
-              onClick={handleClose}
-              title="Cerrar"
-              aria-label="Cerrar"
-              className="rounded-xl border border-zinc-800 bg-zinc-900/90 p-2 text-zinc-400 transition-colors hover:border-zinc-700 hover:text-white cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-            {onOpenAdmin && (
-              <button
-                type="button"
-                onClick={onOpenAdmin}
-                title="Panel de Control VIP"
-                aria-label="Panel de Control VIP"
-                className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2 text-amber-400 transition-colors hover:bg-amber-500/20 hover:border-amber-500/50 cursor-pointer"
-              >
-                <Lock className="h-3.5 w-3.5" />
-              </button>
-            )}
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold tracking-wide shadow-sm">
+              <Sparkles className="h-3 w-3" />
+              <span>VIP</span>
+            </span>
           </div>
 
           {/* Center: Titulo Canal Free + Nombre Publico */}

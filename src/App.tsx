@@ -355,7 +355,6 @@ export default function App() {
         modelName={displayName}
         onRefresh={fetchProfiles}
         loading={loading}
-        onOpenAdmin={() => setIsAdminView(true)}
       />
 
       {/* Main Catalog View */}
@@ -510,6 +509,14 @@ export default function App() {
               <a href={`https://t.me/${botUsername}`} target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 flex items-center gap-1 transition-colors">
                 <Send className="w-3.5 h-3.5" /> Canal VIP Telegram
               </a>
+              <button
+                type="button"
+                onClick={() => setIsAdminView(true)}
+                title="Acceso Administrativo"
+                className="opacity-20 hover:opacity-100 hover:text-amber-400 transition-opacity text-[10px] cursor-pointer"
+              >
+                Admin
+              </button>
             </div>
           </div>
         </div>
