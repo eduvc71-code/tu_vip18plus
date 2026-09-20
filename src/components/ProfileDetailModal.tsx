@@ -124,7 +124,8 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   if (!profile) return null;
 
   const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
-  const currentItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description;
+  const rawItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description || '';
+  const currentItemDescription = /holis|bienvenida|opciones que te salen abajo/i.test(rawItemDescription) ? '' : rawItemDescription;
   const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[currentMediaUrl]?.enabled);
   const currentDuration = profile.ephemeral_config?.[currentMediaUrl]?.duration_seconds || 5;
 
@@ -235,14 +236,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 <Lock className="w-3.5 h-3.5 shrink-0" />
                 Contenido Digital Exclusivo
               </p>
-
-              {/* Attributes Cards */}
-              <div className="grid grid-cols-1 gap-3 p-3 bg-zinc-950 rounded-xl border border-zinc-800/80 mb-5 text-xs text-center">
-                <div>
-                  <span className="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider block">PRECIO SUSCRIPCIÓN VIP</span>
-                  <span className="text-base font-bold text-amber-400">Bs. {profile.rate_bs} / mes</span>
-                </div>
-              </div>
 
               {modelVipLink && (
                 <a

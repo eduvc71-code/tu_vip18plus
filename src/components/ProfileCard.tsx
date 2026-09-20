@@ -264,8 +264,9 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         <div className="flex flex-col justify-between p-4 sm:p-5">
           <div className="space-y-3">
             
-            {/* Descripción del Perfil */}
-            {profile.description && (
+            {/* Descripción del Perfil (excluye textos de bienvenida heredados) */}
+            {profile.description &&
+             !/holis|bienvenida|opciones que te salen abajo/i.test(profile.description) && (
               <p className="text-xs text-zinc-300 leading-relaxed font-normal whitespace-pre-line">
                 {profile.description}
               </p>

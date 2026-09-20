@@ -73,8 +73,8 @@ function ensureDefaultSettings(database: Database): void {
   if (!defaultAdminUsername || /ruti|flavia|iam_danii_vip_bot/i.test(defaultAdminUsername)) {
     defaultAdminUsername = 'Danii_Catalogo_SCZ_bot';
   }
-  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('admin_contact_username', ?)`, [defaultAdminUsername]);
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'admin_contact_username' AND (value = 'IAM_Danii_VIP_bot' OR value LIKE '%flavia%' OR value LIKE '%ruti%')`, [defaultAdminUsername]);
+  database.run(`UPDATE profiles SET description = '' WHERE description LIKE '%Holis%' OR description LIKE '%bienvenida%' OR description LIKE '%opciones que te salen abajo%'`);
   seedPaymentMethods(database);
 }
 
@@ -369,7 +369,7 @@ function seedInitialData(database: Database): void {
         id: 'prof_vip_main',
         name: modelName,
         zone: 'CANAL FREE VIP',
-        description: 'Holis, te doy la bienvenida a mi espacio privado y oficial.\n\nAcá podrás explorar información exclusiva y detalles de lo que desees saber de mí o si quieres ver más de mí 🙈\n\nPresiona cualquiera de las opciones que te salen abajo ‼️',
+        description: '',
         rate_bs: 100,
         commission_bs: 0,
         photos: [],
