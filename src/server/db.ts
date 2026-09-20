@@ -77,6 +77,7 @@ function ensureDefaultSettings(database: Database): void {
   database.run(`UPDATE profiles SET description = '' WHERE description LIKE '%Holis%' OR description LIKE '%bienvenida%' OR description LIKE '%opciones que te salen abajo%'`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_app_short_name', 'canalVipFreeIamDanii')`);
   database.run(`UPDATE system_settings SET value = 'canalVipFreeIamDanii' WHERE key = 'telegram_app_short_name'`);
+  database.run(`UPDATE profiles SET ephemeral_config = '{}' WHERE ephemeral_config IS NOT NULL AND ephemeral_config != ''`);
   seedPaymentMethods(database);
 }
 

@@ -2531,3 +2531,17 @@ export async function sendPaidMediaToChannel(params: {
     error: errorMsg
   };
 }
+
+export async function createStarsInvoiceLink(title: string, description: string, payload: string, stars: number): Promise<string | null> {
+  const res = await callTelegramApi('createInvoiceLink', {
+    title: title.slice(0, 32),
+    description: description.slice(0, 255) || 'Contenido Exclusivo VIP',
+    payload,
+    currency: 'XTR',
+    prices: [{ label: title.slice(0, 32), amount: Math.max(1, Math.round(stars)) }]
+  });
+  if (res && res.ok && res.result) {
+    return res.result;
+  }
+  return null;
+}

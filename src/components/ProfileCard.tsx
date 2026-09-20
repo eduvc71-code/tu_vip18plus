@@ -10,6 +10,7 @@ interface ProfileCardProps {
   modelName: string;
   modelVipLink: string;
   onSelectProfile: (profile: Profile) => void;
+  onSelectMedia?: (profile: Profile, mediaUrl?: string) => void;
   onRequestAvailability: (profile: Profile) => void;
   onOpenPaymentMethods?: () => void;
 }
@@ -19,6 +20,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   modelName,
   modelVipLink,
   onSelectProfile,
+  onSelectMedia,
   onRequestAvailability,
   onOpenPaymentMethods
 }) => {
@@ -122,7 +124,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             </div>
 
             <div
-              onClick={() => onSelectProfile(profile)}
+              onClick={() => onSelectMedia ? onSelectMedia(profile, selectedImage) : onSelectProfile(profile)}
               className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
               title="Toca para ampliar"
             >
@@ -204,7 +206,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               </div>
 
               <div
-                onClick={() => onSelectProfile(profile)}
+                onClick={() => onSelectMedia ? onSelectMedia(profile, selectedVideo) : onSelectProfile(profile)}
                 className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
                 title="Toca para ampliar video"
               >

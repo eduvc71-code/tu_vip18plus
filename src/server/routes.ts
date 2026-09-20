@@ -65,6 +65,7 @@ import {
   sendChannelPoll,
   publishPaymentMethodsToChannel,
   sendPaidMediaToChannel,
+  createStarsInvoiceLink,
   getTelegramFilePath,
   uploadBufferToTelegram
 } from './telegram.js';
@@ -280,6 +281,33 @@ router.post('/telegram/access/verify', (req: Request, res: Response) => {
     return;
   }
   res.json({ valid: true, user: verified.user });
+});
+
+// POST Generate Stars Invoice Link for Web App
+router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
+  try {
+    const { profileId, mediaUrl, stars } = req.body;
+    const profile = await getProfileById(profileId);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+    const starCount = Number(stars) || (mediaUrl && profile.media_stars?.[mediaUrl]) || 50;
+    const title = `⭐ ${profile.name} VIP`;
+    const invoiceLink = await createStarsInvoiceLink(
+      title,
+      `Acceso a contenido VIP exclusivo (${starCount} Estrellas Telegram)`,
+      `stars_${profile.id}_${Date.now()}`,
+      starCount
+    );
+    if (invoiceLink) {
+      res.json({ ok: true, invoiceLink });
+    } else {
+      res.status(500).json({ error: 'No se pudo generar la factura de Telegram Stars' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al procesar estrellas' });
+  }
 });
 
 // GET Public Profile Detail

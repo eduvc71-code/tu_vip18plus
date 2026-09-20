@@ -21,6 +21,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | undefined>(undefined);
   const [requestProfile, setRequestProfile] = useState<Profile | null>(null);
 
   const [botUsername, setBotUsername] = useState('Danii_Catalogo_SCZ_bot');
@@ -414,7 +415,14 @@ export default function App() {
                     botUsername={botUsername}
                     modelName={displayName}
                     modelVipLink={modelVipLink}
-                    onSelectProfile={(prof: Profile) => setSelectedProfile(prof)}
+                    onSelectProfile={(prof: Profile) => {
+                      setSelectedMediaUrl(undefined);
+                      setSelectedProfile(prof);
+                    }}
+                    onSelectMedia={(prof: Profile, mediaUrl?: string) => {
+                      setSelectedMediaUrl(mediaUrl);
+                      setSelectedProfile(prof);
+                    }}
                     onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
                     onOpenPaymentMethods={() => setShowPaymentModal(true)}
                   />
@@ -525,10 +533,15 @@ export default function App() {
       {/* Profile Detail Lightbox Modal */}
       <ProfileDetailModal
         profile={selectedProfile}
+        initialMediaUrl={selectedMediaUrl}
         botUsername={botUsername}
         modelName={displayName}
         modelVipLink={modelVipLink}
-        onClose={() => setSelectedProfile(null)}
+        onClose={() => {
+          setSelectedProfile(null);
+          setSelectedMediaUrl(undefined);
+        }}
+        onOpenPaymentMethods={() => setShowPaymentModal(true)}
         onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
       />
 
