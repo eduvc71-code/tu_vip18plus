@@ -75,6 +75,8 @@ function ensureDefaultSettings(database: Database): void {
   }
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'admin_contact_username' AND (value = 'IAM_Danii_VIP_bot' OR value LIKE '%flavia%' OR value LIKE '%ruti%')`, [defaultAdminUsername]);
   database.run(`UPDATE profiles SET description = '' WHERE description LIKE '%Holis%' OR description LIKE '%bienvenida%' OR description LIKE '%opciones que te salen abajo%'`);
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_app_short_name', 'canalVipFreeIamDanii')`);
+  database.run(`UPDATE system_settings SET value = 'canalVipFreeIamDanii' WHERE key = 'telegram_app_short_name'`);
   seedPaymentMethods(database);
 }
 

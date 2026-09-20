@@ -79,8 +79,10 @@ export function getBotConfig() {
     process.env.APP_URL ||
     'https://catalogo-vip-scz.onrender.com'
   ).replace(/\/+$/, '');
+  const storedAppShortName = getSystemSetting('telegram_app_short_name');
+  const appShortName = (process.env.TELEGRAM_APP_SHORT_NAME || storedAppShortName || 'canalVipFreeIamDanii').trim();
 
-  return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl };
+  return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl, appShortName };
 }
 
 export function isAdminUser(telegramUserId: string | number): boolean {
@@ -598,8 +600,9 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
     { text: `🤩 ${reactions.star_struck || 0}`, callback_data: `react_star_struck_${profile.id}` }
   ];
 
+  const { appShortName } = getBotConfig();
   const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
-  const botAppUrl = `https://t.me/${username}?start=ver_${profile.id}`;
+  const botAppUrl = `https://t.me/${username}/${appShortName || 'canalVipFreeIamDanii'}?startapp=ver_${profile.id}`;
 
   let customButtonRows: any[] = [];
   try {
@@ -1839,7 +1842,7 @@ export async function showPaymentMethodDetail(chatId: string | number, methodId:
 }
 
 export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; message: string }> {
-  const { channelId, username } = getBotConfig();
+  const { channelId, username, appShortName } = getBotConfig();
   if (!channelId) {
     return { ok: false, message: 'No hay canal configurado en el sistema.' };
   }
@@ -1852,12 +1855,13 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
     `_Toca el botón abajo para abrir la lista interactiva de métodos de pago en el bot:_`;
 
   const botUsername = (username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  const directMiniAppUrl = `https://t.me/${botUsername}/${appShortName || 'canalVipFreeIamDanii'}`;
   const inlineKeyboard = [
     [
       { text: '💳 Ver Métodos de Pago', url: `https://t.me/${botUsername}?start=pagos` }
     ],
     [
-      { text: '💎 Abrir Canal VIP Free', url: `https://t.me/${botUsername}` }
+      { text: '💎 Abrir Canal VIP Free', url: directMiniAppUrl }
     ]
   ];
 

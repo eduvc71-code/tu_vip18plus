@@ -178,6 +178,22 @@ export default function App() {
       if (resProfiles.ok) {
         const data = await resProfiles.json();
         setProfiles(data);
+
+        // Soporte de Deep Links via startapp / start_param de Telegram
+        try {
+          const tgApp = (window as any).Telegram?.WebApp;
+          const urlParams = new URLSearchParams(window.location.search);
+          const sp = String(tgApp?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || '').trim();
+          if (sp === 'pagos' || sp === 'metodos') {
+            setShowPaymentModal(true);
+          } else if (sp.startsWith('ver_')) {
+            const targetId = sp.replace('ver_', '').trim();
+            const found = data.find((p: any) => String(p.id) === targetId);
+            if (found) {
+              setSelectedProfile(found);
+            }
+          }
+        } catch {}
       }
       if (resButtons.ok) {
         setCustomButtons(await resButtons.json());
