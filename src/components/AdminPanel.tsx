@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Maximize2,
+  Minimize2,
   BarChart2,
   ExternalLink,
   Sliders,
@@ -75,6 +76,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
 
   const [showPinText, setShowPinText] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullScreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+        setIsFullScreen(true);
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+        setIsFullScreen(false);
+      }
+    } catch {
+      setIsFullScreen(prev => !prev);
+    }
+
+    try {
+      const tg = (window as unknown as { Telegram?: { WebApp?: { requestFullscreen?: () => void } } })?.Telegram?.WebApp;
+      if (typeof tg?.requestFullscreen === 'function') {
+        tg.requestFullscreen();
+      }
+    } catch {}
+  };
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
@@ -1341,8 +1378,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-3xl bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl text-zinc-100 flex flex-col max-h-[88vh] overflow-hidden my-auto">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md overflow-y-auto transition-all ${
+      isFullScreen ? 'p-0' : 'p-2 sm:p-4'
+    }`}>
+      <div className={`relative w-full bg-zinc-900 border border-zinc-800 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
+        isFullScreen
+          ? 'h-screen w-screen max-h-screen max-w-none rounded-none border-none'
+          : 'max-w-3xl rounded-3xl shadow-2xl max-h-[88vh] my-auto'
+      }`}>
 
         {/* ── Header ── */}
         <div className="p-3 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60 shrink-0">
@@ -1372,6 +1415,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <HardDrive className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">{syncingDb ? 'Guardando...' : 'Sincronizar BD'}</span>
+              </button>
+            )}
+            {isAuthenticated && (
+              <button
+                type="button"
+                onClick={toggleFullScreen}
+                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa (Web y Móvil)'}
+              >
+                {isFullScreen ? <Minimize2 className="w-4 h-4 text-amber-400" /> : <Maximize2 className="w-4 h-4" />}
               </button>
             )}
             {isAuthenticated && (
