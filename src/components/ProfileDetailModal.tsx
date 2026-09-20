@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Profile } from '../types';
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageSquareText } from 'lucide-react';
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageSquareText, Lock } from 'lucide-react';
 import { isVideoUrl, ProtectedMedia } from './ProtectedMedia';
 
 interface ProfileDetailModalProps {
@@ -82,11 +82,33 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   if (!profile || media.length === 0) return null;
 
+  // Rastrear contenidos desbloqueados con Stars
+  const [unlockedStarsUrls, setUnlockedStarsUrls] = useState<Set<string>>(() => {
+    const unlocked = new Set<string>();
+    if (typeof window !== 'undefined' && profile?.media_stars) {
+      Object.keys(profile.media_stars).forEach(url => {
+        try {
+          if (localStorage.getItem(`danii_stars_unlocked_${btoa(url).replace(/=/g, '')}`)) {
+            unlocked.add(url);
+          }
+        } catch {}
+      });
+    }
+    return unlocked;
+  });
+
   const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
   const rawItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description || '';
   const currentItemDescription = /holis|bienvenida|opciones que te salen abajo/i.test(rawItemDescription) ? '' : rawItemDescription.trim();
   const currentStars = profile.media_stars?.[currentMediaUrl];
   const isVideo = isVideoUrl(currentMediaUrl);
+
+  const isCurrentMediaLocked = Boolean(
+    currentMediaUrl &&
+    currentStars &&
+    currentStars > 0 &&
+    !unlockedStarsUrls.has(currentMediaUrl)
+  );
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -128,7 +150,16 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         if (tg?.openInvoice) {
           tg.openInvoice(data.invoiceLink, (status: string) => {
             if (status === 'paid') {
-              alert('🎉 ¡Pago de estrellas procesado con éxito!');
+              try {
+                localStorage.setItem(`danii_stars_unlocked_${btoa(currentMediaUrl).replace(/=/g, '')}`, 'true');
+              } catch {}
+              setUnlockedStarsUrls(prev => {
+                const next = new Set(prev);
+                next.add(currentMediaUrl);
+                return next;
+              });
+              window.dispatchEvent(new CustomEvent('stars_media_unlocked', { detail: { url: currentMediaUrl } }));
+              alert('🎉 ¡Contenido desbloqueado con éxito con Telegram Stars!');
             }
           });
         } else {
@@ -189,10 +220,48 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
         {/* Zona Multimedia (Con escala controlada para no salirse de pantalla) */}
         <div
-          onClick={toggleCaption}
+          onClick={!isCurrentMediaLocked ? toggleCaption : undefined}
           className="relative w-full max-h-[58vh] sm:max-h-[62vh] min-h-[260px] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none group"
         >
-          {isVideo ? (
+          {isCurrentMediaLocked ? (
+            <div className="relative w-full h-full min-h-[260px] max-h-[58vh] sm:max-h-[62vh] flex flex-col items-center justify-center bg-zinc-950 overflow-hidden select-none p-6 text-center">
+              {isVideo ? (
+                <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
+              ) : (
+                <img
+                  src={currentMediaUrl}
+                  alt="Contenido Bloqueado"
+                  className="absolute inset-0 h-full w-full object-cover filter blur-3xl brightness-25 scale-125 pointer-events-none"
+                />
+              )}
+              <div className="relative z-10 flex flex-col items-center justify-center max-w-sm">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-2xl shadow-amber-500/30 mb-3">
+                  <Lock className="w-7 h-7 animate-pulse text-amber-400" />
+                </div>
+                <span className="px-3 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-xs font-black uppercase tracking-wider shadow-md mb-2">
+                  ⭐ {currentStars} Estrellas
+                </span>
+                <h3 className="text-base font-black text-white mb-1">
+                  {isVideo ? 'Video Exclusivo Bloqueado' : 'Contenido Exclusivo Bloqueado'}
+                </h3>
+                <p className="text-xs text-zinc-400 leading-relaxed mb-4">
+                  Este material requiere Telegram Stars para desbloquearlo de forma permanente.
+                </p>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePayWithStars();
+                  }}
+                  disabled={payingStars}
+                  className="py-2.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs tracking-wide shadow-lg shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95 transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-zinc-950" />
+                  <span>{payingStars ? 'Generando Factura...' : `Desbloquear Ahora (${currentStars} ⭐)`}</span>
+                </button>
+              </div>
+            </div>
+          ) : isVideo ? (
             <video
               key={currentMediaUrl}
               src={currentMediaUrl}
@@ -220,7 +289,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 type="button"
                 onClick={handlePrev}
                 aria-label="Anterior"
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/60 hover:bg-zinc-900/90 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/60 hover:bg-zinc-900/90 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg z-20"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -228,15 +297,15 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 type="button"
                 onClick={handleNext}
                 aria-label="Siguiente"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/60 hover:bg-zinc-900/90 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-zinc-950/60 hover:bg-zinc-900/90 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg z-20"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
             </>
           )}
 
-          {/* Botón Flotante para Alternar Descripción Manualmente */}
-          {currentItemDescription && (
+          {/* Botón Flotante para Alternar Descripción Manualmente (Solo si no está bloqueado) */}
+          {!isCurrentMediaLocked && currentItemDescription && (
             <button
               type="button"
               onClick={toggleCaption}
@@ -248,7 +317,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           )}
 
           {/* EFECTO MÁGICO: Descripción flotante que aparece por 5s y se desvanece suavemente */}
-          {currentItemDescription && (
+          {!isCurrentMediaLocked && currentItemDescription && (
             <div
               className={`absolute bottom-3 left-3 right-12 z-10 transition-all duration-700 ease-in-out pointer-events-none ${
                 showCaption
@@ -285,16 +354,23 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         {/* Zona Inferior: Botón de Acción Dinámico (Estrellas vs Métodos de Pago) */}
         <div className="p-3.5 sm:p-4 bg-zinc-950 border-t border-zinc-900">
           {currentStars && currentStars > 0 ? (
-            /* Botón de Compra con Telegram Stars */
-            <button
-              type="button"
-              onClick={handlePayWithStars}
-              disabled={payingStars}
-              className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
-            >
-              <Sparkles className="w-4 h-4 text-zinc-950" />
-              <span>{payingStars ? 'Generando Factura...' : `⭐ Desbloquear por ${currentStars} Estrellas`}</span>
-            </button>
+            isCurrentMediaLocked ? (
+              /* Botón de Compra con Telegram Stars */
+              <button
+                type="button"
+                onClick={handlePayWithStars}
+                disabled={payingStars}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
+              >
+                <Sparkles className="w-4 h-4 text-zinc-950" />
+                <span>{payingStars ? 'Generando Factura...' : `⭐ Desbloquear por ${currentStars} Estrellas`}</span>
+              </button>
+            ) : (
+              /* Desbloqueado */
+              <div className="w-full py-2.5 px-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-xs flex items-center justify-center gap-2">
+                <span>✅ Contenido Desbloqueado con Estrellas</span>
+              </div>
+            )
           ) : (
             /* Botón de Adquirir Contenido (Lleva directo a Métodos de Pago) */
             <button

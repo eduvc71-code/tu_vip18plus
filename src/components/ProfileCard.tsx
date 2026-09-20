@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -38,6 +38,36 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     return seen;
   });
 
+  const [unlockedStarsUrls, setUnlockedStarsUrls] = useState<Set<string>>(() => {
+    const unlocked = new Set<string>();
+    if (typeof window !== 'undefined' && profile.media_stars) {
+      Object.keys(profile.media_stars).forEach(url => {
+        try {
+          if (localStorage.getItem(`danii_stars_unlocked_${btoa(url).replace(/=/g, '')}`)) {
+            unlocked.add(url);
+          }
+        } catch {}
+      });
+    }
+    return unlocked;
+  });
+
+  // Escuchar desbloqueos en tiempo real desde el modal
+  useEffect(() => {
+    const handleStarsUnlocked = (e: any) => {
+      const url = e?.detail?.url;
+      if (url) {
+        setUnlockedStarsUrls(prev => {
+          const next = new Set(prev);
+          next.add(url);
+          return next;
+        });
+      }
+    };
+    window.addEventListener('stars_media_unlocked', handleStarsUnlocked);
+    return () => window.removeEventListener('stars_media_unlocked', handleStarsUnlocked);
+  }, []);
+
   const handleMediaExpired = (expiredUrl: string) => {
     try {
       localStorage.setItem(`danii_seen_ephemeral_${btoa(expiredUrl).replace(/=/g, '')}`, 'true');
@@ -68,9 +98,23 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const isCurrentImageEphemeral = Boolean(selectedImage && profile.ephemeral_config?.[selectedImage]?.enabled);
   const currentImageDuration = (selectedImage && profile.ephemeral_config?.[selectedImage]?.duration_seconds) || 5;
 
+  const isImageStarsLocked = Boolean(
+    selectedImage &&
+    profile.media_stars?.[selectedImage] &&
+    profile.media_stars[selectedImage] > 0 &&
+    !unlockedStarsUrls.has(selectedImage)
+  );
+
+  const isVideoStarsLocked = Boolean(
+    selectedVideo &&
+    profile.media_stars?.[selectedVideo] &&
+    profile.media_stars[selectedVideo] > 0 &&
+    !unlockedStarsUrls.has(selectedVideo)
+  );
+
   // Auto-deslizante de Imágenes cada 4 segundos
   useEffect(() => {
-    if (images.length > 1 && !isCurrentImageEphemeral) {
+    if (images.length > 1 && !isCurrentImageEphemeral && !isImageStarsLocked) {
       const interval = setInterval(() => {
         setImageIndex(prev => (prev + 1) % images.length);
       }, 4000);
@@ -128,9 +172,27 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <div
               onClick={() => onSelectMedia ? onSelectMedia(profile, selectedImage) : onSelectProfile(profile)}
               className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
-              title="Toca para ampliar"
+              title={isImageStarsLocked ? "Contenido de pago con Estrellas - Toca para desbloquear" : "Toca para ampliar"}
             >
-              {images.length === 0 ? (
+              {isImageStarsLocked ? (
+                <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[190px]">
+                  <img
+                    src={selectedImage}
+                    alt="Contenido Bloqueado"
+                    className="absolute inset-0 h-full w-full object-cover filter blur-2xl brightness-30 scale-125 pointer-events-none"
+                  />
+                  <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
+                    <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-2">
+                      <Lock className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md mb-1">
+                      ⭐ {profile.media_stars?.[selectedImage]} Estrellas
+                    </span>
+                    <p className="text-xs font-bold text-white">Contenido Bloqueado</p>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">Toca para desbloquear con Telegram Stars</p>
+                  </div>
+                </div>
+              ) : images.length === 0 ? (
                 <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950/80 border border-dashed border-zinc-800 rounded-2xl">
                   <ShieldCheck className="w-8 h-8 text-amber-400/60 mb-2" />
                   <p className="text-xs font-bold text-zinc-300">Sin fotos disponibles</p>
@@ -152,7 +214,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 />
               )}
 
-              {selectedImage && profile.media_stars?.[selectedImage] && (
+              {selectedImage && profile.media_stars?.[selectedImage] && !isImageStarsLocked && (
                 <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
                     ⭐ {profile.media_stars[selectedImage]} Estrellas
@@ -213,19 +275,35 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               <div
                 onClick={() => onSelectMedia ? onSelectMedia(profile, selectedVideo) : onSelectProfile(profile)}
                 className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
-                title="Toca para ampliar video"
+                title={isVideoStarsLocked ? "Video de pago con Estrellas - Toca para desbloquear" : "Toca para ampliar video"}
               >
-                <video
-                  key={selectedVideo}
-                  src={selectedVideo}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
+                {isVideoStarsLocked ? (
+                  <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[180px]">
+                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
+                    <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
+                      <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-2">
+                        <Lock className="w-5 h-5 animate-pulse" />
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md mb-1">
+                        ⭐ {profile.media_stars?.[selectedVideo]} Estrellas
+                      </span>
+                      <p className="text-xs font-bold text-white">Video Exclusivo Bloqueado</p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">Toca para desbloquear con Telegram Stars</p>
+                    </div>
+                  </div>
+                ) : (
+                  <video
+                    key={selectedVideo}
+                    src={selectedVideo}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                )}
 
-                {selectedVideo && profile.media_stars?.[selectedVideo] && (
+                {selectedVideo && profile.media_stars?.[selectedVideo] && !isVideoStarsLocked && (
                   <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
                       ⭐ {profile.media_stars[selectedVideo]} Estrellas

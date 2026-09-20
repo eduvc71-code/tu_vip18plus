@@ -489,7 +489,9 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     return { success: true, message: `Perfil ${profile.status}: removido del canal público.` };
   }
 
-  const primaryPhoto = profile.photos && profile.photos.length > 0 ? profile.photos[0] : null;
+  // Excluir contenido de pago con estrellas del preview gratuito del canal
+  const freePhotos = (profile.photos || []).filter(u => !(profile.media_stars?.[u] && profile.media_stars[u] > 0));
+  const primaryPhoto = freePhotos.length > 0 ? freePhotos[0] : null;
   const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || '';
   const descText = activeDesc.trim() ? `${activeDesc.trim()}\n\n` : '';
   const caption = `${descText}✨ *¿Quieres ver más?* Toca el botón abajo para abrir la galería completa 👇`;
@@ -812,6 +814,20 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
+  // Handle Pre-Checkout Query for Telegram Stars payments
+  if (update.pre_checkout_query) {
+    const pcq = update.pre_checkout_query;
+    try {
+      await callTelegramApi('answerPreCheckoutQuery', {
+        pre_checkout_query_id: pcq.id,
+        ok: true
+      });
+    } catch (e) {
+      console.error('[PreCheckoutQuery Error]:', e);
+    }
+    return;
+  }
+
   // Handle Callback Queries (Buttons)
   if (update.callback_query) {
     await handleCallbackQuery(update.callback_query);
@@ -825,6 +841,16 @@ export async function processTelegramUpdate(update: any) {
   const fromId = message.from?.id;
   const userIdStr = String(fromId || '');
   const text = message.text ? message.text.trim() : '';
+
+  // Handle Successful Telegram Stars Payment
+  if (message.successful_payment) {
+    const sp = message.successful_payment;
+    console.log('[Telegram Stars Payment Success]:', sp);
+    try {
+      await sendMessage(chatId, `🎉 *¡Pago con Telegram Stars Exitoso!*\n\n⭐ *Monto*: ${sp.total_amount} Estrellas\n🔑 *Comprobante*: \`${sp.telegram_payment_charge_id}\`\n\nTu contenido exclusivo ha sido desbloqueado. ¡Disfrútalo!`);
+    } catch {}
+    return;
+  }
 
   // 0.3. Detect forwarded post from a channel
   const fChat = (message.forward_origin && message.forward_origin.type === 'channel' && message.forward_origin.chat)
