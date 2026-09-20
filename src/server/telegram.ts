@@ -774,6 +774,73 @@ export async function uploadBufferToTelegram(
 }
 
 
+// ==========================================
+// 🛡️ ESCUDO DE SEGURIDAD ANTI-SPAM Y ANTI-BOT (FIREWALL TELEGRAM)
+// ==========================================
+const blockedSpamUserIds = new Set<string>();
+const userRateLimitMap = new Map<string, { count: number; firstTimestamp: number }>();
+
+// Expresión regular para palabras y patrones comunes de spam bots (SMS-BOOM, SMS Bomber, spam ruso, cryptos, etc.)
+const SPAM_KEYWORDS_REGEX = /(sms[-_ ]?boom|sms[-_ ]?bomber|bomber|бомбер|спам|смс[-_ ]?атак|sms[-_ ]?spam|spambot|crypto[-_ ]?pump|airdrop|binance[-_ ]?giveaway|1xbet|betwinner|fast[-_ ]?money|invest[-_ ]?now|whatsapp\.com\/channel|t\.me\/\+|t\.me\/joinchat)/i;
+
+// Detección de alfabetos no hispanos: Cirílico (Ruso/Ucraniano), Árabe, Chino/Japonés/Coreano, Devanagari
+const NON_SPANISH_SCRIPTS_REGEX = /[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF\u0900-\u097F]/;
+
+export function isSpamMessage(fromUser?: any, text?: string): { isSpam: boolean; reason?: string } {
+  if (!fromUser) return { isSpam: false };
+  const userId = String(fromUser.id || '');
+
+  // Las administradoras autorizadas NUNCA son bloqueadas
+  if (isAdminUser(userId)) return { isSpam: false };
+
+  // Usuario previamente bloqueado en lista negra en memoria
+  if (blockedSpamUserIds.has(userId)) {
+    return { isSpam: true, reason: 'Usuario bloqueado previamente en lista negra' };
+  }
+
+  // Si es un bot automatizado de Telegram
+  if (fromUser.is_bot) {
+    blockedSpamUserIds.add(userId);
+    return { isSpam: true, reason: 'Bot automatizado (is_bot: true)' };
+  }
+
+  const userText = `${fromUser.first_name || ''} ${fromUser.last_name || ''} ${fromUser.username || ''}`.trim();
+  const fullContent = `${userText} ${text || ''}`;
+
+  // 1. Detección de palabras clave de spam (SMS-BOOM, bomber, etc.)
+  if (SPAM_KEYWORDS_REGEX.test(fullContent)) {
+    blockedSpamUserIds.add(userId);
+    return { isSpam: true, reason: `Palabras de spam detectadas ("${fullContent.slice(0, 60)}")` };
+  }
+
+  // 2. Detección de caracteres cirílicos / rusos / árabes / asiáticos
+  if (NON_SPANISH_SCRIPTS_REGEX.test(fullContent)) {
+    blockedSpamUserIds.add(userId);
+    return { isSpam: true, reason: `Alfabeto no hispano detectado (Cirílico/Ruso/Extranjero): "${fullContent.slice(0, 60)}"` };
+  }
+
+  // 3. Rate Limit / Anti-Flood (Más de 5 mensajes en 5 segundos)
+  const now = Date.now();
+  const rate = userRateLimitMap.get(userId);
+  if (!rate || (now - rate.firstTimestamp) > 5000) {
+    userRateLimitMap.set(userId, { count: 1, firstTimestamp: now });
+  } else {
+    rate.count++;
+    if (rate.count > 5) {
+      blockedSpamUserIds.add(userId);
+      return { isSpam: true, reason: 'Exceso de mensajes en pocos segundos (Anti-Flood / Anti-Bombardeo)' };
+    }
+  }
+
+  // 4. Enlaces externos sospechosos enviados por usuarios desconocidos
+  if (text && /(https?:\/\/|t\.me\/|wa\.me\/)/i.test(text) && !text.startsWith('/start')) {
+    blockedSpamUserIds.add(userId);
+    return { isSpam: true, reason: 'Enlaces sospechosos no permitidos' };
+  }
+
+  return { isSpam: false };
+}
+
 // Webhook Handler for Telegram Updates
 export async function processTelegramUpdate(update: any) {
   if (!update) return;
@@ -830,6 +897,13 @@ export async function processTelegramUpdate(update: any) {
 
   // Handle Callback Queries (Buttons)
   if (update.callback_query) {
+    const cb = update.callback_query;
+    const spamCheck = isSpamMessage(cb.from, cb.data);
+    if (spamCheck.isSpam) {
+      console.warn(`[ANTI-SPAM SHIELD] Callback bloqueado de ${cb.from?.id}: ${spamCheck.reason}`);
+      await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+      return;
+    }
     await handleCallbackQuery(update.callback_query);
     return;
   }
@@ -841,6 +915,22 @@ export async function processTelegramUpdate(update: any) {
   const fromId = message.from?.id;
   const userIdStr = String(fromId || '');
   const text = message.text ? message.text.trim() : '';
+
+  // 🛡️ ESCUDO ANTI-SPAM ACTIVO: Descarte silencioso inmediato si es spam o bot malicioso
+  const spamCheck = isSpamMessage(message.from, text);
+  if (spamCheck.isSpam) {
+    console.warn(`[ANTI-SPAM SHIELD] Mensaje bloqueado de ${fromId} (${message.from?.username || message.from?.first_name}): ${spamCheck.reason}`);
+    return; // Descarte silencioso total
+  }
+
+  // Bloqueo de grupos no autorizados (el bot no responde ni interactúa en grupos spam ajenos)
+  if (message.chat.type === 'group' || message.chat.type === 'supergroup') {
+    const { channelId } = getBotConfig();
+    if (String(message.chat.id) !== String(channelId)) {
+      console.warn(`[ANTI-SPAM SHIELD] Mensaje en grupo no autorizado ignorado: ${message.chat.id} (${message.chat.title || 'Grupo'})`);
+      return;
+    }
+  }
 
   // Handle Successful Telegram Stars Payment
   if (message.successful_payment) {
@@ -2441,9 +2531,17 @@ async function handleConfirmDeleteCommand(chatId: string | number, id: string) {
 async function handleClientAvailabilityRequest(message: any, profileId: string) {
   const chatId = message.chat.id;
   const clientUser = message.from;
+
+  // Filtro anti-spam estricto antes de procesar o notificar a la administradora
+  const spamCheck = isSpamMessage(clientUser, message?.text);
+  if (spamCheck.isSpam) {
+    console.warn(`[ANTI-SPAM SHIELD] Solicitud de disponibilidad falsa descartada de ${clientUser?.id}: ${spamCheck.reason}`);
+    return;
+  }
+
   const profile = await getProfileById(profileId);
 
-  if (!profile) {
+  if (!profile || profile.status === 'retirada' || profile.status === 'borrador') {
     await sendMessage(chatId, '⚠️ El perfil solicitado ya no se encuentra disponible.');
     return;
   }

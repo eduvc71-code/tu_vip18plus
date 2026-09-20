@@ -1399,6 +1399,13 @@ export async function deletePoll(id: string): Promise<boolean> {
 }
 
 export async function registerSubscriber(userId: string, username?: string, firstName?: string): Promise<void> {
+  const combined = `${username || ''} ${firstName || ''}`;
+  if (
+    /(sms[-_ ]?boom|bomber|бомбер|спам|смс|crypto|airdrop)/i.test(combined) ||
+    /[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF]/.test(combined)
+  ) {
+    return; // Descartar bots de spam
+  }
   const database = await getDb();
   const now = new Date().toISOString();
   database.run(`
