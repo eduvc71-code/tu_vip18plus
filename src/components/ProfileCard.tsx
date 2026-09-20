@@ -110,13 +110,19 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           
           {/* 1. SECCIÓN IMÁGENES */}
           <div>
-            {/* Etiqueta reducida de Fotos arriba */}
-            <div className="mb-1.5 flex items-center px-0.5">
+            {/* Etiqueta reducida de Fotos arriba con contador n/n a la derecha */}
+            <div className="mb-1.5 flex items-center justify-between px-0.5">
               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
                 <Images className="h-3 w-3 text-amber-400" />
                 <span>Fotos</span>
                 <span className="text-[10px] text-zinc-500 font-mono">({images.length})</span>
               </span>
+
+              {images.length > 1 && (
+                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800">
+                  {imageIndex + 1} / {images.length}
+                </span>
+              )}
             </div>
 
             <div
@@ -155,39 +161,33 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               )}
             </div>
 
-            {/* Controles al pie: {< .......... >} " 3/n" */}
+            {/* Controles al pie: {< .......... >} centrados */}
             {images.length > 1 && (
-              <div className="mt-1.5 flex items-center justify-between px-1">
-                <div className="flex-1 flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
-                    aria-label="Foto anterior"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  <div className="flex gap-1">
-                    {images.map((_, idx) => (
-                      <span
-                        key={idx}
-                        className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                      />
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); moveImage(1); }}
-                    aria-label="Foto siguiente"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+              <div className="mt-1.5 flex items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
+                  aria-label="Foto anterior"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex gap-1">
+                  {images.map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                    />
+                  ))}
                 </div>
-
-                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 shrink-0">
-                  {imageIndex + 1} / {images.length}
-                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); moveImage(1); }}
+                  aria-label="Foto siguiente"
+                  className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
               </div>
             )}
           </div>
@@ -195,13 +195,19 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON SEPARADOR REDUCIDO) */}
           {videos.length > 0 && (
             <div className="pt-2 border-t border-zinc-800/60">
-              {/* Etiqueta reducida de Videos arriba */}
-              <div className="mb-1.5 flex items-center px-0.5">
+              {/* Etiqueta reducida de Videos arriba con contador n/n a la derecha */}
+              <div className="mb-1.5 flex items-center justify-between px-0.5">
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
                   <Video className="h-3 w-3 text-amber-400" />
                   <span>Videos</span>
                   <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
                 </span>
+
+                {videos.length > 1 && (
+                  <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900/90 px-2 py-0.5 rounded-md border border-zinc-800">
+                    {videoIndex + 1} / {videos.length}
+                  </span>
+                )}
               </div>
 
               <div
@@ -228,39 +234,33 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 )}
               </div>
 
-              {/* Controles al pie: {< .......... >} " 3/n" */}
+              {/* Controles al pie: {< .......... >} centrados */}
               {videos.length > 1 && (
-                <div className="mt-1.5 flex items-center justify-between px-1">
-                  <div className="flex-1 flex items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
-                      aria-label="Video anterior"
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5" />
-                    </button>
-                    <div className="flex gap-1">
-                      {videos.map((_, idx) => (
-                        <span
-                          key={idx}
-                          className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                        />
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
-                      aria-label="Video siguiente"
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
+                <div className="mt-1.5 flex items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
+                    aria-label="Video anterior"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex gap-1">
+                    {videos.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                      />
+                    ))}
                   </div>
-
-                  <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 shrink-0">
-                    {videoIndex + 1} / {videos.length}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
+                    aria-label="Video siguiente"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               )}
             </div>
