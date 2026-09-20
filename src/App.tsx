@@ -106,6 +106,20 @@ export default function App() {
             tgWebApp.disableVerticalSwipes();
           } catch {}
         }
+
+        // 4. Forzar primer plano, pantalla única y grande continua
+        if (typeof tgWebApp.onEvent === 'function') {
+          try {
+            tgWebApp.onEvent('viewportChanged', () => {
+              if (!tgWebApp.isExpanded) {
+                tgWebApp.expand();
+              }
+              if (typeof tgWebApp.requestFullscreen === 'function' && !tgWebApp.isFullscreen) {
+                try { tgWebApp.requestFullscreen(); } catch {}
+              }
+            });
+          } catch {}
+        }
       } catch {
         // Safe fallback
       }

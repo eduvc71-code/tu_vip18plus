@@ -38,7 +38,9 @@ import {
   Sliders,
   CreditCard,
   Star,
-  Bot
+  Bot,
+  RotateCcw,
+  Save
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -49,6 +51,47 @@ interface AdminPanelProps {
 }
 
 type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'telegram' | 'audit';
+
+export function getPaymentMethodFlag(method: PaymentMethod | string): string {
+  const title = typeof method === 'string' ? method : (method.title || '');
+  const id = typeof method === 'string' ? method : (method.id || '');
+  const lower = `${title} ${id}`.toLowerCase();
+
+  const flagMatch = title.match(/^(\p{Regional_Indicator}{2}|\p{Emoji})/u);
+  if (flagMatch && !/^[A-Z0-9]/i.test(flagMatch[0])) {
+    return flagMatch[0];
+  }
+
+  if (lower.includes('bolivia') || /\bbo\b/i.test(lower)) return '🇧🇴';
+  if (lower.includes('peru') || lower.includes('perú') || /\bpe\b/i.test(lower)) return '🇵🇪';
+  if (lower.includes('chile') || /\bcl\b/i.test(lower)) return '🇨🇱';
+  if (lower.includes('argentina') || /\bar\b/i.test(lower)) return '🇦🇷';
+  if (lower.includes('espana') || lower.includes('españa') || lower.includes('spain') || /\bes\b/i.test(lower)) return '🇪🇸';
+  if (lower.includes('mexico') || lower.includes('méxico') || /\bmx\b/i.test(lower)) return '🇲🇽';
+  if (lower.includes('paraguay') || /\bpy\b/i.test(lower)) return '🇵🇾';
+  if (lower.includes('brasil') || lower.includes('brazil') || /\bbr\b/i.test(lower)) return '🇧🇷';
+  if (lower.includes('uruguay') || /\buy\b/i.test(lower)) return '🇺🇾';
+  if (lower.includes('colombia') || /\bco\b/i.test(lower)) return '🇨🇴';
+  if (lower.includes('rusia') || lower.includes('russia') || /\bru\b/i.test(lower)) return '🇷🇺';
+  if (lower.includes('ecuador') || /\bec\b/i.test(lower)) return '🇪🇨';
+  if (lower.includes('venezuela') || /\bve\b/i.test(lower)) return '🇻🇪';
+  if (lower.includes('zelle') || lower.includes('estados unidos') || lower.includes('usa') || /\bus\b/i.test(lower)) return '🇺🇸';
+  if (lower.includes('cripto') || lower.includes('usdt') || lower.includes('bitcoin') || lower.includes('binance')) return '🪙';
+  if (lower.includes('paypal')) return '💸';
+  if (lower.includes('estrella') || lower.includes('stars')) return '⭐';
+  if (lower.includes('tigo')) return '☎️';
+  if (lower.includes('western') || lower.includes('remitly') || lower.includes('moneygram')) return '🌐';
+
+  return '💳';
+}
+
+export function getCleanPaymentTitle(method: PaymentMethod): string {
+  const rawTitle = method.title || '';
+  return rawTitle
+    .replace(/^([A-Z]{2}\s*[-–:]\s*)/i, '')
+    .replace(/^(\p{Regional_Indicator}{2}|\p{Emoji})\s*/u, '')
+    .trim();
+}
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
@@ -149,10 +192,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Payment Methods state
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string>('');
   const [editingPaymentMethod, setEditingPaymentMethod] = useState<PaymentMethod | null>(null);
   const [paymentImageFile, setPaymentImageFile] = useState<File | null>(null);
+  const [paymentImagePreview, setPaymentImagePreview] = useState<string | null>(null);
   const [uploadingPaymentImage, setUploadingPaymentImage] = useState(false);
   const [publishingPaymentsToChannel, setPublishingPaymentsToChannel] = useState(false);
+
+  // Pre-cargar por defecto el primer método de pago para que el contenedor nunca se vea vacío
+  useEffect(() => {
+    if (paymentMethods.length > 0) {
+      if (!selectedPaymentMethodId) {
+        const defaultMethod = paymentMethods.find(m => m.is_active) || paymentMethods[0];
+        setSelectedPaymentMethodId(defaultMethod.id);
+        setEditingPaymentMethod({ ...defaultMethod });
+      } else {
+        const current = paymentMethods.find(m => m.id === selectedPaymentMethodId);
+        if (current && (!editingPaymentMethod || editingPaymentMethod.id !== current.id)) {
+          setEditingPaymentMethod({ ...current });
+        }
+      }
+    }
+  }, [paymentMethods, selectedPaymentMethodId]);
   
   // Reply state for customer requests
   const [replyingRequestId, setReplyingRequestId] = useState<string | null>(null);
@@ -1191,7 +1252,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // Payment Methods Actions
-  const handleSavePaymentMethod = async (e?: React.FormEvent) => {
+  const handleSavePaymentMethod = async (e?: React.FormEvent, publishAfter = false) => {
     if (e) e.preventDefault();
     if (!editingPaymentMethod) return;
     setLoading(true);
@@ -1203,10 +1264,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage({ type: 'success', text: `Método de pago "${data.payment_method.title}" actualizado con éxito.` });
-        setEditingPaymentMethod(null);
+        setMessage({ type: 'success', text: `✅ Método "${data.payment_method.title}" guardado con éxito.` });
+        setEditingPaymentMethod(data.payment_method);
+        setSelectedPaymentMethodId(data.payment_method.id);
         setPaymentImageFile(null);
+        setPaymentImagePreview(null);
         fetchData();
+
+        if (publishAfter) {
+          await handlePublishPaymentsToChannel();
+        }
       } else {
         setMessage({ type: 'error', text: 'Error al actualizar método de pago' });
       }
@@ -1230,8 +1297,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage({ type: 'success', text: 'Imagen/QR subido y guardado exitosamente.' });
+        setMessage({ type: 'success', text: '🎉 Imagen/QR subido y guardado exitosamente.' });
         setPaymentImageFile(null);
+        setPaymentImagePreview(null);
         if (editingPaymentMethod && editingPaymentMethod.id === methodId) {
           setEditingPaymentMethod(data.payment_method);
         }
@@ -4167,14 +4235,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
             {/* TAB: MÉTODOS DE PAGO */}
             {activeTab === 'payments' && (
-              <div className="space-y-5 text-xs">
+              <div className="space-y-4 text-xs">
+                {/* Cabecera */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
                   <div>
                     <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                       <CreditCard className="w-4 h-4 text-amber-400" /> Métodos de Pago
                     </h3>
                     <p className="text-[11px] text-zinc-400">
-                      Sincronizados en Mini App, Bot de Telegram (/pagos) y Canal VIP. Sube imágenes/QR y escribe las instrucciones para cada país o servicio.
+                      Gestiona el catálogo con los selectores. Sincronizado en Mini App, Bot de Telegram (/pagos) y Canal VIP.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -4186,7 +4255,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       title="Publicar menú interactivo de métodos de pago en el canal de Telegram"
                     >
                       <Send className="w-3.5 h-3.5" />
-                      <span>{publishingPaymentsToChannel ? 'Publicando...' : '📢 Publicar en Canal'}</span>
+                      <span>{publishingPaymentsToChannel ? 'Publicando...' : '📢 Publicar Menú en Canal'}</span>
                     </button>
                     <button
                       type="button"
@@ -4198,182 +4267,308 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
 
-                {/* Formulario de Edición de Método de Pago */}
-                {editingPaymentMethod && (
-                  <div className="p-4 bg-zinc-950 border border-amber-500/40 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-                      <h4 className="font-bold text-white text-xs flex items-center gap-2">
-                        <Edit className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Editar: {editingPaymentMethod.title}</span>
-                      </h4>
+                {/* 2 SELECTORES TIPO COMBOLIST: ACTIVOS E INACTIVOS */}
+                {(() => {
+                  const activeMethods = paymentMethods.filter(m => m.is_active);
+                  const inactiveMethods = paymentMethods.filter(m => !m.is_active);
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-zinc-950/90 border border-zinc-800 rounded-2xl shadow-inner">
+                      {/* Combo 1: Métodos Activos */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="font-extrabold text-[11px] text-emerald-400 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>🟢 Métodos Activos ({activeMethods.length})</span>
+                          </label>
+                          <span className="text-[10px] text-zinc-500">Visibles al cliente</span>
+                        </div>
+                        <select
+                          value={activeMethods.some(m => m.id === selectedPaymentMethodId) ? selectedPaymentMethodId : ''}
+                          onChange={(e) => {
+                            const found = paymentMethods.find(m => m.id === e.target.value);
+                            if (found) {
+                              setSelectedPaymentMethodId(found.id);
+                              setEditingPaymentMethod({ ...found });
+                              setPaymentImageFile(null);
+                              setPaymentImagePreview(null);
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 bg-zinc-900 border border-emerald-500/40 rounded-xl text-white text-xs font-bold focus:outline-none focus:border-emerald-400 transition-colors cursor-pointer"
+                        >
+                          <option value="" disabled>-- Selecciona un método activo --</option>
+                          {activeMethods.map((m) => {
+                            const flag = getPaymentMethodFlag(m);
+                            const clean = getCleanPaymentTitle(m);
+                            return (
+                              <option key={m.id} value={m.id}>
+                                {flag} {clean}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Combo 2: Métodos Inactivos */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="font-extrabold text-[11px] text-rose-400 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-rose-500" />
+                            <span>🔴 Métodos Inactivos ({inactiveMethods.length})</span>
+                          </label>
+                          <span className="text-[10px] text-zinc-500">Ocultos</span>
+                        </div>
+                        <select
+                          value={inactiveMethods.some(m => m.id === selectedPaymentMethodId) ? selectedPaymentMethodId : ''}
+                          onChange={(e) => {
+                            const found = paymentMethods.find(m => m.id === e.target.value);
+                            if (found) {
+                              setSelectedPaymentMethodId(found.id);
+                              setEditingPaymentMethod({ ...found });
+                              setPaymentImageFile(null);
+                              setPaymentImagePreview(null);
+                            }
+                          }}
+                          className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs font-bold focus:outline-none focus:border-amber-500 transition-colors cursor-pointer"
+                        >
+                          <option value="" disabled>-- Selecciona un método inactivo --</option>
+                          {inactiveMethods.length === 0 ? (
+                            <option value="" disabled>Todos los métodos están activos</option>
+                          ) : (
+                            inactiveMethods.map((m) => {
+                              const flag = getPaymentMethodFlag(m);
+                              const clean = getCleanPaymentTitle(m);
+                              return (
+                                <option key={m.id} value={m.id}>
+                                  {flag} {clean}
+                                </option>
+                              );
+                            })
+                          )}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* CONTENEDOR ÚNICO DE GESTIÓN (CARGA IMAGEN + DATOS + BOTONES) */}
+                {editingPaymentMethod ? (
+                  <div className="p-4 sm:p-5 bg-zinc-950 border border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5 animate-in fade-in duration-200">
+                    {/* Header del contenedor */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-3xl sm:text-4xl p-2 rounded-2xl bg-zinc-900 border border-zinc-800 shrink-0 shadow-inner">
+                          {getPaymentMethodFlag(editingPaymentMethod)}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-extrabold text-sm sm:text-base text-white tracking-wide">
+                              {editingPaymentMethod.title}
+                            </h4>
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                              editingPaymentMethod.is_active
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                            }`}>
+                              {editingPaymentMethod.is_active ? '🟢 Activo' : '🔴 Inactivo'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">
+                            Categoría:{' '}
+                            <strong className="text-zinc-300">
+                              {editingPaymentMethod.category === 'national' ? '🇧🇴 Pago Nacional' : editingPaymentMethod.category === 'international' ? '🌎 Transferencia Internacional' : '⚡ Cripto / Servicio Digital'}
+                            </strong>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Botón rápido para alternar visibilidad */}
                       <button
                         type="button"
-                        onClick={() => { setEditingPaymentMethod(null); setPaymentImageFile(null); }}
-                        className="text-zinc-400 hover:text-white text-xs font-semibold cursor-pointer"
+                        onClick={() => {
+                          const updated = { ...editingPaymentMethod, is_active: !editingPaymentMethod.is_active };
+                          setEditingPaymentMethod(updated);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 self-start sm:self-auto border ${
+                          editingPaymentMethod.is_active
+                            ? 'bg-rose-950/40 border-rose-500/30 text-rose-300 hover:bg-rose-900/60'
+                            : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-300 hover:bg-emerald-900/60'
+                        }`}
+                        title="Cambiar visibilidad entre Activo e Inactivo"
                       >
-                        ✕ Cancelar
+                        {editingPaymentMethod.is_active ? '🔴 Desactivar (Ocultar)' : '🟢 Activar Método'}
                       </button>
                     </div>
 
-                    <form onSubmit={handleSavePaymentMethod} className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-zinc-400 mb-1 font-semibold">Título / Nombre del Método *</label>
-                          <input
-                            type="text"
-                            required
-                            value={editingPaymentMethod.title || ''}
-                            onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, title: e.target.value })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
-                          />
-                        </div>
+                    <form onSubmit={(e) => handleSavePaymentMethod(e, false)} className="space-y-4">
+                      {/* Grid de 2 Columnas: Carga Imagen a la izquierda (5 cols), Datos a la derecha (7 cols) */}
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        {/* Columna Izquierda: Carga Imagen / QR */}
+                        <div className="md:col-span-5 p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between space-y-3">
+                          <div>
+                            <label className="block text-zinc-300 font-bold mb-1.5 text-xs flex items-center justify-between">
+                              <span>🖼️ Imagen o Código QR</span>
+                              {paymentImagePreview && (
+                                <span className="text-[10px] text-amber-400 font-normal">Nueva imagen lista</span>
+                              )}
+                            </label>
 
-                        <div>
-                          <label className="block text-zinc-400 mb-1 font-semibold">Estado de Visibilidad</label>
-                          <select
-                            value={editingPaymentMethod.is_active ? '1' : '0'}
-                            onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, is_active: e.target.value === '1' })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="1">🟢 Activo (Visible para clientes)</option>
-                            <option value="0">🔴 Inactivo (Oculto)</option>
-                          </select>
-                        </div>
-                      </div>
+                            {paymentImagePreview || editingPaymentMethod.image_url ? (
+                              <div className="relative group w-full h-44 sm:h-52 bg-zinc-950 rounded-xl overflow-hidden border border-zinc-700/80 flex items-center justify-center p-2 shadow-inner">
+                                <img
+                                  src={paymentImagePreview || editingPaymentMethod.image_url!}
+                                  alt={editingPaymentMethod.title}
+                                  className="w-full h-full object-contain rounded-lg"
+                                />
+                                {paymentImagePreview && (
+                                  <div className="absolute top-2 right-2 bg-amber-500 text-zinc-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow">
+                                    Previsualización
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="w-full h-44 sm:h-52 bg-zinc-950/60 rounded-xl border border-dashed border-zinc-700/80 flex flex-col items-center justify-center text-zinc-500 gap-2 p-3 text-center">
+                                <QrCode className="w-10 h-10 text-zinc-600" />
+                                <span className="text-xs font-medium text-zinc-400">Sin imagen o QR subido</span>
+                                <span className="text-[10px] text-zinc-600">Sube una imagen para que el cliente pueda escanearla</span>
+                              </div>
+                            )}
+                          </div>
 
-                      <div>
-                        <label className="block text-zinc-400 mb-1 font-semibold">
-                          Instrucciones, Coordenadas y Cuentas Bancarias
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={editingPaymentMethod.description || ''}
-                          onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, description: e.target.value })}
-                          placeholder="Escribe aquí el número de cuenta, CI, titular, banco, correo electrónico o dirección de billetera que verá el cliente..."
-                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 resize-none font-sans"
-                        />
-                      </div>
-
-                      {/* Subida de Imagen o Código QR */}
-                      <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800 space-y-2">
-                        <label className="block text-zinc-300 font-bold">
-                          Imagen o Código QR del Método
-                        </label>
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-                          {editingPaymentMethod.image_url ? (
-                            <img
-                              src={editingPaymentMethod.image_url}
-                              alt={editingPaymentMethod.title}
-                              className="w-16 h-16 object-contain rounded-lg border border-zinc-700 bg-zinc-950 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 rounded-lg border border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 shrink-0">
-                              <QrCode className="w-6 h-6" />
-                            </div>
-                          )}
-                          <div className="flex-1 w-full space-y-1.5">
+                          {/* Selector de archivo de imagen */}
+                          <div className="space-y-2 pt-1">
                             <input
                               type="file"
                               accept="image/*"
-                              onChange={(e) => setPaymentImageFile(e.target.files?.[0] || null)}
-                              className="w-full text-xs text-zinc-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0] || null;
+                                setPaymentImageFile(file);
+                                if (file) {
+                                  setPaymentImagePreview(URL.createObjectURL(file));
+                                } else {
+                                  setPaymentImagePreview(null);
+                                }
+                              }}
+                              className="w-full text-xs text-zinc-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
                             />
                             {paymentImageFile && (
                               <button
                                 type="button"
                                 disabled={uploadingPaymentImage}
-                                onClick={() => handleUploadPaymentMethodImage(editingPaymentMethod.id!)}
-                                className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold rounded-lg text-xs cursor-pointer transition-colors disabled:opacity-60"
+                                onClick={() => handleUploadPaymentMethodImage(editingPaymentMethod.id)}
+                                className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
                               >
-                                {uploadingPaymentImage ? 'Subiendo imagen...' : '⬆️ Subir imagen ahora'}
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>{uploadingPaymentImage ? 'Subiendo imagen...' : '⬆️ Subir y Guardar Imagen / QR'}</span>
                               </button>
                             )}
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex justify-end gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => { setEditingPaymentMethod(null); setPaymentImageFile(null); }}
-                          className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs cursor-pointer transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-extrabold rounded-xl text-xs cursor-pointer transition-colors disabled:opacity-60"
-                        >
-                          Guardar Método
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
+                        {/* Columna Derecha: Datos del Método */}
+                        <div className="md:col-span-7 space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-zinc-400 mb-1 font-semibold text-[11px]">Título / Nombre del Método *</label>
+                              <input
+                                type="text"
+                                required
+                                value={editingPaymentMethod.title || ''}
+                                onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, title: e.target.value })}
+                                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 font-semibold"
+                              />
+                            </div>
 
-                {/* Lista de Métodos de Pago */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {paymentMethods.map((method) => (
-                    <div
-                      key={method.id}
-                      className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
-                        method.is_active
-                          ? 'bg-zinc-950 border-zinc-800 hover:border-amber-500/40'
-                          : 'bg-zinc-950/40 border-zinc-800/40 opacity-60'
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-extrabold text-sm text-white flex items-center gap-1.5">
-                            {method.title}
-                          </h4>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0 ${
-                            method.is_active
-                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            {method.is_active ? 'Activo' : 'Inactivo'}
-                          </span>
-                        </div>
+                            <div>
+                              <label className="block text-zinc-400 mb-1 font-semibold text-[11px]">Estado de Visibilidad</label>
+                              <select
+                                value={editingPaymentMethod.is_active ? '1' : '0'}
+                                onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, is_active: e.target.value === '1' })}
+                                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 cursor-pointer font-semibold"
+                              >
+                                <option value="1">🟢 Activo (Visible para clientes)</option>
+                                <option value="0">🔴 Inactivo (Oculto)</option>
+                              </select>
+                            </div>
+                          </div>
 
-                        {method.image_url ? (
-                          <div className="w-full h-24 bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 flex items-center justify-center p-1">
-                            <img
-                              src={method.image_url}
-                              alt={method.title}
-                              className="w-full h-full object-contain rounded-lg"
+                          <div>
+                            <label className="block text-zinc-400 mb-1 font-semibold text-[11px]">Categoría del Método</label>
+                            <select
+                              value={editingPaymentMethod.category || 'international'}
+                              onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, category: e.target.value as any })}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                              <option value="national">🇧🇴 Pago Nacional (Bolivia)</option>
+                              <option value="international">🌎 Transferencia Internacional (Por País)</option>
+                              <option value="service">⚡ Criptomonedas & Servicios Digitales</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="block text-zinc-400 mb-1 font-semibold text-[11px]">
+                              Instrucciones, Coordenadas y Cuentas Bancarias
+                            </label>
+                            <textarea
+                              rows={5}
+                              value={editingPaymentMethod.description || ''}
+                              onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, description: e.target.value })}
+                              placeholder="Escribe el número de cuenta, CI, titular, banco, alias, correo electrónico o dirección de billetera que verá el cliente..."
+                              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 resize-none font-sans leading-relaxed"
                             />
                           </div>
-                        ) : (
-                          <div className="w-full h-16 bg-zinc-900/40 rounded-xl border border-dashed border-zinc-800 flex items-center justify-center text-zinc-600 text-[11px]">
-                            Sin imagen / QR subido
-                          </div>
-                        )}
-
-                        <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
-                          {method.description || 'Sin instrucciones adicionales configuradas.'}
-                        </p>
+                        </div>
                       </div>
 
-                      <div className="pt-2 border-t border-zinc-900 flex items-center justify-between">
-                        <span className="text-[10px] font-semibold text-zinc-500 uppercase">
-                          {method.category === 'national' ? '🇧🇴 Nacional' : method.category === 'international' ? '🌎 Internacional' : '⚡ Servicio'}
-                        </span>
+                      {/* Barra de Acciones del Contenedor: Cancelar, Guardar, Guardar/Publicar */}
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-3 border-t border-zinc-800">
                         <button
                           type="button"
                           onClick={() => {
-                            setEditingPaymentMethod(method);
-                            setPaymentImageFile(null);
+                            const original = paymentMethods.find(m => m.id === selectedPaymentMethodId);
+                            if (original) {
+                              setEditingPaymentMethod({ ...original });
+                              setPaymentImageFile(null);
+                              setPaymentImagePreview(null);
+                              setMessage({ type: 'success', text: 'Cambios descartados, datos restaurados.' });
+                            }
                           }}
-                          className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-amber-300 hover:text-amber-200 font-bold rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                          className="w-full sm:w-auto px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold rounded-xl text-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5"
                         >
-                          <Edit className="w-3.5 h-3.5" /> Editar
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Cancelar Cambios</span>
                         </button>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                          <button
+                            type="submit"
+                            disabled={loading}
+                            className="flex-1 sm:flex-initial px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
+                          >
+                            <Save className="w-3.5 h-3.5" />
+                            <span>{loading ? 'Guardando...' : '💾 Guardar'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={loading || publishingPaymentsToChannel}
+                            onClick={() => handleSavePaymentMethod(undefined, true)}
+                            className="flex-1 sm:flex-initial px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-pink-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
+                            title="Guarda los cambios y publica el menú interactivo en el canal oficial"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>{publishingPaymentsToChannel ? 'Publicando...' : '🚀 Guardar y Publicar'}</span>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    </form>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-zinc-950 border border-zinc-800 rounded-2xl text-zinc-400">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto text-amber-500 mb-2" />
+                    <span>Cargando métodos de pago...</span>
+                  </div>
+                )}
               </div>
             )}
 

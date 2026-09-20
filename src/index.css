@@ -7,9 +7,13 @@
 }
 
 /* ── Base ── */
-html, body {
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
   max-width: 100vw;
   overflow-x: hidden;
+  overscroll-behavior-y: none;
   word-break: break-word;
   overflow-wrap: anywhere;
   font-family: var(--font-sans);
