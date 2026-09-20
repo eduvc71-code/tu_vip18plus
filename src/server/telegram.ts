@@ -924,6 +924,8 @@ export async function processTelegramUpdate(update: any) {
   // 1.2. Client Commands & Menus (Interactive for all users)
   if (
     normText.startsWith('/start inv_') ||
+    normText.startsWith('/start free') ||
+    normText.startsWith('/start canal') ||
     normText === '/start' ||
     normText === '/invitar' ||
     normText === '/codigo' ||
@@ -1855,7 +1857,7 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
       { text: '💳 Ver Métodos de Pago', url: `https://t.me/${botUsername}?start=pagos` }
     ],
     [
-      { text: '💎 Abrir Catálogo VIP Free', url: `https://t.me/${botUsername}` }
+      { text: '💎 Abrir Canal VIP Free', url: `https://t.me/${botUsername}` }
     ]
   ];
 
