@@ -45,11 +45,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 
 // Environment variables
 export function getBotConfig() {
-  const ACTIVE_BOT_TOKEN = '8949665976:AAFp1VoeLwPTXDCfvED1g0PAFJgAZAr56Sw';
-  let token = (process.env.BOT_TOKEN || '').trim();
-  if (!token || !token.startsWith('8949665976')) {
-    token = ACTIVE_BOT_TOKEN;
-  }
+  const token = (process.env.BOT_TOKEN || '').trim();
   const storedUsername = getSystemSetting('bot_username');
   let rawUsername = process.env.BOT_USERNAME || storedUsername || 'Danii_Catalogo_SCZ_bot';
   if (!rawUsername || /ruti|flavia|iam_danii_vip_bot/i.test(rawUsername)) {
