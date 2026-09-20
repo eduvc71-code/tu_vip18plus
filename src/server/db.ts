@@ -1556,3 +1556,96 @@ export async function updateBotMediaItem(id: string, updates: Partial<BotMediaIt
   return all.find(x => x.id === id) || null;
 }
 
+export async function getDatabaseStats(): Promise<{
+  fileSizeBytes: number;
+  fileSizeFormatted: string;
+  tableCounts: Record<string, number>;
+  largeFieldsAlert?: string[];
+}> {
+  const database = await getDb();
+  const tablesRes = database.exec("SELECT name FROM sqlite_master WHERE type='table'");
+  const tables = tablesRes?.[0]?.values?.map(v => String(v[0])) || [];
+  const stats: Record<string, number> = {};
+  for (const t of tables) {
+    try {
+      const countRes = database.exec(`SELECT COUNT(*) FROM ${t}`);
+      stats[t] = Number(countRes?.[0]?.values?.[0]?.[0] || 0);
+    } catch {}
+  }
+
+  const largeAlerts: string[] = [];
+  // Detectar si hay base64 o campos excesivamente grandes en profiles
+  try {
+    const profs = database.exec("SELECT id, name, length(photos) as l_photos, length(description) as l_desc FROM profiles");
+    if (profs?.[0]?.values) {
+      for (const row of profs[0].values) {
+        if (Number(row[2]) > 50000) {
+          largeAlerts.push(`Perfil ${row[1]} tiene ${row[2]} bytes en campo photos (posible base64 o sobrecarga)`);
+        }
+      }
+    }
+  } catch {}
+
+  let fileSize = 0;
+  if (fs.existsSync(DB_FILE)) {
+    fileSize = fs.statSync(DB_FILE).size;
+  }
+
+  return {
+    fileSizeBytes: fileSize,
+    fileSizeFormatted: `${(fileSize / (1024 * 1024)).toFixed(2)} MB`,
+    tableCounts: stats,
+    largeFieldsAlert: largeAlerts.length > 0 ? largeAlerts : undefined
+  };
+}
+
+export async function vacuumAndCompactDb(): Promise<{
+  before: string;
+  after: string;
+  purgedLogs: number;
+  message: string;
+}> {
+  const database = await getDb();
+  const beforeStats = await getDatabaseStats();
+
+  let purgedLogs = 0;
+  try {
+    const countBefore = database.exec("SELECT COUNT(*) FROM audit_logs");
+    const cVal = Number(countBefore?.[0]?.values?.[0]?.[0] || 0);
+    // Limpiar logs antiguos de auditoría y errores que ya no se necesitan
+    database.run("DELETE FROM audit_logs WHERE timestamp < datetime('now', '-15 days')");
+    database.run("DELETE FROM sync_errors WHERE timestamp < datetime('now', '-15 days')");
+    const countAfter = database.exec("SELECT COUNT(*) FROM audit_logs");
+    const aVal = Number(countAfter?.[0]?.values?.[0]?.[0] || 0);
+    purgedLogs = Math.max(0, cVal - aVal);
+  } catch (e) {
+    console.warn('[VACUUM] Advertencia al purgar logs antiguos:', e);
+  }
+
+  // Ejecutar VACUUM para desfragmentar y liberar todas las páginas vacías de SQLite
+  try {
+    database.run("VACUUM;");
+  } catch (e) {
+    console.warn('[VACUUM] Error ejecutando comando VACUUM:', e);
+  }
+
+  saveDb();
+  if (isB2Configured()) {
+    try {
+      await syncDbToB2Now();
+    } catch (e) {
+      console.warn('[VACUUM] Advertencia al sincronizar snapshot con B2:', e);
+    }
+  }
+
+  const afterStats = await getDatabaseStats();
+
+  return {
+    before: beforeStats.fileSizeFormatted,
+    after: afterStats.fileSizeFormatted,
+    purgedLogs,
+    message: `Base de datos compactada con éxito: pasó de ${beforeStats.fileSizeFormatted} a ${afterStats.fileSizeFormatted}.`
+  };
+}
+
+

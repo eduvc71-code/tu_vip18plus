@@ -47,7 +47,9 @@ import {
   getBotMediaQueue,
   addBotMediaItem,
   deleteBotMediaItem,
-  updateBotMediaItem
+  updateBotMediaItem,
+  getDatabaseStats,
+  vacuumAndCompactDb
 } from './db.js';
 import {
   processTelegramUpdate,
@@ -1896,3 +1898,26 @@ router.post('/admin/payment-methods/publish-channel', requireAdminAuth, async (r
     res.status(500).json({ error: 'Error al publicar métodos de pago en el canal', details: err?.message });
   }
 });
+
+// GET Database Statistics and Size Breakdown (Admin)
+router.get('/admin/system/database-stats', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const stats = await getDatabaseStats();
+    res.json({ ok: true, stats });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener estadísticas de la base de datos', details: err?.message });
+  }
+});
+
+// POST Vacuum and Compact Database (Admin)
+router.post('/admin/system/database-vacuum', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await vacuumAndCompactDb();
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DATABASE_VACUUM', adminId, `Compactación y VACUUM ejecutado. Tamaño: ${result.before} -> ${result.after}. Logs purgados: ${result.purgedLogs}`);
+    res.json({ ok: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al compactar la base de datos', details: err?.message });
+  }
+});
+
