@@ -16,9 +16,14 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
   const headerTitle = `Canal Free • ${cleanModelName}`;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-xl backdrop-blur-xl">
+    <header 
+      className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-xl backdrop-blur-xl transition-all"
+      style={{
+        paddingTop: 'max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 44px)'
+      }}
+    >
       <div className="mx-auto max-w-7xl px-3.5 sm:px-6 lg:px-8">
-        <div className="flex h-14 items-center justify-between gap-2">
+        <div className="flex h-13 sm:h-14 items-center justify-between gap-2">
           
           {/* Left: Balanced Brand Badge */}
           <div className="flex items-center gap-1.5 shrink-0 min-w-[70px]">

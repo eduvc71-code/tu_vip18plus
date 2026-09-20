@@ -29,6 +29,34 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     };
   }, []);
 
+  // Integración con BackButton nativo de Telegram Mini App
+  useEffect(() => {
+    if (!isOpen) return;
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.BackButton) {
+      try {
+        tg.BackButton.show();
+        const handleBack = () => {
+          if (ephemeralMethod) {
+            if (ephemeralTimerRef.current) clearInterval(ephemeralTimerRef.current);
+            setEphemeralMethod(null);
+          } else if (selectedMethodId) {
+            setSelectedMethodId(null);
+          } else {
+            handleCloseAll();
+          }
+        };
+        tg.BackButton.onClick(handleBack);
+        return () => {
+          try {
+            tg.BackButton.offClick(handleBack);
+            tg.BackButton.hide();
+          } catch {}
+        };
+      } catch {}
+    }
+  }, [isOpen, selectedMethodId, ephemeralMethod]);
+
   if (!isOpen) return null;
 
   const cleanAdminUsername = adminContactUsername.replace(/^@/, '').trim();

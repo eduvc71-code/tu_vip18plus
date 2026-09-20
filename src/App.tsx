@@ -288,6 +288,24 @@ export default function App() {
     };
   }, []);
 
+  // Restauración activa del scroll táctil en la pantalla principal al cerrar cualquier modal
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(selectedProfile || showPaymentModal || requestProfile);
+    if (!isAnyModalOpen) {
+      document.documentElement.style.overflow = '';
+      document.body.style.overflow = '';
+      document.body.style.touchAction = 'pan-y';
+
+      // Nudge WebKit/Chromium para reanudar el despachador de eventos táctiles
+      const rId = setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new Event('scroll'));
+      }, 50);
+
+      return () => clearTimeout(rId);
+    }
+  }, [selectedProfile, showPaymentModal, requestProfile]);
+
   // This template presents one creator profile.
   const filteredProfiles = profiles.slice(0, 1);
 
@@ -345,7 +363,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-zinc-950">
+    <div className="min-h-screen w-full bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-zinc-950 touch-pan-y">
       
       {/* Age Modal Gate (+18) */}
       <AgeModal onConfirm={() => fetchProfiles()} modelName={displayName} />
@@ -359,7 +377,7 @@ export default function App() {
       />
 
       {/* Main Catalog View */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 touch-pan-y">
 
         {/* Pinned Announcement Banner from Admin */}
         {pinnedActive && pinnedText && (
@@ -540,6 +558,11 @@ export default function App() {
         onClose={() => {
           setSelectedProfile(null);
           setSelectedMediaUrl(undefined);
+          try {
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+            document.body.style.touchAction = 'pan-y';
+          } catch {}
         }}
         onOpenPaymentMethods={() => setShowPaymentModal(true)}
         onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
@@ -550,13 +573,27 @@ export default function App() {
         profile={requestProfile}
         modelName={displayName}
         tgUserContext={tgUser}
-        onClose={() => setRequestProfile(null)}
+        onClose={() => {
+          setRequestProfile(null);
+          try {
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+            document.body.style.touchAction = 'pan-y';
+          } catch {}
+        }}
       />
 
       {/* Payment Methods Modal */}
       <PaymentMethodsModal
         isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+        onClose={() => {
+          setShowPaymentModal(false);
+          try {
+            document.body.style.overflow = '';
+            document.documentElement.style.overflow = '';
+            document.body.style.touchAction = 'pan-y';
+          } catch {}
+        }}
         adminContactUsername={adminContactUsername}
         paymentMethods={paymentMethods}
       />

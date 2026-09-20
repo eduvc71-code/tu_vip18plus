@@ -110,19 +110,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
           
           {/* 1. SECCIÓN IMÁGENES */}
           <div>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                <Images className="h-4 w-4 text-amber-400" />
-                <span>Fotos</span>
-                <span className="text-[11px] text-zinc-500 font-mono">({images.length})</span>
-              </span>
-              {images.length > 1 && (
-                <span className="text-[11px] font-mono text-zinc-400">
-                  {imageIndex + 1} / {images.length}
-                </span>
-              )}
-            </div>
-
             <div
               onClick={() => onSelectMedia ? onSelectMedia(profile, selectedImage) : onSelectProfile(profile)}
               className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
@@ -159,52 +146,56 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               )}
             </div>
 
-            {images.length > 1 && (
-              <div className="mt-2 flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => moveImage(-1)}
-                  aria-label="Foto anterior"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <div className="flex gap-1">
-                  {images.map((_, idx) => (
-                    <span
-                      key={idx}
-                      className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-4 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                    />
-                  ))}
+            {/* Controles e Indicadores al pie de las Fotos */}
+            <div className="mt-2.5 flex items-center justify-between px-1">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                <Images className="h-3.5 w-3.5 text-amber-400" />
+                <span>Fotos</span>
+                <span className="text-[10px] text-zinc-500 font-mono">({images.length})</span>
+              </span>
+
+              {images.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
+                    aria-label="Foto anterior"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex gap-1">
+                    {images.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveImage(1); }}
+                    aria-label="Foto siguiente"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => moveImage(1)}
-                  aria-label="Foto siguiente"
-                  className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            )}
+              )}
+
+              {images.length > 1 ? (
+                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800">
+                  {imageIndex + 1} / {images.length}
+                </span>
+              ) : (
+                <span className="w-8" />
+              )}
+            </div>
           </div>
 
-          {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON EL MISMO EFECTO AUTODESLIZANTE) */}
+          {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON CONTROLES INFERIORES) */}
           {videos.length > 0 && (
-            <div className="pt-2 border-t border-zinc-800/80">
-              <div className="mb-2 flex items-center justify-between px-1">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                  <Video className="h-4 w-4 text-amber-400" />
-                  <span>Videos</span>
-                  <span className="text-[11px] text-zinc-500 font-mono">({videos.length})</span>
-                </span>
-                {videos.length > 1 && (
-                  <span className="text-[11px] font-mono text-zinc-400">
-                    {videoIndex + 1} / {videos.length}
-                  </span>
-                )}
-              </div>
-
+            <div className="pt-3 border-t border-zinc-800/80">
               <div
                 onClick={() => onSelectMedia ? onSelectMedia(profile, selectedVideo) : onSelectProfile(profile)}
                 className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
@@ -229,34 +220,51 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 )}
               </div>
 
-              {videos.length > 1 && (
-                <div className="mt-2 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => moveVideo(-1)}
-                    aria-label="Video anterior"
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  <div className="flex gap-1">
-                    {videos.map((_, idx) => (
-                      <span
-                        key={idx}
-                        className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-4 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                      />
-                    ))}
+              {/* Controles e Indicadores al pie de los Videos */}
+              <div className="mt-2.5 flex items-center justify-between px-1">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                  <Video className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Videos</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
+                </span>
+
+                {videos.length > 1 && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
+                      aria-label="Video anterior"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="flex gap-1">
+                      {videos.map((_, idx) => (
+                        <span
+                          key={idx}
+                          className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
+                      aria-label="Video siguiente"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => moveVideo(1)}
-                    aria-label="Video siguiente"
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
+                )}
+
+                {videos.length > 1 ? (
+                  <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800">
+                    {videoIndex + 1} / {videos.length}
+                  </span>
+                ) : (
+                  <span className="w-8" />
+                )}
+              </div>
             </div>
           )}
 

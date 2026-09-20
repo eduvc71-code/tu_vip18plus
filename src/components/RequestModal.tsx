@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Profile } from '../types';
 import { X, Send, AlertTriangle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -20,6 +20,24 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+
+  // Integración con BackButton nativo de Telegram Mini App
+  useEffect(() => {
+    if (!profile) return;
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.BackButton) {
+      try {
+        tg.BackButton.show();
+        tg.BackButton.onClick(onClose);
+        return () => {
+          try {
+            tg.BackButton.offClick(onClose);
+            tg.BackButton.hide();
+          } catch {}
+        };
+      } catch {}
+    }
+  }, [profile, onClose]);
 
   if (!profile) return null;
 
