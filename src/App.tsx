@@ -78,6 +78,34 @@ export default function App() {
       try {
         tgWebApp.ready();
         tgWebApp.expand();
+
+        // 1. Solicitar Pantalla Completa nativa (Telegram Bot API 8.0+)
+        if (typeof tgWebApp.requestFullscreen === 'function') {
+          try {
+            tgWebApp.requestFullscreen();
+          } catch (fsErr) {
+            console.warn('[Telegram Fullscreen]:', fsErr);
+          }
+        }
+
+        // 2. Mimetizar color de la barra superior con el fondo oscuro (#09090b)
+        if (typeof tgWebApp.setHeaderColor === 'function') {
+          try {
+            tgWebApp.setHeaderColor('#09090b');
+          } catch {}
+        }
+        if (typeof tgWebApp.setBackgroundColor === 'function') {
+          try {
+            tgWebApp.setBackgroundColor('#09090b');
+          } catch {}
+        }
+
+        // 3. Desactivar deslizamiento vertical accidental que cierra la Mini App
+        if (typeof tgWebApp.disableVerticalSwipes === 'function') {
+          try {
+            tgWebApp.disableVerticalSwipes();
+          } catch {}
+        }
       } catch {
         // Safe fallback
       }
