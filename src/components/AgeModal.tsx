@@ -11,15 +11,22 @@ export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
   const [accepted, setAccepted] = useState(true);
 
   useEffect(() => {
-    // Si ya es suscriptor o usuario verificado previamente, no volver a abrir el splash
-    const verified = localStorage.getItem('danii_vip_age_verified');
-    if (!verified) {
-      setIsOpen(true);
+    // Si ya es suscriptor o usuario verificado previamente, no volver a abrir el splash (directo a pantalla principal)
+    try {
+      const isSubscribed = localStorage.getItem('danii_vip_subscriber_active') || localStorage.getItem('danii_vip_age_verified');
+      if (!isSubscribed) {
+        setIsOpen(true);
+      }
+    } catch {
+      // En caso de bloqueo de localStorage en navegador restringido, no bloquear
     }
   }, []);
 
   const handleAccept = () => {
-    localStorage.setItem('danii_vip_age_verified', 'true');
+    try {
+      localStorage.setItem('danii_vip_subscriber_active', 'true');
+      localStorage.setItem('danii_vip_age_verified', 'true');
+    } catch {}
     setIsOpen(false);
     onConfirm();
   };

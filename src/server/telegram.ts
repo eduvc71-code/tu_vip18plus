@@ -489,7 +489,8 @@ export async function syncProfileToChannel(profileId: string, performer: string 
 
   const primaryPhoto = profile.photos && profile.photos.length > 0 ? profile.photos[0] : null;
   const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || '';
-  const caption = activeDesc.trim() || 'Contenido VIP Exclusivo';
+  const descText = activeDesc.trim() ? `${activeDesc.trim()}\n\n` : '';
+  const caption = `${descText}✨ *¿Quieres ver más?* Toca el botón abajo para abrir la galería completa 👇`;
 
   const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
 
@@ -534,6 +535,7 @@ export async function syncProfileToChannel(profileId: string, performer: string 
       chat_id: channelId,
       [field]: mediaTarget,
       caption,
+      has_spoiler: true,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup
     });
@@ -616,7 +618,7 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
         { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
       ],
       [
-        { text: '💎 Abrir en Canal VIP Free', url: botAppUrl }
+        { text: '💎 Abrir Canal VIP Free', url: botAppUrl }
       ],
       ...customButtonRows
     ]

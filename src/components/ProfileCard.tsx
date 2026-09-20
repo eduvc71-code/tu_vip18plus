@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, Eye, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -54,63 +54,46 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
   const images = useMemo(() => allMedia.filter(item => !isVideoUrl(item)), [allMedia]);
   const videos = useMemo(() => allMedia.filter(isVideoUrl), [allMedia]);
-  const [mediaType, setMediaType] = useState<'images' | 'videos'>(images.length > 0 ? 'images' : (videos.length > 0 ? 'videos' : 'images'));
-  const [selectedMedia, setSelectedMedia] = useState(allMedia[0]);
+
   const [imageIndex, setImageIndex] = useState(0);
+  const [videoIndex, setVideoIndex] = useState(0);
 
-  const visibleMedia = mediaType === 'images' ? images : videos;
   const isAvailable = profile.status === 'disponible' || profile.status === 'activa';
-  const isCurrentEphemeral = Boolean(profile.ephemeral_config?.[selectedMedia]?.enabled);
-  const currentDuration = profile.ephemeral_config?.[selectedMedia]?.duration_seconds || 5;
 
-  // Reset to first media when collections change
-  useEffect(() => {
-    if (images.length > 0) {
-      setMediaType('images');
-      setSelectedMedia(images[0]);
-      setImageIndex(0);
-    } else if (videos.length > 0) {
-      setMediaType('videos');
-      setSelectedMedia(videos[0]);
-      setImageIndex(0);
-    } else {
-      setSelectedMedia(allMedia[0]);
-    }
-  }, [allMedia, images, videos]);
+  const selectedImage = images[imageIndex] || images[0] || '';
+  const selectedVideo = videos[videoIndex] || videos[0] || '';
 
-  // Auto-rotate media (both images and videos) every 4 seconds when not viewing an ephemeral image
+  const isCurrentImageEphemeral = Boolean(selectedImage && profile.ephemeral_config?.[selectedImage]?.enabled);
+  const currentImageDuration = (selectedImage && profile.ephemeral_config?.[selectedImage]?.duration_seconds) || 5;
+
+  // Auto-deslizante de Imágenes cada 4 segundos
   useEffect(() => {
-    if (visibleMedia.length > 1 && !isCurrentEphemeral) {
+    if (images.length > 1 && !isCurrentImageEphemeral) {
       const interval = setInterval(() => {
-        moveMedia(1);
+        setImageIndex(prev => (prev + 1) % images.length);
       }, 4000);
       return () => clearInterval(interval);
     }
-  }, [visibleMedia.length, isCurrentEphemeral, selectedMedia, mediaType]);
+  }, [images.length, isCurrentImageEphemeral]);
 
-  const selectType = (type: 'images' | 'videos') => {
-    const collection = type === 'images' ? images : videos;
-    if (!collection.length) return;
-    setMediaType(type);
-    setSelectedMedia(collection[0]);
-    if (type === 'images') {
-      setImageIndex(0);
+  // Auto-deslizante de Videos cada 4 segundos
+  useEffect(() => {
+    if (videos.length > 1) {
+      const interval = setInterval(() => {
+        setVideoIndex(prev => (prev + 1) % videos.length);
+      }, 4000);
+      return () => clearInterval(interval);
     }
+  }, [videos.length]);
+
+  const moveImage = (direction: -1 | 1) => {
+    if (images.length < 2) return;
+    setImageIndex(prev => (prev + direction + images.length) % images.length);
   };
 
-  const moveMedia = (direction: -1 | 1) => {
-    if (visibleMedia.length < 2) return;
-    if (mediaType === 'images') {
-      setImageIndex(prev => {
-        const next = (prev + direction + images.length) % images.length;
-        setSelectedMedia(images[next]);
-        return next;
-      });
-    } else {
-      const currentIndex = Math.max(0, visibleMedia.indexOf(selectedMedia));
-      const nextIndex = (currentIndex + direction + visibleMedia.length) % visibleMedia.length;
-      setSelectedMedia(visibleMedia[nextIndex]);
-    }
+  const moveVideo = (direction: -1 | 1) => {
+    if (videos.length < 2) return;
+    setVideoIndex(prev => (prev + direction + videos.length) % videos.length);
   };
 
   return (
@@ -119,155 +102,220 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/90 shadow-2xl shadow-black/30"
     >
       <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
-        <div className="bg-zinc-950 p-3 sm:p-4">
-          <div className="mb-3 flex items-center gap-2" role="tablist" aria-label="Tipo de contenido">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mediaType === 'images'}
-              onClick={() => selectType('images')}
-              disabled={!images.length}
-              className={`min-h-11 flex-1 rounded-xl px-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${mediaType === 'images' ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'} disabled:cursor-not-allowed disabled:opacity-35`}
-            >
-              <Images className="h-4 w-4" /> Imágenes <span className="opacity-70">{images.length}</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mediaType === 'videos'}
-              onClick={() => selectType('videos')}
-              disabled={!videos.length}
-              className={`min-h-11 flex-1 rounded-xl px-3 text-xs font-bold transition-colors flex items-center justify-center gap-2 ${mediaType === 'videos' ? 'bg-amber-500 text-zinc-950' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'} disabled:cursor-not-allowed disabled:opacity-35`}
-            >
-              <Video className="h-4 w-4" /> Videos <span className="opacity-70">{videos.length}</span>
-            </button>
-          </div>
-
-          {/* Compact media preview container (divided vertically in 2, tap to see full designed size) */}
-          <div
-            onClick={() => onSelectProfile(profile)}
-            className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[260px] sm:max-h-[300px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
-            title="Toca para ver en tamaño completo"
-          >
-            {allMedia.length === 0 ? (
-              <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950/80 border border-dashed border-zinc-800 rounded-2xl">
-                <ShieldCheck className="w-10 h-10 text-amber-400/60 mb-2" />
-                <p className="text-xs font-bold text-zinc-300">Contenido Próximamente</p>
-                <p className="text-[11px] text-zinc-500 mt-1">El material exclusivo se publicará en breve.</p>
-              </div>
-            ) : (
-              <EphemeralViewer
-                src={selectedMedia}
-                alt={`Contenido de ${modelName}`}
-                modelName={modelName}
-                autoPlay={isVideoUrl(selectedMedia)}
-                showControls={false}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                isEphemeral={isCurrentEphemeral}
-                durationSeconds={currentDuration}
-                isSeen={seenEphemeralUrls.has(selectedMedia)}
-                onExpired={() => handleMediaExpired(selectedMedia)}
-                onRequestVip={() => onRequestAvailability(profile)}
-              />
-            )}
-
-            {profile.media_stars?.[selectedMedia] && (
-              <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg shadow-amber-500/30 uppercase tracking-wide">
-                  ⭐ {profile.media_stars[selectedMedia]} Estrellas
+        
+        {/* Columna Multimedia: Imágenes ARRIBA y Videos DEBAJO */}
+        <div className="bg-zinc-950 p-3 sm:p-4 space-y-4">
+          
+          {/* 1. SECCIÓN IMÁGENES */}
+          <div>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                <Images className="h-4 w-4 text-amber-400" />
+                <span>Fotos</span>
+                <span className="text-[11px] text-zinc-500 font-mono">({images.length})</span>
+              </span>
+              {images.length > 1 && (
+                <span className="text-[11px] font-mono text-zinc-400">
+                  {imageIndex + 1} / {images.length}
                 </span>
+              )}
+            </div>
+
+            <div
+              onClick={() => onSelectProfile(profile)}
+              className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
+              title="Toca para ampliar"
+            >
+              {images.length === 0 ? (
+                <div className="h-full w-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950/80 border border-dashed border-zinc-800 rounded-2xl">
+                  <ShieldCheck className="w-8 h-8 text-amber-400/60 mb-2" />
+                  <p className="text-xs font-bold text-zinc-300">Sin fotos disponibles</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">El material exclusivo se publicará en breve.</p>
+                </div>
+              ) : (
+                <EphemeralViewer
+                  src={selectedImage}
+                  alt={`Foto de ${modelName}`}
+                  modelName={modelName}
+                  autoPlay={false}
+                  showControls={false}
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  isEphemeral={isCurrentImageEphemeral}
+                  durationSeconds={currentImageDuration}
+                  isSeen={seenEphemeralUrls.has(selectedImage)}
+                  onExpired={() => handleMediaExpired(selectedImage)}
+                  onRequestVip={() => onRequestAvailability(profile)}
+                />
+              )}
+
+              {selectedImage && profile.media_stars?.[selectedImage] && (
+                <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
+                    ⭐ {profile.media_stars[selectedImage]} Estrellas
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {images.length > 1 && (
+              <div className="mt-2 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => moveImage(-1)}
+                  aria-label="Foto anterior"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="flex gap-1">
+                  {images.map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-4 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => moveImage(1)}
+                  aria-label="Foto siguiente"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
             )}
-
-            <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-zinc-950/80 text-amber-300 border border-amber-500/30 backdrop-blur-md shadow-md">
-                <Eye className="w-3.5 h-3.5 text-amber-400" /> Toca para ampliar
-              </span>
-            </div>
           </div>
 
-          {visibleMedia.length > 1 && (
-            <div className="mt-3 flex items-center justify-center gap-3">
-              <button type="button" onClick={() => moveMedia(-1)} aria-label="Medio anterior" className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 transition-colors hover:border-amber-500/50 hover:text-amber-300">
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-              <span className="min-w-14 text-center text-xs font-semibold text-zinc-400">
-                {mediaType === 'images' ? (imageIndex + 1) : (visibleMedia.indexOf(selectedMedia) + 1)} / {visibleMedia.length}
-              </span>
-              <button type="button" onClick={() => moveMedia(1)} aria-label="Medio siguiente" className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 transition-colors hover:border-amber-500/50 hover:text-amber-300">
-                <ChevronRight className="h-5 w-5" />
-              </button>
+          {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON EL MISMO EFECTO AUTODESLIZANTE) */}
+          {videos.length > 0 && (
+            <div className="pt-2 border-t border-zinc-800/80">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
+                  <Video className="h-4 w-4 text-amber-400" />
+                  <span>Videos</span>
+                  <span className="text-[11px] text-zinc-500 font-mono">({videos.length})</span>
+                </span>
+                {videos.length > 1 && (
+                  <span className="text-[11px] font-mono text-zinc-400">
+                    {videoIndex + 1} / {videos.length}
+                  </span>
+                )}
+              </div>
+
+              <div
+                onClick={() => onSelectProfile(profile)}
+                className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
+                title="Toca para ampliar video"
+              >
+                <video
+                  key={selectedVideo}
+                  src={selectedVideo}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+
+                {selectedVideo && profile.media_stars?.[selectedVideo] && (
+                  <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
+                      ⭐ {profile.media_stars[selectedVideo]} Estrellas
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {videos.length > 1 && (
+                <div className="mt-2 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => moveVideo(-1)}
+                    aria-label="Video anterior"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <div className="flex gap-1">
+                    {videos.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-4 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => moveVideo(1)}
+                    aria-label="Video siguiente"
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
+
         </div>
 
-        <div className="flex flex-col justify-between p-5 sm:p-6">
-          <div>
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${isAvailable ? 'bg-emerald-500/15 text-emerald-300' : 'bg-zinc-800 text-zinc-300'}`}>
-                <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
-                {isAvailable ? 'Suscripción disponible' : 'Atención privada'}
-              </span>
-              <ShieldCheck className="h-5 w-5 text-amber-400" aria-label="Contenido protegido" />
-            </div>
-
-            {/* Descripción del Perfil configurada en Datos */}
+        {/* Columna de Información y Botones de Acción */}
+        <div className="flex flex-col justify-between p-4 sm:p-5">
+          <div className="space-y-3">
+            
+            {/* Descripción del Perfil */}
             {profile.description && (
-              <p className="my-2 text-xs text-zinc-300 line-clamp-3 leading-relaxed font-normal">
+              <p className="text-xs text-zinc-300 leading-relaxed font-normal whitespace-pre-line">
                 {profile.description}
               </p>
             )}
-
-            {/* Contenedor de precio ultra-compacto */}
-            <div className="my-2.5 flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-200/80">Suscripción VIP</span>
-              <div className="flex items-baseline gap-1">
-                <strong className="text-sm font-black text-amber-400">Bs. {profile.rate_bs}</strong>
-                <span className="text-[10px] text-zinc-400">/ mes</span>
-              </div>
-            </div>
 
             {modelVipLink && (
               <a
                 href={modelVipLink}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-xs font-semibold text-zinc-200 hover:border-amber-500/40 hover:text-amber-300">
-                <Link className="h-3.5 w-3.5" /> Abrir red social
+                className="inline-flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs font-semibold text-zinc-300 hover:border-amber-500/40 hover:text-amber-300 transition-colors"
+              >
+                <Link className="h-3.5 w-3.5" /> Red social oficial
               </a>
             )}
+
+            {/* Botones de Acción Ajustados y Reducidos (Grid de 2 Columnas) */}
+            <div className="pt-2 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => onRequestAvailability(profile)}
+                id={`btn-request-${profile.id}`}
+                className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95 transition-all cursor-pointer truncate"
+              >
+                <Send className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Adquirir Contenido</span>
+              </button>
+
+              {onOpenPaymentMethods && (
+                <button
+                  type="button"
+                  onClick={onOpenPaymentMethods}
+                  className="py-2.5 px-3 rounded-xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-amber-600/20 hover:from-amber-500/25 hover:to-amber-600/30 text-amber-300 hover:text-amber-200 text-xs font-extrabold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm cursor-pointer truncate"
+                >
+                  <span className="shrink-0">💳</span>
+                  <span className="truncate">Métodos de Pago</span>
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-[auto_1fr] gap-2">
-            <button
-              type="button"
-              onClick={() => onSelectProfile(profile)}
-              className="min-h-11 rounded-xl border border-zinc-700 bg-zinc-800/90 hover:bg-zinc-800 px-3.5 text-zinc-200 hover:text-amber-300 hover:border-amber-500/40 flex items-center justify-center gap-1.5 font-bold text-xs transition-colors cursor-pointer"
-              aria-label="Ver contenido en tamaño completo"
-              title="Ver contenido en tamaño completo"
-            >
-              <Eye className="h-4 w-4 text-amber-400" />
-              <span>Ver</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onRequestAvailability(profile)}
-              id={`btn-request-${profile.id}`}
-              className="min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 text-xs sm:text-sm font-extrabold text-zinc-950 shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-amber-500 flex items-center justify-center gap-2 cursor-pointer">
-              <Send className="h-4 w-4" /> Adquirir Contenido
-            </button>
+          {/* Etiqueta SUSCRIPCIÓN DISPONIBLE movida al final de la pantalla/tarjeta */}
+          <div className="mt-4 pt-3 border-t border-zinc-800/80 flex items-center justify-between">
+            <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider ${isAvailable ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20' : 'bg-zinc-800 text-zinc-300'}`}>
+              <span className={`h-2 w-2 rounded-full ${isAvailable ? 'bg-emerald-400 animate-pulse' : 'bg-zinc-500'}`} />
+              {isAvailable ? 'Suscripción disponible' : 'Atención privada'}
+            </span>
+            <ShieldCheck className="h-4 w-4 text-amber-400/80" aria-label="Contenido protegido" />
           </div>
 
-          {onOpenPaymentMethods && (
-            <button
-              type="button"
-              onClick={onOpenPaymentMethods}
-              className="mt-2 w-full min-h-11 rounded-xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-amber-600/20 hover:from-amber-500/25 hover:to-amber-600/30 px-3 text-xs font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
-            >
-              <span>💳</span>
-              <span>Métodos de Pago</span>
-            </button>
-          )}
         </div>
       </div>
     </article>

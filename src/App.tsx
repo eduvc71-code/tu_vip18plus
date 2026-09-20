@@ -32,7 +32,6 @@ export default function App() {
   const [pinnedText, setPinnedText] = useState('');
   const [pinnedActive, setPinnedActive] = useState(false);
 
-  const [showIntroBanner, setShowIntroBanner] = useState(false);
   const [isAdminView, setIsAdminView] = useState(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
@@ -47,79 +46,62 @@ export default function App() {
   const [tgUser, setTgUser] = useState<TelegramUserContext | null>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowIntroBanner(false);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('admin_token') || params.get('admin') === 'true' || params.get('panel') === 'true') {
-      setIsAdminView(true);
-      setAccessChecking(false);
-      return;
-    }
-
-    // Permitir previsualización en navegador local con ?dev=true o ?preview=true
-    if (params.get('dev') === 'true' || params.get('preview') === 'true') {
-      setTelegramAuthorized(true);
-      setTgUser({
-        id: '123456789',
-        first_name: 'Usuario Demo',
-        username: 'demo_user'
-      });
-      setAccessChecking(false);
-      return;
-    }
+    const enforceFullscreen = () => {
+      const tg = (window as any).Telegram?.WebApp;
+      if (!tg) return;
+      try {
+        if (!tg.isExpanded) tg.expand();
+        if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
+          tg.requestFullscreen();
+        }
+      } catch {}
+    };
 
     const tgWebApp = (window as any).Telegram?.WebApp;
     if (tgWebApp) {
       try {
         tgWebApp.ready();
-        tgWebApp.expand();
+        enforceFullscreen();
 
-        // 1. Solicitar Pantalla Completa nativa (Telegram Bot API 8.0+)
-        if (typeof tgWebApp.requestFullscreen === 'function') {
-          try {
-            tgWebApp.requestFullscreen();
-          } catch (fsErr) {
-            console.warn('[Telegram Fullscreen]:', fsErr);
-          }
-        }
-
-        // 2. Mimetizar color de la barra superior con el fondo oscuro (#09090b)
+        // Mimetizar color de la barra superior con el fondo oscuro (#09090b)
         if (typeof tgWebApp.setHeaderColor === 'function') {
-          try {
-            tgWebApp.setHeaderColor('#09090b');
-          } catch {}
+          try { tgWebApp.setHeaderColor('#09090b'); } catch {}
         }
         if (typeof tgWebApp.setBackgroundColor === 'function') {
-          try {
-            tgWebApp.setBackgroundColor('#09090b');
-          } catch {}
+          try { tgWebApp.setBackgroundColor('#09090b'); } catch {}
         }
 
-        // 3. Desactivar deslizamiento vertical accidental que cierra la Mini App
+        // Desactivar deslizamiento vertical accidental que cierra la Mini App
         if (typeof tgWebApp.disableVerticalSwipes === 'function') {
-          try {
-            tgWebApp.disableVerticalSwipes();
-          } catch {}
+          try { tgWebApp.disableVerticalSwipes(); } catch {}
         }
 
-        // 4. Forzar primer plano, pantalla única y grande continua
+        // Forzar primer plano, pantalla única y grande continua
         if (typeof tgWebApp.onEvent === 'function') {
           try {
-            tgWebApp.onEvent('viewportChanged', () => {
-              if (!tgWebApp.isExpanded) {
-                tgWebApp.expand();
-              }
-              if (typeof tgWebApp.requestFullscreen === 'function' && !tgWebApp.isFullscreen) {
-                try { tgWebApp.requestFullscreen(); } catch {}
-              }
-            });
+            tgWebApp.onEvent('viewportChanged', enforceFullscreen);
           } catch {}
         }
+
+        // Reintentos automáticos para clientes con delay en Telegram WebApp 8.0
+        const timer1 = setTimeout(enforceFullscreen, 300);
+        const timer2 = setTimeout(enforceFullscreen, 1000);
+
+        // Forzar también al primer toque
+        const handleUserTouch = () => {
+          enforceFullscreen();
+          window.removeEventListener('touchstart', handleUserTouch);
+          window.removeEventListener('click', handleUserTouch);
+        };
+        window.addEventListener('touchstart', handleUserTouch, { passive: true });
+        window.addEventListener('click', handleUserTouch, { passive: true });
+
+        return () => {
+          clearTimeout(timer1);
+          clearTimeout(timer2);
+          window.removeEventListener('touchstart', handleUserTouch);
+          window.removeEventListener('click', handleUserTouch);
+        };
       } catch {
         // Safe fallback
       }
@@ -334,52 +316,6 @@ export default function App() {
 
       {/* Main Catalog View */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
-        
-        {/* Intro Splash Welcome Banner (desaparece automático tras 5s o con botón X) */}
-        {showIntroBanner && (
-          <div className="relative rounded-2xl bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-950 border border-amber-500/30 p-4 sm:p-6 shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-            <button
-              onClick={() => setShowIntroBanner(false)}
-              className="absolute top-3 right-3 p-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer z-20"
-              title="Cerrar introducción"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pr-8">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-amber-400">
-                    Contenido Exclusivo VIP
-                  </span>
-                  {tgUser && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 border border-sky-500/40 text-sky-300">
-                      <UserCheck className="w-3 h-3" />
-                      {tgUser.first_name}
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-white font-serif truncate">
-                  Galería Privada de {displayName}
-                </h2>
-                <p className="text-xs text-zinc-300 mt-0.5 truncate">
-                  Suscripciones y contenido exclusivo.
-                </p>
-                {modelVipLink && (
-                  <a
-                    href={modelVipLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-4"
-                  >
-                    Abrir red social
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Pinned Announcement Banner from Admin */}
         {pinnedActive && pinnedText && (
