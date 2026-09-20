@@ -106,10 +106,19 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
         
         {/* Columna Multimedia: Imágenes ARRIBA y Videos DEBAJO */}
-        <div className="bg-zinc-950 p-3 sm:p-4 space-y-4">
+        <div className="bg-zinc-950 p-3 sm:p-4 space-y-2.5">
           
           {/* 1. SECCIÓN IMÁGENES */}
           <div>
+            {/* Etiqueta reducida de Fotos arriba */}
+            <div className="mb-1.5 flex items-center px-0.5">
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                <Images className="h-3 w-3 text-amber-400" />
+                <span>Fotos</span>
+                <span className="text-[10px] text-zinc-500 font-mono">({images.length})</span>
+              </span>
+            </div>
+
             <div
               onClick={() => onSelectMedia ? onSelectMedia(profile, selectedImage) : onSelectProfile(profile)}
               className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
@@ -146,16 +155,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               )}
             </div>
 
-            {/* Controles e Indicadores al pie de las Fotos */}
-            <div className="mt-2.5 flex items-center justify-between px-1">
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                <Images className="h-3.5 w-3.5 text-amber-400" />
-                <span>Fotos</span>
-                <span className="text-[10px] text-zinc-500 font-mono">({images.length})</span>
-              </span>
-
-              {images.length > 1 && (
-                <div className="flex items-center gap-2">
+            {/* Controles al pie: {< .......... >} " 3/n" */}
+            {images.length > 1 && (
+              <div className="mt-1.5 flex items-center justify-between px-1">
+                <div className="flex-1 flex items-center justify-center gap-2">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
@@ -181,21 +184,26 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 </div>
-              )}
 
-              {images.length > 1 ? (
-                <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800">
+                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 shrink-0">
                   {imageIndex + 1} / {images.length}
                 </span>
-              ) : (
-                <span className="w-8" />
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON CONTROLES INFERIORES) */}
+          {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON SEPARADOR REDUCIDO) */}
           {videos.length > 0 && (
-            <div className="pt-3 border-t border-zinc-800/80">
+            <div className="pt-2 border-t border-zinc-800/60">
+              {/* Etiqueta reducida de Videos arriba */}
+              <div className="mb-1.5 flex items-center px-0.5">
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
+                  <Video className="h-3 w-3 text-amber-400" />
+                  <span>Videos</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
+                </span>
+              </div>
+
               <div
                 onClick={() => onSelectMedia ? onSelectMedia(profile, selectedVideo) : onSelectProfile(profile)}
                 className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
@@ -220,16 +228,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 )}
               </div>
 
-              {/* Controles e Indicadores al pie de los Videos */}
-              <div className="mt-2.5 flex items-center justify-between px-1">
-                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400">
-                  <Video className="h-3.5 w-3.5 text-amber-400" />
-                  <span>Videos</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
-                </span>
-
-                {videos.length > 1 && (
-                  <div className="flex items-center gap-2">
+              {/* Controles al pie: {< .......... >} " 3/n" */}
+              {videos.length > 1 && (
+                <div className="mt-1.5 flex items-center justify-between px-1">
+                  <div className="flex-1 flex items-center justify-center gap-2">
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
@@ -255,16 +257,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                       <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                )}
 
-                {videos.length > 1 ? (
-                  <span className="text-[11px] font-mono text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800">
+                  <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded-lg border border-zinc-800 shrink-0">
                     {videoIndex + 1} / {videos.length}
                   </span>
-                ) : (
-                  <span className="w-8" />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
