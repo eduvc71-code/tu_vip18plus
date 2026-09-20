@@ -42,7 +42,7 @@ function safeFileName(name: string) {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 10)}${extension}`;
 }
 
-export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' | 'qr' | 'backups') {
+export async function uploadToB2(file: Express.Multer.File, folder: 'profiles' | 'qr' | 'backups' | 'bot') {
   const connection = getB2Connection();
   if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
 

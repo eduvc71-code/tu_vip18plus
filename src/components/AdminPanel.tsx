@@ -170,7 +170,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Bot Welcome Media state
   const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
-  const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video'>('photo');
+  const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video' | null>('photo');
   const [uploadingWelcomeMedia, setUploadingWelcomeMedia] = useState(false);
 
   // Operating Mode state (Modo A: solo_bot / Modo B: bot_and_channel)
@@ -226,10 +226,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setEditingProfile(p);
       setFormData({
         name: p.name,
-        age: p.age,
+        age: p.age ?? 18,
         zone: p.zone,
         description: p.description,
-        rate_bs: p.rate_bs,
+        rate_bs: p.rate_bs ?? 0,
         commission_bs: 0,
         status: p.status,
         priority_order: p.priority_order || 0
@@ -1460,8 +1460,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         if (target && !editingProfile) {
                           setEditingProfile(target);
                           setFormData({
-                            name: target.name, age: target.age, zone: target.zone,
-                            description: target.description, rate_bs: target.rate_bs,
+                            name: target.name, age: target.age ?? 18, zone: target.zone,
+                            description: target.description, rate_bs: target.rate_bs ?? 0,
                             commission_bs: 0, status: target.status,
                             priority_order: target.priority_order || 0
                           });
@@ -2018,7 +2018,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     <div className="flex gap-2">
                                       <button
                                         type="button"
-                                        onClick={() => handleEditVipMedia(editingProfile.id)}
+                                        onClick={() => editingProfile && handleEditVipMedia(editingProfile.id)}
                                         disabled={uploadingVip}
                                         className="flex-1 py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer shadow"
                                       >
@@ -2045,7 +2045,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => handlePublishVipMedia(editingProfile.id)}
+                                      onClick={() => editingProfile && handlePublishVipMedia(editingProfile.id)}
                                       disabled={publishingVip}
                                       className="flex-1 py-3 px-5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-60 transition-all"
                                     >
@@ -2239,18 +2239,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             ) : (
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                 {displayedPhotos.map((photoUrl, idx) => {
-                                  const mediaStatus = editingProfile.media_status?.[photoUrl] || 2;
-                                  const isEphemeral = Boolean(editingProfile.ephemeral_config?.[photoUrl]?.enabled);
-                                  const duration = editingProfile.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
-                                  const hasDescription = Boolean(editingProfile.media_descriptions?.[photoUrl]);
-                                  const isCover = editingProfile.photos?.[0] === photoUrl;
+                                  const mediaStatus = editingProfile?.media_status?.[photoUrl] || 2;
+                                  const isEphemeral = Boolean(editingProfile?.ephemeral_config?.[photoUrl]?.enabled);
+                                  const duration = editingProfile?.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
+                                  const hasDescription = Boolean(editingProfile?.media_descriptions?.[photoUrl]);
+                                  const isCover = editingProfile?.photos?.[0] === photoUrl;
 
                                   return (
                                     <div
                                       key={photoUrl}
                                       onClick={() => {
                                         setEnlargedMediaUrl(photoUrl);
-                                        setTempDescText(editingProfile.media_descriptions?.[photoUrl] || '');
+                                        setTempDescText(editingProfile?.media_descriptions?.[photoUrl] || '');
                                       }}
                                       className="group relative rounded-2xl overflow-hidden border border-zinc-800 hover:border-amber-500/70 bg-zinc-900 flex flex-col cursor-pointer transition-all hover:shadow-xl hover:shadow-amber-500/10 active:scale-[0.98]"
                                     >
@@ -2990,7 +2990,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 })()}
 
                     {/* MODAL VISTA AMPLIADA Y CONFIGURACIÓN (SUGESTIVA & DESCRIPCIÓN) */}
-                    {enlargedMediaUrl && (
+                    {enlargedMediaUrl && editingProfile && (
                       <div
                         className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
                         onClick={() => setEnlargedMediaUrl(null)}

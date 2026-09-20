@@ -810,7 +810,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       updatedEphemeral,
       updatedStatus,
       now,
-      updatedTgMsgId,
+      updatedTgMsgId ?? null,
       updatedPriority,
       updatedReactions,
       updatedMediaDesc,
@@ -906,7 +906,7 @@ export async function toggleProfileReaction(
     star_struck: 'star_struck'
   };
   const key = reactionKeyMap[reactionType] || reactionType;
-  const reactions: Record<string, number> = { ...(profile.reactions || {}) };
+  const reactions: Record<string, number> = { ...((profile.reactions as Record<string, number>) || {}) };
 
   // Check if user already reacted with this type
   const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?");

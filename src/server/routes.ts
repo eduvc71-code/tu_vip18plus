@@ -1275,7 +1275,8 @@ router.post('/admin/bot-queue', requireAdminAuth, upload.single('media'), async 
       media_url: mediaUrlVal,
       telegram_file_id: tgFileId || undefined,
       caption: caption.trim() || undefined,
-      category
+      category,
+      is_published: false
     });
 
     const adminId = (req as any).adminUserId || 'Admin Web';
