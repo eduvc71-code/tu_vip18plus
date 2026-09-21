@@ -114,17 +114,6 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
         )}
       </div>
 
-      {/* ── Insignia Comercial de Adaptabilidad a Cualquier Creadora ── */}
-      <div className="mx-3 mt-2.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2">
-        <span className="text-[10px] text-amber-300 font-medium flex items-center gap-1.5">
-          <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-          <span>Plataforma 100% adaptable a cualquier Creadora de Contenido o Modelo</span>
-        </span>
-        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 shrink-0">
-          DEMO
-        </span>
-      </div>
-
       {/* ── Cuerpo del Catálogo ── */}
       <div className="flex-1 p-3 space-y-4 pb-12">
         

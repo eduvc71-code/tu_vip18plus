@@ -162,9 +162,9 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <span>Panel Administrativo "Tú VIP FREE"</span>
+              <span>Panel Administrativo</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                DEMO COMERCIAL
+                DEMO
               </span>
             </h2>
             <p className="text-xs text-zinc-400">
@@ -182,22 +182,6 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
           <span>Restablecer Demo</span>
         </button>
-      </div>
-
-      {/* Banner Comercial de Adaptabilidad a Cualquier Creadora */}
-      <div className="mx-3.5 sm:mx-5 mt-3.5 p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-500/30 flex items-start gap-3">
-        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-          <Sparkles className="w-4 h-4" />
-        </div>
-        <div className="text-xs">
-          <h3 className="font-extrabold text-amber-300 flex items-center gap-1.5">
-            <span>Plataforma 100% Personalizable y Adaptable</span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200">A tu Medida</span>
-          </h3>
-          <p className="text-zinc-300 mt-1 leading-relaxed">
-            Esta aplicación, junto con su Canal y Bot de Telegram, <strong className="text-white">se adapta y modifica a la medida de cualquier Creadora de Contenido, Modelo o Agencia</strong>: tu nombre, tu foto de portada, tus enlaces (OnlyFans, Fansly, etc.), tus métodos de pago (QR Bolivia, USDT, Zelle) y tus publicaciones con venta directa en Estrellas de Telegram.
-          </p>
-        </div>
       </div>
 
       {/* Pestañas de Navegación del Panel */}

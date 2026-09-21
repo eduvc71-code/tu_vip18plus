@@ -33,3 +33,31 @@ html, body {
   scrollbar-width: none;
 }
 
+@keyframes shrinkWidth {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes zoomBounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.82) translateY(-12px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.03) translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-shrink-width {
+  animation: shrinkWidth 4.5s linear forwards;
+}
+
+.animate-zoom-bounce-in {
+  animation: zoomBounceIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
