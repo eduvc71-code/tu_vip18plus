@@ -49,7 +49,11 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [hasMediaError, setHasMediaError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [showSlideIndicators, setShowSlideIndicators] = useState(true);
   const captionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const userInteractedWithSlideRef = useRef<boolean>(false);
+  const hideIndicatorsTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const soundToggledVideoRef = useRef<boolean>(false);
 
   // Rastrear contenidos desbloqueados con Stars (Siempre al tope para no violar reglas de hooks)
   const [unlockedStarsUrls, setUnlockedStarsUrls] = useState<Set<string>>(() => {
@@ -70,6 +74,32 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   useEffect(() => {
     setActivePhotoIdx(computeInitialIdx());
   }, [initialMediaUrl, media]);
+
+  // Ciclo de 10 segundos en fotos: desaparecer y aparecer los indicadores de deslizamiento
+  useEffect(() => {
+    const currentUrl = media[activePhotoIdx] || '';
+    const isCurrentVideo = isVideoUrl(currentUrl);
+    userInteractedWithSlideRef.current = false;
+    soundToggledVideoRef.current = false;
+    if (hideIndicatorsTimerRef.current) {
+      clearTimeout(hideIndicatorsTimerRef.current);
+      hideIndicatorsTimerRef.current = null;
+    }
+
+    if (isCurrentVideo) {
+      setShowSlideIndicators(true);
+      return; // Los videos se controlan por interacción de sonido y tiempo
+    }
+
+    setShowSlideIndicators(true);
+
+    // Ciclo de 10s: 5s visible, 5s oculto
+    const cycleInterval = setInterval(() => {
+      setShowSlideIndicators(prev => !prev);
+    }, 5000);
+
+    return () => clearInterval(cycleInterval);
+  }, [activePhotoIdx, media]);
 
   // Restablecer estados de carga y error al cambiar de archivo
   useEffect(() => {
@@ -193,12 +223,45 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   const handlePrev = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    userInteractedWithSlideRef.current = true;
+    setShowSlideIndicators(true);
+    soundToggledVideoRef.current = false;
     setActivePhotoIdx((prev) => (prev - 1 + media.length) % media.length);
   };
 
   const handleNext = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    userInteractedWithSlideRef.current = true;
+    setShowSlideIndicators(true);
+    soundToggledVideoRef.current = false;
     setActivePhotoIdx((prev) => (prev + 1) % media.length);
+  };
+
+  const handleSoundToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsMuted(prev => !prev);
+    // Al dar click en sonido desaparecer indicadores
+    setShowSlideIndicators(false);
+    userInteractedWithSlideRef.current = false;
+    soundToggledVideoRef.current = true;
+  };
+
+  const handleVideoTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const vid = e.currentTarget;
+    if (!vid.duration) return;
+    const timeLeft = vid.duration - vid.currentTime;
+
+    if (soundToggledVideoRef.current) {
+      if (timeLeft <= 0.5 && timeLeft > 0) {
+        // Se acerca a 0.5s del final del video: reaparecer indicadores
+        if (!showSlideIndicators) {
+          setShowSlideIndicators(true);
+        }
+      } else if (timeLeft > 0.6 && !userInteractedWithSlideRef.current && showSlideIndicators) {
+        // Si el cliente no toca ninguno de los botones de avance o retroceso, vuelve a desaparecer
+        setShowSlideIndicators(false);
+      }
+    }
   };
 
   const toggleCaption = (e: React.MouseEvent) => {
@@ -333,10 +396,9 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           </div>
         )}
 
-        {/* CONTENIDO BLOQUEADO CON ESTRELLAS ESTILO TELEGRAM (Preview difuminado + Candado discreto) */}
+        {/* CONTENIDO BLOQUEADO CON ESTRELLAS ESTILO TELEGRAM (Preview nítido de silueta + Candado centrado sin estorbar) */}
         {isCurrentMediaLocked ? (
           <div className="relative w-full h-full flex items-center justify-center overflow-hidden select-none">
-            {/* Foto o Video difuminado como Telegram Paid Media */}
             {isVideo ? (
               <video
                 key={currentMediaUrl}
@@ -345,69 +407,45 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 loop
                 muted
                 playsInline
-                className="w-full h-full object-cover filter blur-2xl scale-110 opacity-85 select-none"
+                className="w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
               />
             ) : (
               <img
                 src={currentMediaUrl}
                 alt="Vista previa exclusiva"
                 draggable={false}
-                className="w-full h-full object-cover filter blur-2xl scale-110 opacity-90 select-none"
+                className="w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
               />
             )}
-            <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
+            <div className="absolute inset-0 bg-black/25 pointer-events-none" />
 
-            {/* Insignia Central Estilo Nativo Telegram */}
-            <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
-              <div className="px-4 py-2 rounded-2xl bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
-                <Lock className="w-4 h-4 text-amber-400 animate-pulse" />
-                <span className="font-bold text-xs sm:text-sm">Desbloquear por</span>
-                <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs sm:text-sm">
-                  ⭐ {currentStars}
-                </span>
+            {/* Insignia Central Ultra Compacta Estilo Nativo Telegram (Centrada, no toca flechas) */}
+            <div className="absolute z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
+              <div className="w-13 h-13 rounded-full bg-black/75 backdrop-blur-xl border border-amber-400/50 flex items-center justify-center shadow-2xl mb-1.5">
+                <Lock className="w-5 h-5 text-amber-400 animate-pulse" />
+              </div>
+              <div className="px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-amber-500/40 text-amber-300 font-extrabold text-[11px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                <span>⭐</span>
+                <span>{currentStars} Estrellas</span>
               </div>
             </div>
           </div>
         ) : isVideo ? (
-          <>
-            <video
-              key={currentMediaUrl}
-              src={currentMediaUrl}
-              autoPlay
-              muted={isMuted}
-              controls
-              playsInline
-              loop
-              onLoadStart={() => { setIsLoadingMedia(true); setHasMediaError(false); }}
-              onLoadedData={() => setIsLoadingMedia(false)}
-              onCanPlay={() => setIsLoadingMedia(false)}
-              onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
-              className={`w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
-            />
-            {!hasMediaError && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsMuted(prev => !prev);
-                }}
-                className="absolute top-14 left-3 z-30 px-3 py-1.5 rounded-full bg-black/70 hover:bg-black/90 border border-zinc-800 text-xs font-bold text-amber-300 flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-all"
-                title={isMuted ? 'Activar sonido' : 'Silenciar'}
-              >
-                {isMuted ? (
-                  <>
-                    <VolumeX className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Activar Sonido</span>
-                  </>
-                ) : (
-                  <>
-                    <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Sonido Activo</span>
-                  </>
-                )}
-              </button>
-            )}
-          </>
+          <video
+            key={currentMediaUrl}
+            src={currentMediaUrl}
+            autoPlay
+            muted={isMuted}
+            controls
+            playsInline
+            loop
+            onTimeUpdate={handleVideoTimeUpdate}
+            onLoadStart={() => { setIsLoadingMedia(true); setHasMediaError(false); }}
+            onLoadedData={() => setIsLoadingMedia(false)}
+            onCanPlay={() => setIsLoadingMedia(false)}
+            onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
+            className={`w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+          />
         ) : (
           <img
             key={currentMediaUrl}
@@ -421,14 +459,16 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           />
         )}
 
-        {/* Flechas Laterales */}
+        {/* Flechas Laterales con desvanecimiento suave */}
         {media.length > 1 && (
           <>
             <button
               type="button"
               onClick={handlePrev}
               aria-label="Anterior"
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg z-20 backdrop-blur-sm"
+              className={`absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all duration-500 active:scale-95 cursor-pointer shadow-lg z-20 backdrop-blur-sm ${
+                showSlideIndicators ? 'opacity-70 hover:opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+              }`}
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -436,7 +476,9 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               type="button"
               onClick={handleNext}
               aria-label="Siguiente"
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all opacity-70 hover:opacity-100 active:scale-95 cursor-pointer shadow-lg z-20 backdrop-blur-sm"
+              className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 hover:bg-black/80 text-zinc-300 hover:text-white border border-zinc-800/80 transition-all duration-500 active:scale-95 cursor-pointer shadow-lg z-20 backdrop-blur-sm ${
+                showSlideIndicators ? 'opacity-70 hover:opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+              }`}
             >
               <ChevronRight className="w-5 h-5" />
             </button>
@@ -459,56 +501,78 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         )}
       </div>
 
-      {/* Barra Inferior Flotante: Un Solo Botón Mínimo y Compacto */}
+      {/* Barra Inferior Flotante: Acciones y Sonido */}
       <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-5 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex flex-col items-center gap-2">
-          {currentStars && currentStars > 0 ? (
-            isCurrentMediaLocked ? (
-              /* Botón Único de Desbloqueo con Estrellas */
+          <div className="flex items-center gap-2">
+            {currentStars && currentStars > 0 ? (
+              isCurrentMediaLocked ? (
+                /* Botón Único de Desbloqueo con Estrellas */
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePayWithStars();
+                  }}
+                  disabled={payingStars}
+                  className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm tracking-wide shadow-xl shadow-amber-500/25 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 transition-all"
+                >
+                  <Sparkles className="w-4 h-4 text-zinc-950" />
+                  <span>{payingStars ? 'Procesando...' : `Desbloquear (${currentStars} ⭐)`}</span>
+                </button>
+              ) : (
+                <div className="px-3 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-[11px] backdrop-blur-md">
+                  <span>✅ Desbloqueado</span>
+                </div>
+              )
+            ) : (
+              /* Botón Único Mínimo de Métodos de Pago */
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handlePayWithStars();
+                  onClose();
+                  if (onOpenPaymentMethods) {
+                    onOpenPaymentMethods();
+                  }
                 }}
-                disabled={payingStars}
-                className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm tracking-wide shadow-xl shadow-amber-500/25 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 transition-all"
+                className="px-4 py-2 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 font-bold text-xs shadow-lg backdrop-blur-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
               >
-                <Sparkles className="w-4 h-4 text-zinc-950" />
-                <span>{payingStars ? 'Procesando...' : `Desbloquear (${currentStars} ⭐)`}</span>
+                <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+                <span>Métodos de Pago</span>
               </button>
-            ) : (
-              <div className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-[11px] backdrop-blur-md">
-                <span>✅ Desbloqueado</span>
-              </div>
-            )
-          ) : (
-            /* Botón Único Mínimo de Métodos de Pago */
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-                if (onOpenPaymentMethods) {
-                  onOpenPaymentMethods();
-                }
-              }}
-              className="px-4 py-2 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 font-bold text-xs shadow-lg backdrop-blur-md flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
-            >
-              <CreditCard className="w-3.5 h-3.5 text-amber-400" />
-              <span>Métodos de Pago</span>
-            </button>
-          )}
+            )}
+
+            {/* Solo icono para activar sonido al lado de Métodos de Pago / Desbloqueo */}
+            {isVideo && !isCurrentMediaLocked && (
+              <button
+                type="button"
+                onClick={handleSoundToggle}
+                className="p-2 sm:p-2.5 rounded-full bg-zinc-900/90 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-all flex items-center justify-center"
+                title={isMuted ? 'Activar sonido' : 'Silenciar'}
+                aria-label={isMuted ? 'Activar sonido' : 'Silenciar'}
+              >
+                {isMuted ? (
+                  <VolumeX className="w-4 h-4 text-amber-400" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                )}
+              </button>
+            )}
+          </div>
 
           {/* Puntos Indicadores Compactos */}
           {media.length > 1 && (
-            <div className="flex items-center justify-center gap-1.5 mt-0.5">
+            <div className={`flex items-center justify-center gap-1.5 mt-0.5 transition-opacity duration-500 ${
+              showSlideIndicators ? 'opacity-100' : 'opacity-0 pointer-events-none'
+            }`}>
               {media.map((_, idx) => (
                 <button
                   key={idx}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    userInteractedWithSlideRef.current = true;
                     setActivePhotoIdx(idx);
                   }}
                   aria-label={`Archivo ${idx + 1}`}

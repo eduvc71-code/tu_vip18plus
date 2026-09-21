@@ -203,16 +203,16 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                     src={selectedImage}
                     alt="Contenido VIP"
                     draggable={false}
-                    className="absolute inset-0 w-full h-full object-cover filter blur-lg scale-110 opacity-90 select-none"
+                    className="absolute inset-0 w-full h-full object-cover filter blur-[11px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
                   />
-                  <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
-                  <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
-                    <div className="px-3.5 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
-                      <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                      <span className="font-bold text-xs">Desbloquear por</span>
-                      <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs">
-                        ⭐ {imageStars}
-                      </span>
+                  <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                  <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center pointer-events-none">
+                    <div className="w-10 h-10 rounded-full bg-black/75 backdrop-blur-md border border-amber-400/50 flex items-center justify-center shadow-xl mb-1.5">
+                      <Lock className="w-4 h-4 text-amber-400 animate-pulse" />
+                    </div>
+                    <div className="px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-amber-500/40 text-amber-300 font-bold text-[11px] shadow-lg flex items-center gap-1">
+                      <span>⭐</span>
+                      <span>{imageStars} Estrellas</span>
                     </div>
                   </div>
                 </div>
@@ -310,16 +310,16 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                       loop
                       muted
                       playsInline
-                      className="absolute inset-0 w-full h-full object-cover filter blur-lg scale-110 opacity-90 select-none"
+                      className="absolute inset-0 w-full h-full object-cover filter blur-[11px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
                     />
-                    <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
-                    <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
-                      <div className="px-3.5 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
-                        <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                        <span className="font-bold text-xs">Desbloquear por</span>
-                        <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs">
-                          ⭐ {profile.media_stars?.[selectedVideo]}
-                        </span>
+                    <div className="absolute inset-0 bg-black/25 pointer-events-none" />
+                    <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center pointer-events-none">
+                      <div className="w-10 h-10 rounded-full bg-black/75 backdrop-blur-md border border-amber-400/50 flex items-center justify-center shadow-xl mb-1.5">
+                        <Lock className="w-4 h-4 text-amber-400 animate-pulse" />
+                      </div>
+                      <div className="px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-amber-500/40 text-amber-300 font-bold text-[11px] shadow-lg flex items-center gap-1">
+                        <span>⭐</span>
+                        <span>{videoStars} Estrellas</span>
                       </div>
                     </div>
                   </div>
