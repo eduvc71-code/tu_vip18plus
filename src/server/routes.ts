@@ -260,6 +260,7 @@ router.get('/info', (_req: Request, res: Response) => {
     model_vip_link: getSystemSetting('model_vip_link') || '',
     welcome_media_url: getSystemSetting('welcome_media_url') || '',
     welcome_media_type: getSystemSetting('welcome_media_type') || '',
+    splash_description: getSystemSetting('splash_description') || '',
     operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
@@ -1435,7 +1436,7 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res:
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
@@ -1469,6 +1470,9 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     if (model_vip_link !== undefined) {
       saveSystemSetting('model_vip_link', String(model_vip_link).trim());
     }
+    if (splash_description !== undefined) {
+      saveSystemSetting('splash_description', String(splash_description).trim());
+    }
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración de modo y parámetros actualizada');
     const updatedConfig = getBotConfig();
@@ -1485,7 +1489,8 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       qr_image_url: getSystemSetting('qr_image_url') || '',
       admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'Danii_Catalogo_SCZ_bot',
       model_display_name: getSystemSetting('model_display_name') || 'Tú',
-      model_vip_link: getSystemSetting('model_vip_link') || ''
+      model_vip_link: getSystemSetting('model_vip_link') || '',
+      splash_description: getSystemSetting('splash_description') || ''
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar configuración' });
@@ -1600,9 +1605,18 @@ router.post('/admin/settings/welcome-media', requireAdminAuth, upload.single('we
     saveSystemSetting('welcome_media_url', mediaFileUrl);
     saveSystemSetting('welcome_media_type', mediaType);
 
+    if (req.body.splash_description !== undefined) {
+      saveSystemSetting('splash_description', String(req.body.splash_description).trim());
+    }
+
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, `Foto/Video de bienvenida actualizado (${mediaType})`);
-    res.json({ success: true, welcome_media_url: mediaFileUrl, welcome_media_type: mediaType });
+    res.json({
+      success: true,
+      welcome_media_url: mediaFileUrl,
+      welcome_media_type: mediaType,
+      splash_description: getSystemSetting('splash_description') || ''
+    });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar foto/video de bienvenida', details: err?.message });
   }

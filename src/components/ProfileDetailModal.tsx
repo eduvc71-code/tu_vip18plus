@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Profile } from '../types';
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageSquareText, Lock } from 'lucide-react';
-import { isVideoUrl, ProtectedMedia } from './ProtectedMedia';
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageSquareText, Lock, Volume2, VolumeX, AlertTriangle, RefreshCw } from 'lucide-react';
+import { isVideoUrl } from './ProtectedMedia';
 
 interface ProfileDetailModalProps {
   profile: Profile | null;
@@ -18,7 +18,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   profile,
   initialMediaUrl,
   botUsername: _botUsername,
-  modelName: _modelName,
+  modelName,
   modelVipLink: _modelVipLink,
   onClose,
   onOpenPaymentMethods,
@@ -32,7 +32,25 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [showCaption, setShowCaption] = useState(true);
   const [payingStars, setPayingStars] = useState(false);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(true);
+  const [hasMediaError, setHasMediaError] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const captionTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Rastrear contenidos desbloqueados con Stars (Siempre al tope para no violar reglas de hooks)
+  const [unlockedStarsUrls, setUnlockedStarsUrls] = useState<Set<string>>(() => {
+    const unlocked = new Set<string>();
+    if (typeof window !== 'undefined' && profile?.media_stars) {
+      Object.keys(profile.media_stars).forEach(url => {
+        try {
+          if (localStorage.getItem(`danii_stars_unlocked_${btoa(url).replace(/=/g, '')}`)) {
+            unlocked.add(url);
+          }
+        } catch {}
+      });
+    }
+    return unlocked;
+  });
 
   // Sincronizar índice inicial según el archivo que tocó el usuario
   useEffect(() => {
@@ -40,9 +58,20 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       const idx = media.indexOf(initialMediaUrl);
       if (idx !== -1) {
         setActivePhotoIdx(idx);
+      } else {
+        // Búsqueda por subcadena por si difiere en dominio absoluto vs relativo
+        const relativeInitial = initialMediaUrl.replace(/^https?:\/\/[^/]+/, '');
+        const foundIdx = media.findIndex(m => m.endsWith(relativeInitial) || relativeInitial.endsWith(m.replace(/^https?:\/\/[^/]+/,'')));
+        if (foundIdx !== -1) setActivePhotoIdx(foundIdx);
       }
     }
   }, [initialMediaUrl, media]);
+
+  // Restablecer estados de carga y error al cambiar de archivo
+  useEffect(() => {
+    setIsLoadingMedia(true);
+    setHasMediaError(false);
+  }, [activePhotoIdx]);
 
   // Integración con BackButton nativo de Telegram Mini App
   useEffect(() => {
@@ -82,32 +111,59 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   if (!profile || media.length === 0) return null;
 
-  // Rastrear contenidos desbloqueados con Stars
-  const [unlockedStarsUrls, setUnlockedStarsUrls] = useState<Set<string>>(() => {
-    const unlocked = new Set<string>();
-    if (typeof window !== 'undefined' && profile?.media_stars) {
-      Object.keys(profile.media_stars).forEach(url => {
-        try {
-          if (localStorage.getItem(`danii_stars_unlocked_${btoa(url).replace(/=/g, '')}`)) {
-            unlocked.add(url);
-          }
-        } catch {}
-      });
-    }
-    return unlocked;
-  });
-
   const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
-  const rawItemDescription = (currentMediaUrl && profile.media_descriptions?.[currentMediaUrl]) || profile.description || '';
+
+  // Helper para buscar estrellas coincidiendo rutas relativas y absolutas
+  const getStarsForUrl = (url: string): number | undefined => {
+    if (!profile?.media_stars || !url) return undefined;
+    if (profile.media_stars[url] !== undefined) return profile.media_stars[url];
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
+    for (const [key, val] of Object.entries(profile.media_stars)) {
+      const cleanKey = key.replace(/^https?:\/\/[^/]+/, '');
+      if (cleanKey === cleanUrl || url.endsWith(cleanKey) || key.endsWith(cleanUrl)) {
+        return val;
+      }
+    }
+    return undefined;
+  };
+
+  const currentStars = getStarsForUrl(currentMediaUrl);
+
+  const isMediaUnlocked = (url: string): boolean => {
+    if (!url) return false;
+    if (unlockedStarsUrls.has(url)) return true;
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
+    for (const unlocked of unlockedStarsUrls) {
+      const cleanUnlocked = unlocked.replace(/^https?:\/\/[^/]+/, '');
+      if (cleanUnlocked === cleanUrl || url.endsWith(cleanUnlocked) || unlocked.endsWith(cleanUrl)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const getDescriptionForUrl = (url: string): string => {
+    if (!profile?.media_descriptions || !url) return profile?.description || '';
+    if (profile.media_descriptions[url]) return profile.media_descriptions[url];
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
+    for (const [key, val] of Object.entries(profile.media_descriptions)) {
+      const cleanKey = key.replace(/^https?:\/\/[^/]+/, '');
+      if (cleanKey === cleanUrl || url.endsWith(cleanKey) || key.endsWith(cleanUrl)) {
+        return val;
+      }
+    }
+    return profile?.description || '';
+  };
+
+  const rawItemDescription = getDescriptionForUrl(currentMediaUrl);
   const currentItemDescription = /holis|bienvenida|opciones que te salen abajo/i.test(rawItemDescription) ? '' : rawItemDescription.trim();
-  const currentStars = profile.media_stars?.[currentMediaUrl];
   const isVideo = isVideoUrl(currentMediaUrl);
 
   const isCurrentMediaLocked = Boolean(
     currentMediaUrl &&
     currentStars &&
     currentStars > 0 &&
-    !unlockedStarsUrls.has(currentMediaUrl)
+    !isMediaUnlocked(currentMediaUrl)
   );
 
   const handlePrev = (e?: React.MouseEvent) => {
@@ -221,10 +277,43 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         {/* Zona Multimedia (Con escala controlada para no salirse de pantalla) */}
         <div
           onClick={!isCurrentMediaLocked ? toggleCaption : undefined}
-          className="relative w-full max-h-[58vh] sm:max-h-[62vh] min-h-[260px] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none group"
+          className="relative w-full h-[52vh] sm:h-[60vh] min-h-[280px] max-h-[65vh] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none group"
         >
+          {/* Indicador de Carga / Spinner mientras descarga de Telegram */}
+          {isLoadingMedia && !hasMediaError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-20 pointer-events-none">
+              <div className="w-10 h-10 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-3" />
+              <span className="text-xs font-bold text-amber-400">Cargando {isVideo ? 'video' : 'foto'}...</span>
+              <span className="text-[10px] text-zinc-500 mt-1">Conectando con Servidor Telegram...</span>
+            </div>
+          )}
+
+          {/* Fallback de Error si falla la conexión */}
+          {hasMediaError && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/95 p-6 text-center z-20">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3 shadow-lg">
+                <AlertTriangle className="w-6 h-6 text-amber-400" />
+              </div>
+              <p className="text-sm font-bold text-white mb-1">No se pudo cargar este archivo</p>
+              <p className="text-xs text-zinc-400 mb-4 max-w-xs">
+                El archivo multimedia no está disponible en este momento desde Telegram.
+              </p>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setHasMediaError(false);
+                  setIsLoadingMedia(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs shadow-md cursor-pointer active:scale-95 transition-all flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reintentar
+              </button>
+            </div>
+          )}
+
           {isCurrentMediaLocked ? (
-            <div className="relative w-full h-full min-h-[260px] max-h-[58vh] sm:max-h-[62vh] flex flex-col items-center justify-center bg-zinc-950 overflow-hidden select-none p-6 text-center">
+            <div className="relative w-full h-full min-h-[260px] flex flex-col items-center justify-center bg-zinc-950 overflow-hidden select-none p-6 text-center">
               {isVideo ? (
                 <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
               ) : (
@@ -232,6 +321,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                   src={currentMediaUrl}
                   alt="Contenido Bloqueado"
                   className="absolute inset-0 h-full w-full object-cover filter blur-3xl brightness-25 scale-125 pointer-events-none"
+                  onLoad={() => setIsLoadingMedia(false)}
                 />
               )}
               <div className="relative z-10 flex flex-col items-center justify-center max-w-sm">
@@ -262,24 +352,63 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               </div>
             </div>
           ) : isVideo ? (
-            <video
-              key={currentMediaUrl}
-              src={currentMediaUrl}
-              autoPlay
-              controls
-              playsInline
-              loop
-              className="max-h-[58vh] sm:max-h-[62vh] w-auto h-auto max-w-full object-contain mx-auto"
-            />
+            <>
+              <video
+                key={currentMediaUrl}
+                src={currentMediaUrl}
+                autoPlay
+                muted={isMuted}
+                controls
+                playsInline
+                loop
+                onLoadStart={() => { setIsLoadingMedia(true); setHasMediaError(false); }}
+                onLoadedData={() => setIsLoadingMedia(false)}
+                onCanPlay={() => setIsLoadingMedia(false)}
+                onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
+                className={`max-h-[58vh] sm:max-h-[62vh] w-auto h-auto max-w-full object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+              />
+              {!hasMediaError && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsMuted(prev => !prev);
+                  }}
+                  className="absolute top-3 left-3 z-30 px-3 py-1.5 rounded-full bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 text-xs font-bold text-amber-300 flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-all"
+                  title={isMuted ? 'Activar sonido' : 'Silenciar'}
+                >
+                  {isMuted ? (
+                    <>
+                      <VolumeX className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Activar Sonido</span>
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Sonido Activo</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           ) : (
-            <ProtectedMedia
-              src={currentMediaUrl}
-              alt="Contenido Danii"
-              modelName="Danii"
-              className="max-h-[58vh] sm:max-h-[62vh] w-auto h-auto max-w-full object-contain mx-auto"
-              autoPlay={false}
-              showControls={false}
-            />
+            <div className="relative w-full h-full flex items-center justify-center select-none" onContextMenu={(e) => e.preventDefault()}>
+              <img
+                key={currentMediaUrl}
+                src={currentMediaUrl}
+                alt="Contenido Danii"
+                referrerPolicy="no-referrer"
+                draggable={false}
+                onLoad={() => setIsLoadingMedia(false)}
+                onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
+                className={`max-h-[58vh] sm:max-h-[62vh] w-auto h-auto max-w-full object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+              />
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20 select-none">
+                <span className="-rotate-12 text-center text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white drop-shadow-lg px-4">
+                  Vista Protegida · Contenido Privado {modelName ? modelName.replace(/_/g, ' ') : 'IAM Danii'}
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Flechas Laterales Flotantes Discretas (No tapan el centro de la imagen) */}

@@ -627,12 +627,44 @@ function seedPaymentMethods(database: Database): void {
 function normalizePhotoUrls(photos: any): string[] {
   if (!Array.isArray(photos)) return [];
   return photos.map(url => {
-    if (typeof url === 'string' && url.includes('/uploads/')) {
-      const filename = url.split('/uploads/').pop();
-      return `/uploads/${filename}`;
+    if (typeof url === 'string') {
+      if (url.includes('/uploads/')) {
+        const filename = url.split('/uploads/').pop();
+        return `/uploads/${filename}`;
+      }
+      if (url.includes('/api/telegram-media/')) {
+        const filePart = url.split('/api/telegram-media/').pop();
+        return `/api/telegram-media/${filePart}`;
+      }
+      if (url.includes('/telegram-media/')) {
+        const filePart = url.split('/telegram-media/').pop();
+        return `/api/telegram-media/${filePart}`;
+      }
+      if (url.includes('/api/media?')) {
+        const queryPart = url.split('/api/media?').pop();
+        return `/api/media?${queryPart}`;
+      }
+      if (url.includes('/media?')) {
+        const queryPart = url.split('/media?').pop();
+        return `/api/media?${queryPart}`;
+      }
     }
     return url;
   });
+}
+
+// Normaliza las claves de diccionarios multimedia para que coincidan tanto con rutas relativas como absolutas
+function normalizeDictKeys(dict: Record<string, any>): Record<string, any> {
+  if (!dict || typeof dict !== 'object') return {};
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(dict)) {
+    const normalizedKey = normalizePhotoUrls([key])[0] || key;
+    result[normalizedKey] = val;
+    if (normalizedKey !== key) {
+      result[key] = val;
+    }
+  }
+  return result;
 }
 
 // Data Access Methods
@@ -678,27 +710,27 @@ function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
     obj.photos = [];
   }
   try {
-    obj.ephemeral_config = obj.ephemeral_config ? JSON.parse(obj.ephemeral_config) : {};
+    obj.ephemeral_config = obj.ephemeral_config ? normalizeDictKeys(JSON.parse(obj.ephemeral_config)) : {};
   } catch {
     obj.ephemeral_config = {};
   }
   try {
-    obj.media_descriptions = obj.media_descriptions ? JSON.parse(obj.media_descriptions) : {};
+    obj.media_descriptions = obj.media_descriptions ? normalizeDictKeys(JSON.parse(obj.media_descriptions)) : {};
   } catch {
     obj.media_descriptions = {};
   }
   try {
-    obj.media_status = obj.media_status ? JSON.parse(obj.media_status) : {};
+    obj.media_status = obj.media_status ? normalizeDictKeys(JSON.parse(obj.media_status)) : {};
   } catch {
     obj.media_status = {};
   }
   try {
-    obj.media_stars = obj.media_stars ? JSON.parse(obj.media_stars) : {};
+    obj.media_stars = obj.media_stars ? normalizeDictKeys(JSON.parse(obj.media_stars)) : {};
   } catch {
     obj.media_stars = {};
   }
   try {
-    obj.telegram_media_file_ids = obj.telegram_media_file_ids ? JSON.parse(obj.telegram_media_file_ids) : {};
+    obj.telegram_media_file_ids = obj.telegram_media_file_ids ? normalizeDictKeys(JSON.parse(obj.telegram_media_file_ids)) : {};
   } catch {
     obj.telegram_media_file_ids = {};
   }

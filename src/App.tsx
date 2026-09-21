@@ -8,6 +8,7 @@ import { AgeModal } from './components/AgeModal';
 import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
 import { PaymentMethodsModal } from './components/PaymentMethodsModal';
+import { SplashScreen } from './components/SplashScreen';
 import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2, CreditCard } from 'lucide-react';
 
 export default function App() {
@@ -32,6 +33,21 @@ export default function App() {
   const [accessChecking, setAccessChecking] = useState(true);
   const [pinnedText, setPinnedText] = useState('');
   const [pinnedActive, setPinnedActive] = useState(false);
+
+  // Splash Screen & Welcome States
+  const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
+  const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video'>('photo');
+  const [splashDescription, setSplashDescription] = useState('');
+  const [showSplash, setShowSplash] = useState(true);
+  const [isAgeVerified, setIsAgeVerified] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return Boolean(localStorage.getItem('danii_vip_subscriber_active') || localStorage.getItem('danii_vip_age_verified'));
+    } catch {
+      return false;
+    }
+  });
+  const [showAgeModal, setShowAgeModal] = useState(false);
 
   const [isAdminView, setIsAdminView] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -219,6 +235,9 @@ export default function App() {
         if (info.pinned_message_active !== undefined) setPinnedActive(Boolean(info.pinned_message_active));
         if (info.model_display_name) setModelDisplayName(info.model_display_name);
         if (info.model_vip_link !== undefined) setModelVipLink(info.model_vip_link);
+        if (info.welcome_media_url !== undefined) setWelcomeMediaUrl(info.welcome_media_url || '');
+        if (info.welcome_media_type !== undefined) setWelcomeMediaType(info.welcome_media_type || 'photo');
+        if (info.splash_description !== undefined) setSplashDescription(info.splash_description || '');
       }
     } catch {
       // safe fallback
@@ -365,8 +384,32 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-amber-500 selection:text-zinc-950 touch-pan-y">
       
-      {/* Age Modal Gate (+18) */}
-      <AgeModal onConfirm={() => fetchProfiles()} modelName={displayName} />
+      {/* Splash Screen / Preview (Siempre visible al ingresar a la Mini App) */}
+      {showSplash && (
+        <SplashScreen
+          mediaUrl={welcomeMediaUrl || filteredProfiles[0]?.photos?.[0]}
+          mediaType={welcomeMediaType}
+          modelName={displayName}
+          splashDescription={splashDescription}
+          onFinish={() => {
+            setShowSplash(false);
+            if (!isAgeVerified) {
+              setShowAgeModal(true);
+            }
+          }}
+        />
+      )}
+
+      {/* Age Modal Gate (+18) - Aparece tras el splash si es nuevo usuario */}
+      <AgeModal
+        isOpen={showAgeModal}
+        onConfirm={() => {
+          setIsAgeVerified(true);
+          setShowAgeModal(false);
+          fetchProfiles();
+        }}
+        modelName={displayName}
+      />
 
       {/* Main Header & Navbar */}
       <Header
@@ -549,24 +592,26 @@ export default function App() {
       </footer>
 
       {/* Profile Detail Lightbox Modal */}
-      <ProfileDetailModal
-        profile={selectedProfile}
-        initialMediaUrl={selectedMediaUrl}
-        botUsername={botUsername}
-        modelName={displayName}
-        modelVipLink={modelVipLink}
-        onClose={() => {
-          setSelectedProfile(null);
-          setSelectedMediaUrl(undefined);
-          try {
-            document.body.style.overflow = '';
-            document.documentElement.style.overflow = '';
-            document.body.style.touchAction = 'pan-y';
-          } catch {}
-        }}
-        onOpenPaymentMethods={() => setShowPaymentModal(true)}
-        onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
-      />
+      {selectedProfile && (
+        <ProfileDetailModal
+          profile={selectedProfile}
+          initialMediaUrl={selectedMediaUrl}
+          botUsername={botUsername}
+          modelName={displayName}
+          modelVipLink={modelVipLink}
+          onClose={() => {
+            setSelectedProfile(null);
+            setSelectedMediaUrl(undefined);
+            try {
+              document.body.style.overflow = '';
+              document.documentElement.style.overflow = '';
+              document.body.style.touchAction = 'pan-y';
+            } catch {}
+          }}
+          onOpenPaymentMethods={() => setShowPaymentModal(true)}
+          onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
+        />
+      )}
 
       {/* Customer Availability Request Modal */}
       <RequestModal

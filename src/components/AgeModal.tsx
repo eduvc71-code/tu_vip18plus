@@ -2,32 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Sparkles } from 'lucide-react';
 
 interface AgeModalProps {
+  isOpen?: boolean;
   onConfirm: () => void;
   modelName: string;
 }
 
-export const AgeModal: React.FC<AgeModalProps> = ({ onConfirm, modelName }) => {
-  const [isOpen, setIsOpen] = useState(false);
+export const AgeModal: React.FC<AgeModalProps> = ({ isOpen: controlledIsOpen, onConfirm, modelName }) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [accepted, setAccepted] = useState(true);
 
   useEffect(() => {
-    // Si ya es suscriptor o usuario verificado previamente, no volver a abrir el splash (directo a pantalla principal)
-    try {
-      const isSubscribed = localStorage.getItem('danii_vip_subscriber_active') || localStorage.getItem('danii_vip_age_verified');
-      if (!isSubscribed) {
-        setIsOpen(true);
-      }
-    } catch {
-      // En caso de bloqueo de localStorage en navegador restringido, no bloquear
+    // Si no es controlado externamente, verificar localStorage
+    if (controlledIsOpen === undefined) {
+      try {
+        const isSubscribed = localStorage.getItem('danii_vip_subscriber_active') || localStorage.getItem('danii_vip_age_verified');
+        if (!isSubscribed) {
+          setInternalIsOpen(true);
+        }
+      } catch {}
     }
-  }, []);
+  }, [controlledIsOpen]);
+
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
 
   const handleAccept = () => {
     try {
       localStorage.setItem('danii_vip_subscriber_active', 'true');
       localStorage.setItem('danii_vip_age_verified', 'true');
     } catch {}
-    setIsOpen(false);
+    setInternalIsOpen(false);
     onConfirm();
   };
 

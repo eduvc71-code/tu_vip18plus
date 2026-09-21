@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
+import { SplashScreen } from './SplashScreen';
 import {
   X,
   Lock,
@@ -390,10 +391,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [profileStep, setProfileStep] = useState<1 | 2 | 3>(1);
   const [mediaStatusFilter, setMediaStatusFilter] = useState<'pending' | 'active' | 'all'>('pending');
 
-  // Bot Welcome Media state
+  // Bot Welcome & Splash Media state
   const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
   const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video' | null>('photo');
+  const [splashDescription, setSplashDescription] = useState('');
   const [uploadingWelcomeMedia, setUploadingWelcomeMedia] = useState(false);
+  const [savingSplashDescription, setSavingSplashDescription] = useState(false);
+  const [showSplashPreview, setShowSplashPreview] = useState(false);
 
   // Operating Mode state (Modo A: solo_bot / Modo B: bot_and_channel)
   const [operatingMode, setOperatingMode] = useState<'solo_bot' | 'bot_and_channel'>('solo_bot');
@@ -520,6 +524,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.model_vip_link !== undefined) setModelVipLink(infoData.model_vip_link || '');
         if (infoData.welcome_media_url !== undefined) setWelcomeMediaUrl(infoData.welcome_media_url || '');
         if (infoData.welcome_media_type !== undefined) setWelcomeMediaType(infoData.welcome_media_type || 'photo');
+        if (infoData.splash_description !== undefined) setSplashDescription(infoData.splash_description || '');
         if (infoData.operating_mode) setOperatingMode(infoData.operating_mode);
       }
       
@@ -1246,6 +1251,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       setMessage({ type: 'error', text: 'Error de red' });
+    }
+  };
+
+  const handleSaveSplashDescription = async () => {
+    setSavingSplashDescription(true);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ splash_description: splashDescription })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({ type: 'success', text: '✅ Descripción de la Pantalla de Inicio / Splash guardada con éxito' });
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar descripción del Splash' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al guardar descripción' });
+    } finally {
+      setSavingSplashDescription(false);
     }
   };
 
@@ -3808,64 +3838,115 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
 
-                {/* FOTO O VIDEO DE BIENVENIDA (BOT Y CANAL) */}
+                {/* PANTALLA DE INICIO / SPLASH PREVIEW & BIENVENIDA */}
                 <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-base font-extrabold text-amber-400 flex items-center gap-2">
-                      <Sparkles className="w-5 h-5" /> Foto o Video de Bienvenida (Bot y Clientes)
+                      <Sparkles className="w-5 h-5" /> Pantalla de Inicio / Splash Preview & Bienvenida
                     </h4>
                     <span className="px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
-                      Bienvenida Clientes
+                      Mini App y Bot
                     </span>
                   </div>
                   <p className="text-zinc-300 text-xs leading-relaxed">
-                    Sube una foto o video fijado que recibirán automáticamente los clientes cuando inicien el bot o consulten el canal oficial.
+                    Sube una foto o video y edita la descripción. Esta pantalla se mostrará como <strong>vista previa obligatoria de inicio</strong> a todos los usuarios (nuevos y suscriptores) al ingresar a la Mini App.
                   </p>
 
+                  {/* Vista Previa del Archivo Multimedia Actual */}
                   {welcomeMediaUrl ? (
                     <div className="flex flex-col sm:flex-row items-center gap-4 p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl">
                       {welcomeMediaType === 'video' || isVideoUrl(welcomeMediaUrl) ? (
                         <video src={welcomeMediaUrl} controls className="w-32 h-32 object-cover rounded-xl bg-black shadow-md" />
                       ) : (
-                        <img src={welcomeMediaUrl} alt="Bienvenida Oficial" className="w-32 h-32 object-cover rounded-xl shadow-md" />
+                        <img src={welcomeMediaUrl} alt="Splash Screen" className="w-32 h-32 object-cover rounded-xl shadow-md" />
                       )}
                       <div className="space-y-2 text-xs flex-1">
                         <p className="text-emerald-400 font-bold flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4" /> Multimedia de bienvenida activo ({welcomeMediaType || 'foto'})
+                          <CheckCircle2 className="w-4 h-4" /> Multimedia del Splash activo ({welcomeMediaType || 'foto'})
                         </p>
-                        <p className="text-zinc-400">Este archivo se envía automáticamente a los usuarios al iniciar el bot.</p>
+                        <p className="text-zinc-400">Este archivo se muestra en la pantalla de inicio y se envía en el bot.</p>
                         <p className="text-zinc-500 text-[10px] font-mono break-all">{welcomeMediaUrl}</p>
-                        <button
-                          type="button"
-                          onClick={handleDeleteWelcomeMedia}
-                          className="py-1.5 px-3 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Eliminar Bienvenida
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowSplashPreview(true)}
+                            className="py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Ver Vista Previa
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleDeleteWelcomeMedia}
+                            className="py-1.5 px-3 rounded-lg bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Eliminar Archivo
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs font-semibold flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      Aún no has subido una foto o video de bienvenida.
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs font-semibold flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>Aún no has subido una foto o video para el Splash de Inicio.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSplashPreview(true)}
+                        className="py-1 px-2.5 rounded-lg bg-zinc-900 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-[11px] font-bold cursor-pointer active:scale-95"
+                      >
+                        Ver Diseño Base
+                      </button>
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="file"
-                      accept="image/*,video/*"
-                      disabled={uploadingWelcomeMedia}
-                      onChange={(e) => {
-                        if (e.target.files?.[0]) {
-                          handleUploadWelcomeMedia(e.target.files[0]);
-                        }
-                      }}
-                      className="text-xs text-zinc-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-zinc-950 hover:file:bg-amber-400 cursor-pointer w-full sm:w-auto"
+                  {/* Carga de Nuevo Archivo para Splash */}
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                      <span>Subir Foto o Video para el Splash:</span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="file"
+                        accept="image/*,video/*"
+                        disabled={uploadingWelcomeMedia}
+                        onChange={(e) => {
+                          if (e.target.files?.[0]) {
+                            handleUploadWelcomeMedia(e.target.files[0]);
+                          }
+                        }}
+                        className="text-xs text-zinc-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-zinc-950 hover:file:bg-amber-400 cursor-pointer w-full sm:w-auto"
+                      />
+                      {uploadingWelcomeMedia && (
+                        <span className="text-xs text-amber-400 font-bold animate-pulse">Subiendo al Servidor...</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Edición de la Descripción del Splash */}
+                  <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                    <label className="text-xs font-bold text-zinc-300 flex items-center justify-between">
+                      <span>Descripción / Mensaje de Bienvenida del Splash:</span>
+                      <span className="text-[10px] text-zinc-500 font-normal">Editable</span>
+                    </label>
+                    <textarea
+                      value={splashDescription}
+                      onChange={(e) => setSplashDescription(e.target.value)}
+                      placeholder="Ej: Bienvenido a mi espacio exclusivo y confidencial. Disfruta de material único y de alta calidad (+18)."
+                      rows={3}
+                      className="w-full rounded-xl bg-zinc-900 border border-zinc-800 p-3 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500"
                     />
-                    {uploadingWelcomeMedia && (
-                      <span className="text-xs text-amber-400 font-bold animate-pulse">Subiendo al Servidor...</span>
-                    )}
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveSplashDescription}
+                        disabled={savingSplashDescription}
+                        className="py-2 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs tracking-wide shadow-md cursor-pointer disabled:opacity-50 active:scale-95 transition-all flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>{savingSplashDescription ? 'Guardando...' : 'Guardar Descripción del Splash'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -5119,6 +5200,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Vista Previa Interactiva de Pantalla de Inicio / Splash para Admin */}
+      {showSplashPreview && (
+        <SplashScreen
+          mediaUrl={welcomeMediaUrl}
+          mediaType={welcomeMediaType || 'photo'}
+          modelName={modelDisplayName || 'IAM Danii'}
+          splashDescription={splashDescription}
+          onFinish={() => setShowSplashPreview(false)}
+          isPreview={true}
+        />
+      )}
     </div>
   );
 };
