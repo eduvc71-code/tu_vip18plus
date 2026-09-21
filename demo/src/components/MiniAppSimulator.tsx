@@ -19,8 +19,8 @@ import {
 
 interface MiniAppSimulatorProps {
   profile: CreatorProfile;
-  onOpenAdmin?: () => void;
 }
+
 
 export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) => {
   const [photoIndex, setPhotoIndex] = useState(0);
@@ -451,10 +451,11 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
         <button
           type="button"
           onClick={onClose}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-700 text-xs font-bold text-zinc-200 cursor-pointer active:scale-95"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700 text-xs font-bold text-zinc-200 cursor-pointer active:scale-95 transition-all"
+          title="Cerrar visor"
         >
-          <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
-          <span>Volver</span>
+          <X className="w-3.5 h-3.5 text-amber-400" />
+          <span>Cerrar</span>
         </button>
 
         <div className="flex items-center gap-1.5">
@@ -467,14 +468,6 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
             {activeIdx + 1} / {allMedia.length}
           </span>
         </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1.5 rounded-full bg-zinc-900/80 border border-zinc-700 text-zinc-300 cursor-pointer active:scale-95"
-        >
-          <X className="w-4 h-4" />
-        </button>
       </div>
 
       {/* Zona Multimedia Inmersiva */}

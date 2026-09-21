@@ -54,10 +54,45 @@ html, body {
 }
 
 .animate-shrink-width {
-  animation: shrinkWidth 4.5s linear forwards;
+  animation: shrinkWidth 9.5s linear forwards;
 }
 
 .animate-zoom-bounce-in {
   animation: zoomBounceIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+@keyframes zoomCenterIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-zoom-center-in {
+  animation: zoomCenterIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes splashIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-splash-in {
+  animation: splashIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 

@@ -49,14 +49,9 @@ export const ChannelSimulator: React.FC<ChannelSimulatorProps> = ({
       {/* ── Cabecera Nativa de Canal de Telegram ── */}
       <div className="bg-[#17212b] px-3 py-2.5 flex items-center justify-between border-b border-[#0f1821] shadow-md shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <button
-            type="button"
-            onClick={() => onNavigateToView('admin')}
-            className="p-1 rounded-full text-zinc-300 hover:text-white cursor-pointer"
-            title="Volver al Panel Admin"
-          >
+          <div className="p-1 text-zinc-300">
             <ArrowLeft className="w-5 h-5" />
-          </button>
+          </div>
           
           <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800 border border-amber-400/40 shrink-0">
             <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />

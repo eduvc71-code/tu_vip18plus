@@ -10,9 +10,7 @@ import { BotSimulator } from './components/BotSimulator';
 export default function App() {
   const [profile, setProfile] = useState<CreatorProfile>(() => getStoredDemoProfile());
   const [currentView, setCurrentView] = useState<DemoView>('admin');
-  const [isPhoneFrame, setIsPhoneFrame] = useState<boolean>(() => {
-    return typeof window !== 'undefined' && window.innerWidth >= 1024;
-  });
+  const [isPhoneFrame, setIsPhoneFrame] = useState<boolean>(true);
 
   useEffect(() => {
     const handleUpdated = (e: any) => {
@@ -55,9 +53,9 @@ export default function App() {
       {currentView === 'miniapp' && (
         <MiniAppSimulator
           profile={profile}
-          onOpenAdmin={() => setCurrentView('admin')}
         />
       )}
+
 
       {currentView === 'channel' && (
         <ChannelSimulator
