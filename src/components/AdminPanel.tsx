@@ -40,7 +40,8 @@ import {
   Star,
   Bot,
   RotateCcw,
-  Save
+  Save,
+  HelpCircle
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -93,6 +94,106 @@ export function getCleanPaymentTitle(method: PaymentMethod): string {
     .trim();
 }
 
+interface AdminHelpModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-3 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full max-w-lg bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="p-4 border-b border-zinc-800 bg-zinc-950 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <HelpCircle className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Guía Práctica del Administrador</h3>
+              <p className="text-[10px] text-zinc-400">Instrucciones claras y directas</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-4 overflow-y-auto space-y-3.5 text-xs text-zinc-300">
+          {/* Tarjeta 1: Contenido Free */}
+          <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-emerald-500/30 space-y-1.5">
+            <h4 className="font-extrabold text-emerald-400 flex items-center gap-1.5 text-xs">
+              <span>🟢</span> 1. Contenido Free (Fotos y Videos Gratuitos)
+            </h4>
+            <p className="leading-relaxed">
+              • <strong>¿Dónde se guarda?</strong> Se almacena directamente en el <strong>Servidor Telegram</strong>.
+            </p>
+            <p className="leading-relaxed">
+              • <strong>Publicada (Activa):</strong> Queda visible de inmediato para todos tus clientes en la Mini App.
+            </p>
+            <p className="leading-relaxed">
+              • <strong>Borrador (Oculto):</strong> Se guarda en el <strong>Servidor Telegram</strong> de forma privada, oculta para tus clientes hasta que decidas activarla.
+            </p>
+          </div>
+
+          {/* Tarjeta 2: Contenido VIP Stars */}
+          <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-amber-500/30 space-y-1.5">
+            <h4 className="font-extrabold text-amber-400 flex items-center gap-1.5 text-xs">
+              <Star className="w-3.5 h-3.5 fill-current" /> 2. Contenido VIP (Telegram Stars)
+            </h4>
+            <p className="leading-relaxed">
+              • <strong>Paso 1 (Guardar):</strong> Seleccionas el archivo y le asignas su precio en Estrellas (⭐ 10, 25, 50, etc.). Se registra en el <strong>Servidor Telegram</strong> y en el <strong>Servidor DB</strong>.
+            </p>
+            <p className="leading-relaxed">
+              • <strong>Paso 2 (Previsualizar):</strong> Ves cómo se mostrará el candado con efecto borroso en el canal de tus clientes.
+            </p>
+            <p className="leading-relaxed">
+              • <strong>Paso 3 (Publicar):</strong> Se publica en tu Canal VIP con botón de cobro oficial de Telegram. Cuando el cliente paga con Telegram Stars, el bot le entrega el contenido desbloqueado al instante.
+            </p>
+          </div>
+
+          {/* Tarjeta 3: Biblioteca del Bot */}
+          <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-indigo-500/30 space-y-1.5">
+            <h4 className="font-extrabold text-indigo-400 flex items-center gap-1.5 text-xs">
+              <Bot className="w-3.5 h-3.5" /> 3. Biblioteca del Bot (Privada)
+            </h4>
+            <p className="leading-relaxed">
+              • Almacena multimedia exclusivo en el <strong>Servidor Telegram</strong> para que el bot responda por chat privado o para envíos especiales, sin publicarse en el canal ni mostrarse en la Mini App.
+            </p>
+          </div>
+
+          {/* Tarjeta 4: Respaldo en Servidor DB */}
+          <div className="p-3.5 rounded-2xl bg-zinc-950/80 border border-zinc-700 space-y-1.5">
+            <h4 className="font-extrabold text-zinc-100 flex items-center gap-1.5 text-xs">
+              <HardDrive className="w-3.5 h-3.5 text-amber-400" /> 4. Respaldo Seguro (Servidor DB)
+            </h4>
+            <p className="leading-relaxed">
+              • Al pulsar el botón <strong>"Servidor DB"</strong> en la barra superior, se crea un respaldo completo de tu catálogo, perfiles, encuestas y métodos de pago en el <strong>Servidor DB</strong> para asegurar que tus datos nunca se pierdan ante reinicios.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-3 border-t border-zinc-800 bg-zinc-950 flex justify-end shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs cursor-pointer transition-colors shadow-md"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({
   isOpen,
   onClose,
@@ -120,6 +221,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [showPinText, setShowPinText] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showHelpGuide, setShowHelpGuide] = useState(false);
+
+  useEffect(() => {
+    try {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        if (!tg.isExpanded) tg.expand();
+        if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
+          tg.requestFullscreen();
+        }
+        if (typeof tg.disableVerticalSwipes === 'function') {
+          tg.disableVerticalSwipes();
+        }
+        if (typeof tg.setHeaderColor === 'function') {
+          tg.setHeaderColor('#09090b');
+        }
+        if (typeof tg.setBackgroundColor === 'function') {
+          tg.setBackgroundColor('#09090b');
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -805,7 +929,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  // Sync Database SQLite to B2
+  // Sync Database SQLite to DB Server
   const handleSyncDbToB2 = async () => {
     setSyncingDb(true);
     try {
@@ -815,9 +939,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: '💾 Base de datos SQLite respaldada en Backblaze B2 exitosamente.' });
+        setMessage({ type: 'success', text: '💾 Base de datos respaldada en Servidor DB exitosamente.' });
       } else {
-        setMessage({ type: 'error', text: data.error || 'Error al respaldar DB en B2' });
+        setMessage({ type: 'error', text: data.error || 'Error al respaldar en Servidor DB' });
       }
     } catch {
       setMessage({ type: 'error', text: 'Error de conexión al respaldar base de datos' });
@@ -895,7 +1019,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleDeleteMediaPermanently = async (photoUrl: string) => {
     if (!editingProfile) return;
-    if (!confirm('⚠️ ¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE este archivo del servidor y de Backblaze B2?\n\nEsta acción borrará el archivo de raíz y no se puede deshacer.')) return;
+    if (!confirm('⚠️ ¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE este archivo del Servidor Telegram y Servidor DB?\n\nEsta acción borrará el archivo de raíz y no se puede deshacer.')) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media`, {
@@ -1446,72 +1570,86 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   ];
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md overflow-y-auto transition-all ${
-      isFullScreen ? 'p-0' : 'p-2 sm:p-4'
-    }`}>
-      <div className={`relative w-full bg-zinc-900 border border-zinc-800 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-full min-h-screen overflow-hidden sm:p-3 sm:items-center sm:justify-center">
+      <div className={`relative w-full h-full bg-zinc-900 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
         isFullScreen
           ? 'h-screen w-screen max-h-screen max-w-none rounded-none border-none'
-          : 'max-w-3xl rounded-3xl shadow-2xl max-h-[88vh] my-auto'
+          : 'sm:max-w-4xl sm:rounded-3xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[92vh] rounded-none border-none'
       }`}>
 
         {/* ── Header ── */}
-        <div className="p-3 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60 shrink-0">
-          <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
-            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
-              <Lock className="w-4 h-4" />
+        <div className="p-2.5 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80 shrink-0 gap-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Lock className="w-3.5 h-3.5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight font-serif truncate">
-                Panel Administrativo — {modelDisplayName || formData.name || 'IAM Danii'}
+              <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight truncate flex items-center gap-1.5">
+                <span>Panel Admin</span>
+                <span className="text-zinc-500 font-normal hidden xs:inline">•</span>
+                <span className="text-amber-400/90 font-medium text-xs truncate hidden xs:inline">{modelDisplayName || formData.name || 'Danii'}</span>
               </h2>
-              <p className="text-[11px] text-zinc-400 truncate">Gestión de contenido y atención privada</p>
+              <p className="text-[10px] text-zinc-400 truncate">Gestión de contenido</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             {(loading || authLoading) && (
-              <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-1" />
             )}
+            {/* Botón de Ayuda / Guía Práctica '?' */}
+            <button
+              type="button"
+              onClick={() => setShowHelpGuide(true)}
+              className="px-2 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
+              title="Guía Práctica del Administrador"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="font-bold text-[11px]">Ayuda</span>
+            </button>
             {isAuthenticated && (
               <button
                 type="button"
                 onClick={handleSyncDbToB2}
                 disabled={syncingDb}
-                className="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer text-[11px] font-bold flex items-center gap-1.5 border border-zinc-700/60 disabled:opacity-50"
-                title="Sincronizar base de datos SQLite con Backblaze B2 para que nunca se pierda en Render"
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 transition-colors cursor-pointer text-xs font-bold flex items-center gap-1 border border-zinc-700/60 disabled:opacity-50"
+                title="Sincronizar y respaldar en Servidor DB"
               >
                 <HardDrive className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">{syncingDb ? 'Guardando...' : 'Sincronizar BD'}</span>
+                <span className="hidden md:inline">{syncingDb ? 'Guardando...' : 'Servidor DB'}</span>
               </button>
             )}
             {isAuthenticated && (
               <button
                 type="button"
                 onClick={toggleFullScreen}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-                title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa (Web y Móvil)'}
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer hidden sm:flex"
+                title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
               >
-                {isFullScreen ? <Minimize2 className="w-4 h-4 text-amber-400" /> : <Maximize2 className="w-4 h-4" />}
+                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
               </button>
             )}
             {isAuthenticated && (
               <button
                 onClick={handleLogout}
-                className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
                 title="Cerrar sesión"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             )}
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title="Cerrar panel"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
+
+        {/* Modal de Guía Práctica '?' */}
+        <AdminHelpModal isOpen={showHelpGuide} onClose={() => setShowHelpGuide(false)} />
 
         {/* ── Global Floating Toast Notification ── */}
         {message && (
@@ -1748,67 +1886,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
 
                         {/* Selector de Pestañas de Carga: Free / VIP / Bot */}
-                        <div className="flex items-center gap-1.5 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
+                        <div className="flex items-center gap-1 p-1 bg-zinc-900 border border-zinc-800 rounded-xl">
                           <button
                             type="button"
                             onClick={() => setStep2Tab('free')}
-                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'free'
                                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            <span>🟢 Subir Contenido Free</span>
+                            <span>🟢 Free</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setStep2Tab('vip')}
-                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'vip'
                                 ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black shadow-md shadow-amber-500/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            <Star className="w-3.5 h-3.5 fill-current" />
-                            <span>⭐ Subir Contenido VIP</span>
+                            <Star className="w-3.5 h-3.5 fill-current shrink-0" />
+                            <span>⭐ VIP Stars</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setStep2Tab('bot')}
-                            className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'bot'
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            <Bot className="w-3.5 h-3.5" />
-                            <span>🤖 Contenido / Bot</span>
+                            <Bot className="w-3.5 h-3.5 shrink-0" />
+                            <span>🤖 Bot</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowHelpGuide(true)}
+                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 transition-colors cursor-pointer shrink-0"
+                            title="Ver guía práctica de carga"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
                         {/* ── SUB-PESTAÑA 1: SUBIR CONTENIDO FREE ── */}
                         {step2Tab === 'free' && (
                           <div className="space-y-3.5 bg-zinc-900/40 p-3.5 rounded-xl border border-zinc-850">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-bold text-emerald-400 flex items-center gap-1.5">
-                                <span>🟢</span> Subir Fotos o Videos Gratuitos a Servidores de Telegram
+                            <div className="flex items-center justify-between pb-1.5 border-b border-zinc-800/80">
+                              <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1.5">
+                                <span>🟢</span> Contenido Free
                               </span>
-                              <span className="text-[10px] text-zinc-500">Guardado en la nube de Telegram</span>
+                              <span className="text-[10px] text-zinc-400 font-medium">Servidor Telegram</span>
                             </div>
 
                             {/* Selector de Estado al Subir Contenido */}
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-3 bg-zinc-900/90 rounded-xl border border-zinc-800">
-                              <div className="space-y-0.5">
-                                <span className="text-[11px] font-bold text-zinc-200 flex items-center gap-1.5">
-                                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                  Al subir, guardar como:
-                                </span>
-                                <p className="text-[10px] text-zinc-400">
-                                  {uploadInitialStatus === 1
-                                    ? 'Se publicará de inmediato en la Mini App y Canal para clientes.'
-                                    : 'Se guardará en Telegram en modo borrador, oculto a clientes hasta que decidas publicarlo.'}
-                                </p>
-                              </div>
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-zinc-900/90 rounded-xl border border-zinc-800">
+                              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                                Al subir, guardar como:
+                              </span>
                               <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                                 <button
                                   type="button"
@@ -1925,39 +2064,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                         )}
 
-                        {/* ── SUB-PESTAÑA 2: SUBIR CONTENIDO VIP (4 FASES: GUARDAR -> PREVISUALIZAR -> EDITAR -> PUBLICAR) ── */}
+                        {/* ── SUB-PESTAÑA 2: SUBIR CONTENIDO VIP ── */}
                         {step2Tab === 'vip' && (
-                          <div className="space-y-4 bg-gradient-to-br from-amber-500/10 via-zinc-900/60 to-zinc-950 p-4 rounded-xl border border-amber-500/30">
-                            {/* Flujo Lineal Indicador */}
+                          <div className="space-y-3.5 bg-gradient-to-br from-amber-500/10 via-zinc-900/60 to-zinc-950 p-3 sm:p-4 rounded-xl border border-amber-500/30">
+                            {/* Indicador de Etapa Compacto */}
                             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
-                              <span className="text-[11px] font-black text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
-                                <Star className="w-3.5 h-3.5 fill-current" /> Flujo VIP Telegram Stars
+                              <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <Star className="w-3.5 h-3.5 fill-current" /> Contenido VIP Stars
                               </span>
-                              <div className="flex items-center gap-1 text-[10px] font-bold">
-                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'upload' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                                  1. Guardar
-                                </span>
-                                <span className="text-zinc-600">➔</span>
-                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'preview' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                                  2. Previsualizar
-                                </span>
-                                <span className="text-zinc-600">➔</span>
-                                <span className={`px-2 py-0.5 rounded-full ${vipPhase === 'edit' ? 'bg-amber-500 text-zinc-950 ring-1 ring-amber-300' : 'bg-zinc-800 text-zinc-400'}`}>
-                                  3. Editar
-                                </span>
-                                <span className="text-zinc-600">➔</span>
-                                <span className="px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">
-                                  4. Publicar
-                                </span>
-                              </div>
+                              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                {vipPhase === 'upload' && 'Paso 1: Guardar'}
+                                {vipPhase === 'preview' && 'Paso 2: Previsualizar'}
+                                {vipPhase === 'edit' && 'Paso 3: Editar precio'}
+                              </span>
                             </div>
 
                             {/* FASE A: GUARDAR (SUBIR) */}
                             {vipPhase === 'upload' && (
                               <div className="space-y-3.5">
-                                <p className="text-[11px] text-zinc-300">
-                                  Sube un archivo de pago (uno por uno). Se almacenará en Telegram y en la base de datos con su precio en estrellas.
-                                </p>
 
                                 {/* Selector de Estrellas */}
                                 <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
@@ -3412,7 +3536,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     if (enlargedMediaUrl) handleDeleteMediaPermanently(enlargedMediaUrl);
                                   }}
                                   className="py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
-                                  title="Borrar definitivamente del servidor y Backblaze B2"
+                                  title="Borrar definitivamente del Servidor Telegram y Servidor DB"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                   Borrar del Servidor
@@ -3740,7 +3864,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       className="text-xs text-zinc-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-zinc-950 hover:file:bg-amber-400 cursor-pointer w-full sm:w-auto"
                     />
                     {uploadingWelcomeMedia && (
-                      <span className="text-xs text-amber-400 font-bold animate-pulse">Subiendo a Backblaze B2...</span>
+                      <span className="text-xs text-amber-400 font-bold animate-pulse">Subiendo al Servidor...</span>
                     )}
                   </div>
                 </div>

@@ -112,24 +112,29 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     !unlockedStarsUrls.has(selectedVideo)
   );
 
-  // Auto-deslizante de Imágenes cada 4 segundos
+  // Auto-deslizante de Imágenes cada 4 segundos garantizado
   useEffect(() => {
-    if (images.length > 1 && !isCurrentImageEphemeral && !isImageStarsLocked) {
-      const interval = setInterval(() => {
-        setImageIndex(prev => (prev + 1) % images.length);
-      }, 4000);
-      return () => clearInterval(interval);
+    if (images.length <= 1) return;
+    const interval = setInterval(() => {
+      setImageIndex(prev => (prev + 1) % images.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [images.length]);
+
+  // Asegurar que el índice de imagen no quede fuera de rango
+  useEffect(() => {
+    if (imageIndex >= images.length && images.length > 0) {
+      setImageIndex(0);
     }
-  }, [images.length, isCurrentImageEphemeral]);
+  }, [images.length, imageIndex]);
 
   // Auto-deslizante de Videos cada 4 segundos
   useEffect(() => {
-    if (videos.length > 1) {
-      const interval = setInterval(() => {
-        setVideoIndex(prev => (prev + 1) % videos.length);
-      }, 4000);
-      return () => clearInterval(interval);
-    }
+    if (videos.length <= 1) return;
+    const interval = setInterval(() => {
+      setVideoIndex(prev => (prev + 1) % videos.length);
+    }, 4000);
+    return () => clearInterval(interval);
   }, [videos.length]);
 
   const moveImage = (direction: -1 | 1) => {
@@ -145,12 +150,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   return (
     <article
       id={`profile-${profile.id}`}
-      className="overflow-hidden rounded-3xl border border-zinc-800 bg-zinc-900/90 shadow-2xl shadow-black/30"
+      className="overflow-hidden rounded-2xl sm:rounded-3xl border border-zinc-800/90 bg-zinc-900/90 shadow-2xl shadow-black/40"
     >
       <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
         
         {/* Columna Multimedia: Imágenes ARRIBA y Videos DEBAJO */}
-        <div className="bg-zinc-950 p-3 sm:p-4 space-y-2.5">
+        <div className="bg-zinc-950 p-2 sm:p-4 space-y-2.5">
           
           {/* 1. SECCIÓN IMÁGENES */}
           <div>

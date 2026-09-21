@@ -316,7 +316,7 @@ export default function App() {
 
   if (isAdminView) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans">
+      <div className="fixed inset-0 w-full h-full min-h-screen bg-zinc-950 text-zinc-100 font-sans p-0 m-0 overflow-hidden">
         <AdminPanel
           isOpen={true}
           onClose={() => {
@@ -376,8 +376,8 @@ export default function App() {
         loading={loading}
       />
 
-      {/* Main Catalog View */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 touch-pan-y">
+      {/* Main Catalog View - Optimizado para aprovechar la pantalla en móviles */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-2 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-5 sm:space-y-8 touch-pan-y">
 
         {/* Pinned Announcement Banner from Admin */}
         {pinnedActive && pinnedText && (

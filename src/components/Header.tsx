@@ -19,10 +19,10 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
     <header 
       className="sticky top-0 z-40 border-b border-zinc-800/80 bg-zinc-950/95 text-zinc-100 shadow-xl backdrop-blur-xl transition-all"
       style={{
-        paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 52px) + 8px)'
+        paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 42px) + 4px)'
       }}
     >
-      <div className="mx-auto max-w-7xl px-3.5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-2.5 sm:px-6 lg:px-8">
         <div className="flex h-13 sm:h-14 items-center justify-between gap-2">
           
           {/* Left: Balanced Brand Badge */}
