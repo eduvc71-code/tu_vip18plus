@@ -199,16 +199,20 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             >
               {isImageStarsLocked ? (
                 <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[190px]">
-                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black opacity-95" />
-                  <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
-                    <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-2">
+                  <img
+                    src={selectedImage}
+                    alt="Contenido VIP"
+                    draggable={false}
+                    className="w-full h-full object-cover filter blur-xl scale-110 opacity-40 select-none"
+                  />
+                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-1.5">
                       <Lock className="w-5 h-5 animate-pulse" />
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md">
                       ⭐ {imageStars} Estrellas
                     </span>
-                    <p className="text-xs font-bold text-white">Contenido Bloqueado</p>
-                    <p className="text-[10px] text-zinc-400 mt-0.5">Toca para desbloquear con Telegram Stars</p>
                   </div>
                 </div>
               ) : images.length === 0 ? (
@@ -299,15 +303,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 {isVideoStarsLocked ? (
                   <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[180px]">
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
-                    <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
-                      <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-2">
+                    <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-1.5">
                         <Lock className="w-5 h-5 animate-pulse" />
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md mb-1">
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md">
                         ⭐ {profile.media_stars?.[selectedVideo]} Estrellas
                       </span>
-                      <p className="text-xs font-bold text-white">Video Exclusivo Bloqueado</p>
-                      <p className="text-[10px] text-zinc-400 mt-0.5">Toca para desbloquear con Telegram Stars</p>
                     </div>
                   </div>
                 ) : (

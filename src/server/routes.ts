@@ -151,14 +151,60 @@ router.get('/media', (req: Request, res: Response) => {
   return streamB2Object(req, res);
 });
 
-// Telegram Media Streaming Proxy with HTTP Range support for video seeking
+const TG_CACHE_DIR = path.join(process.cwd(), 'public', 'uploads', 'tg_cache');
+if (!fs.existsSync(TG_CACHE_DIR)) {
+  try {
+    fs.mkdirSync(TG_CACHE_DIR, { recursive: true });
+  } catch {}
+}
+
+// Telegram Media Streaming Proxy with High-Speed Disk Cache & HTTP Range support
 router.get('/telegram-media/:fileIdWithExt', async (req: Request, res: Response) => {
   try {
     const fileIdWithExt = req.params.fileIdWithExt;
     const dotIdx = fileIdWithExt.lastIndexOf('.');
     const fileId = dotIdx !== -1 ? fileIdWithExt.substring(0, dotIdx) : fileIdWithExt;
     const ext = dotIdx !== -1 ? fileIdWithExt.substring(dotIdx).toLowerCase() : '';
+    const safeExt = ext || (fileIdWithExt.includes('.mp4') ? '.mp4' : '.jpg');
+    const cachedFile = path.join(TG_CACHE_DIR, `${fileId}${safeExt}`);
 
+    let contentType = 'image/jpeg';
+    if (safeExt === '.mp4') contentType = 'video/mp4';
+    else if (safeExt === '.webm') contentType = 'video/webm';
+    else if (safeExt === '.mov') contentType = 'video/quicktime';
+    else if (safeExt === '.png') contentType = 'image/png';
+    else if (safeExt === '.webp') contentType = 'image/webp';
+    else if (safeExt === '.gif') contentType = 'image/gif';
+
+    // 1. Si ya existe en caché local de disco, servir directamente (< 5ms)
+    if (fs.existsSync(cachedFile)) {
+      const stat = fs.statSync(cachedFile);
+      const fileSize = stat.size;
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      const range = req.headers.range;
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+        res.setHeader('Content-Length', chunksize);
+        fs.createReadStream(cachedFile, { start, end }).pipe(res);
+        return;
+      } else {
+        res.setHeader('Content-Length', fileSize);
+        res.status(200);
+        fs.createReadStream(cachedFile).pipe(res);
+        return;
+      }
+    }
+
+    // 2. Si no está en caché, resolver ruta en Telegram
     const filePath = await getTelegramFilePath(fileId);
     if (!filePath) {
       res.status(404).json({ error: 'Archivo no encontrado en Telegram' });
@@ -173,48 +219,32 @@ router.get('/telegram-media/:fileIdWithExt', async (req: Request, res: Response)
     }
 
     const tgUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
-
-    const headers: Record<string, string> = {};
-    if (req.headers.range) {
-      headers['Range'] = req.headers.range;
-    }
-
-    const tgRes = await fetch(tgUrl, { headers });
-    if (!tgRes.ok && tgRes.status !== 206) {
+    const tgRes = await fetch(tgUrl);
+    if (!tgRes.ok) {
       res.status(tgRes.status).send('Error al obtener archivo de Telegram');
       return;
     }
 
-    let contentType = tgRes.headers.get('content-type');
-    if (!contentType || contentType === 'application/octet-stream') {
-      if (ext === '.mp4') contentType = 'video/mp4';
-      else if (ext === '.webm') contentType = 'video/webm';
-      else if (ext === '.mov') contentType = 'video/quicktime';
-      else if (ext === '.png') contentType = 'image/png';
-      else if (ext === '.gif') contentType = 'image/gif';
-      else if (ext === '.webp') contentType = 'image/webp';
-      else contentType = 'image/jpeg';
+    const arrayBuf = await tgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+
+    // Guardar en disco para futuros accesos instantáneos
+    try {
+      fs.writeFileSync(cachedFile, buffer);
+    } catch (writeErr) {
+      console.warn('[Telegram Media Cache Write Warning]:', writeErr);
     }
 
-    res.status(tgRes.status);
+    const tgContentType = tgRes.headers.get('content-type');
+    if (tgContentType && tgContentType !== 'application/octet-stream') {
+      contentType = tgContentType;
+    }
+
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-
-    const acceptRanges = tgRes.headers.get('accept-ranges') || 'bytes';
-    res.setHeader('Accept-Ranges', acceptRanges);
-
-    const contentRange = tgRes.headers.get('content-range');
-    if (contentRange) res.setHeader('Content-Range', contentRange);
-
-    const contentLength = tgRes.headers.get('content-length');
-    if (contentLength) res.setHeader('Content-Length', contentLength);
-
-    if (tgRes.body) {
-      const nodeStream = Readable.fromWeb(tgRes.body as any);
-      nodeStream.pipe(res);
-    } else {
-      res.end();
-    }
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', buffer.length);
+    res.status(200).send(buffer);
   } catch (err: any) {
     console.error('Error in /telegram-media proxy:', err);
     if (!res.headersSent) {

@@ -9,3 +9,6 @@ coverage/
 !.env.example
 data/*.sqlite
 data/catalogo.sqlite
+public/uploads/tg_cache/*
+!public/uploads/tg_cache/.gitkeep
+

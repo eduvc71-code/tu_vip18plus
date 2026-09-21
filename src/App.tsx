@@ -125,6 +125,12 @@ export default function App() {
         try {
           if (!tgWebApp.isExpanded) tgWebApp.expand();
         } catch {}
+        try {
+          // Minimizar la barra nativa de Telegram y ocupar pantalla completa
+          if (typeof tgWebApp.requestFullscreen === 'function' && !tgWebApp.isFullscreen) {
+            tgWebApp.requestFullscreen();
+          }
+        } catch {}
       };
 
       try {
