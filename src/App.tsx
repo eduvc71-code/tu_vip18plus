@@ -388,7 +388,7 @@ export default function App() {
           className="w-full max-w-xs py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer border border-amber-400/40"
         >
           <ExternalLink className="w-4 h-4 text-zinc-950 stroke-[2.5]" />
-          <span>Abrir en Google Chrome</span>
+          <span>Abrir en Navegador (Chrome / Safari)</span>
         </button>
         <p className="text-[11px] text-zinc-500 mt-4">
           Toca el botón si tu navegador no se abrió automáticamente.
@@ -399,7 +399,7 @@ export default function App() {
 
   if (isAdminView) {
     return (
-      <div className="fixed inset-0 w-full h-full min-h-screen bg-zinc-950 text-zinc-100 font-sans p-0 m-0 overflow-hidden">
+      <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-zinc-950 text-zinc-100 font-sans p-0 m-0 flex flex-col overflow-hidden">
         <AdminPanel
           isOpen={true}
           onClose={() => {

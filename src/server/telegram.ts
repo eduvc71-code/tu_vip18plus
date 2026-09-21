@@ -1200,11 +1200,11 @@ export async function processTelegramUpdate(update: any) {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
     const adminLink = buildAdminWebLink(baseUrl, adminToken);
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (*Google Chrome*, *Safari*, etc.):\n\n👉 [Ingresar al Panel Web en Chrome](${adminLink})\n\n*(Nota: Al abrirse en el navegador web dispones de pantalla completa sin la barra superior ni botones de Telegram)*`, {
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (*Google Chrome*, *Safari iOS*, etc.):\n\n👉 [Ingresar al Panel Web (Chrome / Safari)](${adminLink})\n\n*(Nota: Al abrirse en el navegador web dispones de pantalla completa sin la barra superior ni botones de Telegram)*`, {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🌐 Abrir Panel Web (Google Chrome)', url: adminLink }
+            { text: '🌐 Abrir Panel Web (Chrome / Safari)', url: adminLink }
           ],
           [
             { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
@@ -2317,7 +2317,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🌐 Abrir Panel Admin (Google Chrome)', url: adminLink }
+          { text: '🌐 Abrir Panel Admin (Chrome / Safari)', url: adminLink }
         ],
         [
           { text: '💎 Abrir Canal VIP Free (Mini App Cliente)', web_app: { url: baseUrl } }

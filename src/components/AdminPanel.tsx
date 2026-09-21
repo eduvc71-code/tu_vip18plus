@@ -322,6 +322,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const toggleFullScreen = async () => {
     try {
+      const isIos = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+      if (isIos && !document.documentElement.requestFullscreen) {
+        setMessage({
+          type: 'success',
+          text: '📱 En iPhone: Toca Compartir [↑] en Safari y selecciona "Añadir a pantalla de inicio" para usar en pantalla completa sin barra de direcciones.'
+        });
+        setIsFullScreen(prev => !prev);
+        return;
+      }
+
       if (!document.fullscreenElement) {
         if (document.documentElement.requestFullscreen) {
           await document.documentElement.requestFullscreen();
@@ -1664,8 +1674,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-full min-h-screen overflow-hidden sm:p-3 sm:items-center sm:justify-center">
-      <div className={`relative w-full h-full bg-zinc-900 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
+    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-[100dvh] max-h-[100dvh] overflow-hidden sm:p-3 sm:items-center sm:justify-center">
+      <div className={`relative w-full h-full max-h-full min-h-0 bg-zinc-900 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
         isFullScreen
           ? 'h-screen w-screen max-h-screen max-w-none rounded-none border-none'
           : 'sm:max-w-4xl sm:rounded-3xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[92vh] rounded-none border-none'
@@ -1726,10 +1736,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <button
                 type="button"
                 onClick={toggleFullScreen}
-                className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer hidden sm:flex"
-                title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer flex items-center gap-1 border border-zinc-700/60"
+                title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa (ocultar barra del navegador)'}
               >
-                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5 text-amber-400" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                <span className="hidden xs:inline text-xs font-bold">{isFullScreen ? 'Ventana' : 'Pantalla'}</span>
               </button>
             )}
             {isAuthenticated && (
@@ -1783,7 +1794,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
 
         {/* ── Body ── */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
           {/* ── Tab Bar ── */}
           <div className="flex items-center gap-0.5 px-3 sm:px-4 pt-2 bg-zinc-950/40 border-b border-zinc-800/80 overflow-x-auto scrollbar-none shrink-0">
@@ -1814,7 +1825,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           {/* ── Tab Views ── */}
-          <div className="flex-1 overflow-y-auto px-1 sm:px-4 py-2 sm:py-3 space-y-2.5 sm:space-y-3.5">
+          <div 
+            className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y px-1 sm:px-4 py-2 sm:py-3 space-y-2.5 sm:space-y-3.5 pb-28"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
 
             {/* TAB: MY PROFILE FORM */}
             {activeTab === 'profiles' && (
