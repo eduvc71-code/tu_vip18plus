@@ -41,7 +41,10 @@ async function startServer() {
       res.setHeader('Cache-Control', 'private, no-store');
     }
   }));
-  app.use(express.static(path.join(process.cwd(), 'public')));
+  // Lightweight health check endpoint (para servicios anti-sleep / UptimeRobot)
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  });
 
   // API routes FIRST
   app.use('/api', apiRouter);
