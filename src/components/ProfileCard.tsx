@@ -98,21 +98,39 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const isCurrentImageEphemeral = Boolean(selectedImage && profile.ephemeral_config?.[selectedImage]?.enabled);
   const currentImageDuration = (selectedImage && profile.ephemeral_config?.[selectedImage]?.duration_seconds) || 5;
 
-  const isImageStarsLocked = Boolean(
-    selectedImage &&
-    profile.media_stars?.[selectedImage] &&
-    profile.media_stars[selectedImage] > 0 &&
-    !unlockedStarsUrls.has(selectedImage)
-  );
+  const getStarsForUrl = (url: string): number | undefined => {
+    if (!profile?.media_stars || !url) return undefined;
+    if (profile.media_stars[url] !== undefined) return profile.media_stars[url];
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
+    for (const [key, val] of Object.entries(profile.media_stars)) {
+      const cleanKey = key.replace(/^https?:\/\/[^/]+/, '');
+      if (cleanKey === cleanUrl || url.endsWith(cleanKey) || key.endsWith(cleanUrl)) {
+        return val;
+      }
+    }
+    return undefined;
+  };
 
-  const isVideoStarsLocked = Boolean(
-    selectedVideo &&
-    profile.media_stars?.[selectedVideo] &&
-    profile.media_stars[selectedVideo] > 0 &&
-    !unlockedStarsUrls.has(selectedVideo)
-  );
+  const isMediaUnlocked = (url: string): boolean => {
+    if (!url) return false;
+    if (unlockedStarsUrls.has(url)) return true;
+    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
+    for (const unlocked of unlockedStarsUrls) {
+      const cleanUnlocked = unlocked.replace(/^https?:\/\/[^/]+/, '');
+      if (cleanUnlocked === cleanUrl || url.endsWith(cleanUnlocked) || unlocked.endsWith(cleanUrl)) {
+        return true;
+      }
+    }
+    return false;
+  };
 
-  // Auto-deslizante de Imágenes cada 4 segundos garantizado
+  const imageStars = getStarsForUrl(selectedImage);
+  const isImageStarsLocked = Boolean(selectedImage && imageStars && imageStars > 0 && !isMediaUnlocked(selectedImage));
+
+  const videoStars = getStarsForUrl(selectedVideo);
+  const isVideoStarsLocked = Boolean(selectedVideo && videoStars && videoStars > 0 && !isMediaUnlocked(selectedVideo));
+
+  // Auto-deslizante de Imágenes cada 4 segundos garantizado: Foto 1 -> Foto N -> Foto 1
   useEffect(() => {
     if (images.length <= 1) return;
     const interval = setInterval(() => {
@@ -128,7 +146,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     }
   }, [images.length, imageIndex]);
 
-  // Auto-deslizante de Videos cada 4 segundos
+  // Auto-deslizante de Videos cada 4 segundos: Video 1 -> Video N -> Video 1
   useEffect(() => {
     if (videos.length <= 1) return;
     const interval = setInterval(() => {
@@ -181,17 +199,13 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             >
               {isImageStarsLocked ? (
                 <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[190px]">
-                  <img
-                    src={selectedImage}
-                    alt="Contenido Bloqueado"
-                    className="absolute inset-0 h-full w-full object-cover filter blur-2xl brightness-30 scale-125 pointer-events-none"
-                  />
+                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black opacity-95" />
                   <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
                     <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-2">
                       <Lock className="w-5 h-5 animate-pulse" />
                     </div>
                     <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md mb-1">
-                      ⭐ {profile.media_stars?.[selectedImage]} Estrellas
+                      ⭐ {imageStars} Estrellas
                     </span>
                     <p className="text-xs font-bold text-white">Contenido Bloqueado</p>
                     <p className="text-[10px] text-zinc-400 mt-0.5">Toca para desbloquear con Telegram Stars</p>

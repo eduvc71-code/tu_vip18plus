@@ -9,13 +9,19 @@ interface ProtectedMediaProps {
   showControls?: boolean;
 }
 
-export const isVideoUrl = (url: string) =>
-  /\.(mp4|webm|mov|m4v|ogv)(?:$|[?#])/i.test(url);
+export const isVideoUrl = (url: string): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  const clean = url.toLowerCase().split('?')[0].split('#')[0];
+  if (/\.(mp4|webm|mov|m4v|ogv|mkv|avi|3gp)$/i.test(clean)) return true;
+  if (/\.(mp4|webm|mov|m4v|ogv|mkv|avi|3gp)(?:$|[?#])/i.test(url)) return true;
+  if (url.toLowerCase().includes('/video') || url.toLowerCase().includes('type=video')) return true;
+  return false;
+};
 
 export const ProtectedMedia: React.FC<ProtectedMediaProps> = ({
   src,
   alt,
-  modelName,
+  modelName: _modelName,
   className = '',
   autoPlay = false,
   showControls = true
@@ -56,12 +62,6 @@ export const ProtectedMedia: React.FC<ProtectedMediaProps> = ({
           onDragStart={(event) => event.preventDefault()}
         />
       )}
-
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20 select-none">
-        <span className="-rotate-12 text-center text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white drop-shadow-lg px-4">
-          Vista Protegida · Contenido Privado {modelName ? modelName.replace(/_/g, ' ') : 'IAM Danii'}
-        </span>
-      </div>
     </div>
   );
 };

@@ -26,13 +26,18 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 }) => {
   const media = useMemo(() => {
     if (!profile?.photos?.length) return [];
+    if (initialMediaUrl) {
+      const isInitialVideo = isVideoUrl(initialMediaUrl);
+      const filtered = profile.photos.filter(url => isInitialVideo ? isVideoUrl(url) : !isVideoUrl(url));
+      return filtered.length > 0 ? filtered : profile.photos;
+    }
     return profile.photos;
-  }, [profile?.photos]);
+  }, [profile?.photos, initialMediaUrl]);
 
   const [activePhotoIdx, setActivePhotoIdx] = useState(0);
   const [showCaption, setShowCaption] = useState(true);
   const [payingStars, setPayingStars] = useState(false);
-  const [isLoadingMedia, setIsLoadingMedia] = useState(true);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [hasMediaError, setHasMediaError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const captionTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -69,9 +74,30 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   // Restablecer estados de carga y error al cambiar de archivo
   useEffect(() => {
-    setIsLoadingMedia(true);
     setHasMediaError(false);
-  }, [activePhotoIdx]);
+    const currentUrl = media[activePhotoIdx] || '';
+    if (!currentUrl) {
+      setIsLoadingMedia(false);
+      return;
+    }
+    const cleanUrl = currentUrl.replace(/^https?:\/\/[^/]+/, '');
+    const isUnlocked = unlockedStarsUrls.has(currentUrl) || Array.from(unlockedStarsUrls).some(u => u.replace(/^https?:\/\/[^/]+/,'') === cleanUrl);
+    let stars: number | undefined;
+    if (profile?.media_stars) {
+      stars = profile.media_stars[currentUrl];
+      if (stars === undefined) {
+        for (const [k, v] of Object.entries(profile.media_stars)) {
+          if (k.replace(/^https?:\/\/[^/]+/,'') === cleanUrl) {
+            stars = v;
+            break;
+          }
+        }
+      }
+    }
+    const isLocked = Boolean(stars && stars > 0 && !isUnlocked);
+    // Si está bloqueado con Stars, NO intentamos cargar de fondo (tal cual Telegram)
+    setIsLoadingMedia(!isLocked);
+  }, [activePhotoIdx, media, profile?.media_stars, unlockedStarsUrls]);
 
   // Integración con BackButton nativo de Telegram Mini App
   useEffect(() => {
@@ -280,7 +306,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           className="relative w-full h-[52vh] sm:h-[60vh] min-h-[280px] max-h-[65vh] bg-black flex items-center justify-center overflow-hidden cursor-pointer select-none group"
         >
           {/* Indicador de Carga / Spinner mientras descarga de Telegram */}
-          {isLoadingMedia && !hasMediaError && (
+          {isLoadingMedia && !hasMediaError && !isCurrentMediaLocked && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950/80 z-20 pointer-events-none">
               <div className="w-10 h-10 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-3" />
               <span className="text-xs font-bold text-amber-400">Cargando {isVideo ? 'video' : 'foto'}...</span>
@@ -314,16 +340,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
           {isCurrentMediaLocked ? (
             <div className="relative w-full h-full min-h-[260px] flex flex-col items-center justify-center bg-zinc-950 overflow-hidden select-none p-6 text-center">
-              {isVideo ? (
-                <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
-              ) : (
-                <img
-                  src={currentMediaUrl}
-                  alt="Contenido Bloqueado"
-                  className="absolute inset-0 h-full w-full object-cover filter blur-3xl brightness-25 scale-125 pointer-events-none"
-                  onLoad={() => setIsLoadingMedia(false)}
-                />
-              )}
+              <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-black opacity-95" />
               <div className="relative z-10 flex flex-col items-center justify-center max-w-sm">
                 <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-2xl shadow-amber-500/30 mb-3">
                   <Lock className="w-7 h-7 animate-pulse text-amber-400" />
@@ -403,11 +420,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
                 className={`max-h-[58vh] sm:max-h-[62vh] w-auto h-auto max-w-full object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
               />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-20 select-none">
-                <span className="-rotate-12 text-center text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-white drop-shadow-lg px-4">
-                  Vista Protegida · Contenido Privado {modelName ? modelName.replace(/_/g, ' ') : 'IAM Danii'}
-                </span>
-              </div>
             </div>
           )}
 

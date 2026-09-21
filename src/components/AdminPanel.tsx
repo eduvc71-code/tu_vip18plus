@@ -224,15 +224,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
 
+  // Detección y autoajuste del dispositivo en tiempo real
+  const [deviceLayout, setDeviceLayout] = useState<{
+    width: number;
+    height: number;
+    safeAreaTop: number;
+    isMobile: boolean;
+    platform: string;
+  }>(() => {
+    const tg = typeof window !== 'undefined' ? (window as any).Telegram?.WebApp : null;
+    const safeTop = Math.max(
+      tg?.contentSafeAreaInset?.top || 0,
+      tg?.safeAreaInset?.top || 0,
+      0
+    );
+    return {
+      width: typeof window !== 'undefined' ? window.innerWidth : 390,
+      height: typeof window !== 'undefined' ? window.innerHeight : 844,
+      safeAreaTop: safeTop,
+      isMobile: typeof window !== 'undefined' ? (window.innerWidth < 640 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) : true,
+      platform: tg?.platform || (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent) ? 'android' : 'other')
+    };
+  });
+
   useEffect(() => {
     try {
       const tg = (window as any).Telegram?.WebApp;
       if (tg) {
         tg.ready();
         if (!tg.isExpanded) tg.expand();
-        if (typeof tg.requestFullscreen === 'function' && !tg.isFullscreen) {
-          tg.requestFullscreen();
-        }
         if (typeof tg.disableVerticalSwipes === 'function') {
           tg.disableVerticalSwipes();
         }
@@ -244,6 +264,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         }
       }
     } catch {}
+  }, []);
+
+  useEffect(() => {
+    const updateMetrics = () => {
+      const tg = (window as any).Telegram?.WebApp;
+      const safeTop = Math.max(
+        tg?.contentSafeAreaInset?.top || 0,
+        tg?.safeAreaInset?.top || 0,
+        0
+      );
+      setDeviceLayout({
+        width: window.innerWidth,
+        height: window.innerHeight,
+        safeAreaTop: safeTop,
+        isMobile: window.innerWidth < 640 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent),
+        platform: tg?.platform || (/Android/i.test(navigator.userAgent) ? 'android' : 'other')
+      });
+      document.documentElement.style.setProperty('--app-safe-top', `${safeTop}px`);
+    };
+
+    updateMetrics();
+    window.addEventListener('resize', updateMetrics);
+    window.addEventListener('orientationchange', updateMetrics);
+
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg?.onEvent) {
+      try {
+        tg.onEvent('viewportChanged', updateMetrics);
+        tg.onEvent('safeAreaChanged', updateMetrics);
+        tg.onEvent('contentSafeAreaChanged', updateMetrics);
+      } catch {}
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateMetrics);
+      window.removeEventListener('orientationchange', updateMetrics);
+      if (tg?.offEvent) {
+        try {
+          tg.offEvent('viewportChanged', updateMetrics);
+          tg.offEvent('safeAreaChanged', updateMetrics);
+          tg.offEvent('contentSafeAreaChanged', updateMetrics);
+        } catch {}
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -1608,15 +1672,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }`}>
 
         {/* ── Header ── */}
-        <div className="p-2.5 sm:p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/80 shrink-0 gap-2">
+        <div 
+          style={{ paddingTop: deviceLayout.safeAreaTop > 0 ? `${deviceLayout.safeAreaTop + 6}px` : undefined }}
+          className="p-2 sm:p-3.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/90 shrink-0 gap-2"
+        >
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <Lock className="w-3.5 h-3.5" />
-            </div>
+            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <div className="min-w-0 flex-1">
               <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight truncate flex items-center gap-1.5">
                 <span>Panel Admin</span>
-                <span className="text-zinc-500 font-normal hidden xs:inline">•</span>
+                <span className="text-zinc-600 font-normal hidden xs:inline">•</span>
                 <span className="text-amber-400/90 font-medium text-xs truncate hidden xs:inline">{modelDisplayName || formData.name || 'Danii'}</span>
               </h2>
               <p className="text-[10px] text-zinc-400 truncate">Gestión de contenido</p>
@@ -1627,16 +1692,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {(loading || authLoading) && (
               <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-1" />
             )}
-            {/* Botón de Ayuda / Guía Práctica '?' */}
-            <button
-              type="button"
-              onClick={() => setShowHelpGuide(true)}
-              className="px-2 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-black flex items-center gap-1 transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Guía Práctica del Administrador"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-bold text-[11px]">Ayuda</span>
-            </button>
             {isAuthenticated && (
               <button
                 type="button"
@@ -1677,6 +1732,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Botón Flotante '?' para Guía Práctica */}
+        <button
+          type="button"
+          onClick={() => setShowHelpGuide(true)}
+          className="fixed bottom-5 right-4 z-40 w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xl shadow-2xl shadow-amber-500/40 border-2 border-amber-300 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all"
+          title="Guía Práctica del Administrador"
+        >
+          <span>?</span>
+        </button>
 
         {/* Modal de Guía Práctica '?' */}
         <AdminHelpModal isOpen={showHelpGuide} onClose={() => setShowHelpGuide(false)} />
@@ -1731,11 +1796,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
 
           {/* ── Tab Views ── */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-5">
+          <div className="flex-1 overflow-y-auto px-1 sm:px-4 py-2 sm:py-3 space-y-2.5 sm:space-y-3.5">
 
             {/* TAB: MY PROFILE FORM */}
             {activeTab === 'profiles' && (
-              <div className="max-w-xl mx-auto space-y-5">
+              <div className="w-full max-w-2xl mx-auto space-y-2.5 sm:space-y-3.5">
                 <div className="flex items-center justify-between pb-1 flex-wrap gap-2">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                     <User className="w-4 h-4 text-amber-400" />
@@ -1767,11 +1832,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
 
                 {/* ── 3-STEP WIZARD NAVIGATION ── */}
-                <div className="grid grid-cols-3 gap-2 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 text-xs shadow-inner">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 text-xs shadow-inner">
                   <button
                     type="button"
                     onClick={() => setProfileStep(1)}
-                    className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                       profileStep === 1
                         ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -1789,7 +1854,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       }
                       setProfileStep(2);
                     }}
-                    className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                       profileStep === 2
                         ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -1807,7 +1872,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       }
                       setProfileStep(3);
                     }}
-                    className={`py-2 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`py-2 px-1.5 rounded-xl font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
                       profileStep === 3
                         ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
                         : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
@@ -1824,10 +1889,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     e.preventDefault();
                     await handleSaveProfile(e);
                     setProfileStep(2);
-                  }} className="space-y-4 text-xs">
-                    <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-md">
-                      <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                        <h4 className="font-bold text-white flex items-center gap-2 text-xs">
+                  }} className="space-y-3 text-xs">
+                    <div className="p-3.5 sm:p-5 bg-zinc-950/90 border border-zinc-850 rounded-xl sm:rounded-2xl space-y-3 shadow-md">
+                      <div className="flex items-center justify-between pb-1.5 border-b border-zinc-900">
+                        <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
                           <User className="w-4 h-4 text-amber-400" /> Paso 1: Información Principal
                         </h4>
                         <span className="text-[10px] text-zinc-500">Datos públicos</span>
@@ -1874,11 +1939,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
+                    <div className="flex gap-2">
                       <button
                         type="submit"
                         disabled={loading || !formData.name.trim()}
-                        className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Guardar y Continuar a Galería (Paso 2) ➔
@@ -1899,18 +1964,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     : photos;
 
                   return (
-                    <div className="space-y-4 text-xs">
-                      <div className="p-5 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4 shadow-md">
-                        <div className="flex items-center justify-between pb-2 border-b border-zinc-900">
-                          <h4 className="font-bold text-white flex items-center gap-2 text-xs">
+                    <div className="space-y-3 text-xs">
+                      <div className="p-3.5 sm:p-5 bg-zinc-950/90 border border-zinc-850 rounded-xl sm:rounded-2xl space-y-3 shadow-md">
+                        <div className="flex items-center justify-between pb-1.5 border-b border-zinc-900">
+                          <h4 className="font-bold text-white flex items-center gap-1.5 text-xs">
                             <Upload className="w-4 h-4 text-amber-400" /> Paso 2: Gestión y Carga de Multimedia
                           </h4>
-                          <div className="flex items-center gap-1.5 font-mono text-[10px] font-bold">
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
-                              🟢 {activePhotos.length} Publicadas
+                          <div className="flex items-center gap-1.5 font-bold">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                              <span>{activePhotos.length} Publicadas</span>
                             </span>
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400">
-                              🟡 {pendingPhotos.length} Sin Publicar
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-[11px] font-semibold">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                              <span>{pendingPhotos.length} Sin Publicar</span>
                             </span>
                           </div>
                         </div>
@@ -1920,42 +1987,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           <button
                             type="button"
                             onClick={() => setStep2Tab('free')}
-                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
+                            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'free'
                                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
-                            <span>🟢 Free</span>
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                            <span>Free</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setStep2Tab('vip')}
-                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
+                            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'vip'
                                 ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black shadow-md shadow-amber-500/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
                             <Star className="w-3.5 h-3.5 fill-current shrink-0" />
-                            <span>⭐ VIP Stars</span>
+                            <span>VIP Stars</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setStep2Tab('bot')}
-                            className={`flex-1 py-2 px-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
+                            className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'bot'
                                 ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
                             <Bot className="w-3.5 h-3.5 shrink-0" />
-                            <span>🤖 Bot</span>
+                            <span>Bot</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => setShowHelpGuide(true)}
-                            className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 transition-colors cursor-pointer shrink-0"
+                            className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-400 transition-colors cursor-pointer shrink-0"
                             title="Ver guía práctica de carga"
                           >
                             <HelpCircle className="w-3.5 h-3.5" />
@@ -2233,7 +2301,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                         Contenido VIP Exclusivo
                                       </span>
                                       <div className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg flex items-center gap-1.5">
-                                        <Star className="w-4 h-4 fill-current" /> Desbloquear por ⭐ {vipStarCount} Estrellas
+                                        <Star className="w-4 h-4 fill-current" /> Desbloquear por {vipStarCount} Estrellas
                                       </div>
                                     </div>
                                   </div>
@@ -2469,33 +2537,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         {photos.length > 0 ? (
                           <div className="space-y-3.5 pt-2">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-zinc-900 gap-2">
-                              <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+                              <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
                                 <button
                                   type="button"
                                   onClick={() => setMediaStatusFilter('active')}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                                     mediaStatusFilter === 'active'
                                       ? 'bg-emerald-600 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
                                 >
-                                  <span>🟢 Publicadas ({activePhotos.length})</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                  <span>Publicadas ({activePhotos.length})</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setMediaStatusFilter('pending')}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                                     mediaStatusFilter === 'pending'
                                       ? 'bg-amber-500 text-zinc-950 shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
                                 >
-                                  <span>🟡 Sin Publicar ({pendingPhotos.length})</span>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                  <span>Sin Publicar ({pendingPhotos.length})</span>
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setMediaStatusFilter('all')}
-                                  className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
                                     mediaStatusFilter === 'all'
                                       ? 'bg-zinc-700 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'

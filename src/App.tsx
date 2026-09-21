@@ -92,9 +92,6 @@ export default function App() {
       const enforceFullscreen = () => {
         try {
           if (!tgWebApp.isExpanded) tgWebApp.expand();
-          if (typeof tgWebApp.requestFullscreen === 'function' && !tgWebApp.isFullscreen) {
-            tgWebApp.requestFullscreen();
-          }
         } catch {}
       };
 
