@@ -1186,15 +1186,25 @@ export async function processTelegramUpdate(update: any) {
   }
 
   // Administrative tools never run in a group or channel.
-  if (text === '/panel' || text === '/admin' || text.toLowerCase() === 'admin' || text === '👑 Abrir Panel Web' || text.includes('Abrir Panel Web')) {
+  const tLower = text.toLowerCase().trim();
+  const isPanelCommand =
+    tLower === '/panel' ||
+    tLower === '/admin' ||
+    tLower === 'admin' ||
+    tLower === 'panel' ||
+    tLower.includes('abrir panel') ||
+    tLower.includes('panel web') ||
+    tLower.includes('panel admin');
+
+  if (isPanelCommand) {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
     const adminLink = buildAdminWebLink(baseUrl, adminToken);
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (Google Chrome, Safari, etc.):\n\n👉 [Ingresar al Panel Web en Navegador](${adminLink})`, {
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (*Google Chrome*, *Safari*, etc.):\n\n👉 [Ingresar al Panel Web en Chrome](${adminLink})\n\n*(Nota: Al abrirse en el navegador web dispones de pantalla completa sin la barra superior ni botones de Telegram)*`, {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🌐 Abrir Panel Web (Navegador)', url: adminLink }
+            { text: '🌐 Abrir Panel Web (Google Chrome)', url: adminLink }
           ],
           [
             { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
@@ -2307,7 +2317,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🌐 Abrir Panel Admin (Página Web)', url: adminLink }
+          { text: '🌐 Abrir Panel Admin (Google Chrome)', url: adminLink }
         ],
         [
           { text: '💎 Abrir Canal VIP Free (Mini App Cliente)', web_app: { url: baseUrl } }

@@ -62,6 +62,37 @@ export default function App() {
   // Telegram User Context state
   const [tgUser, setTgUser] = useState<TelegramUserContext | null>(null);
 
+  // Detección precisa de si la vista actual se ejecuta dentro del contenedor Mini App / Webview de Telegram
+  const isInsideTelegramMiniApp = typeof window !== 'undefined' && Boolean(
+    (window as any).TelegramWebviewProxy ||
+    ((window as any).Telegram?.WebApp && (
+      ((window as any).Telegram.WebApp.initData && (window as any).Telegram.WebApp.initData.length > 0) ||
+      ((window as any).Telegram.WebApp.platform && (window as any).Telegram.WebApp.platform !== 'unknown')
+    )) ||
+    window.location.hash.includes('tgWebAppData') ||
+    window.location.search.includes('tgWebApp')
+  );
+
+  useEffect(() => {
+    // Si es vista de administración y se abrió dentro del modal de Mini App de Telegram:
+    // Hacemos handoff automático para que se abra en Google Chrome / Safari externo
+    if (isAdminView && isInsideTelegramMiniApp) {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg && typeof tg.openLink === 'function') {
+        try {
+          const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
+          tg.openLink(cleanUrl);
+          const t = setTimeout(() => {
+            try { tg.close(); } catch {}
+          }, 600);
+          return () => clearTimeout(t);
+        } catch (e) {
+          console.warn('[Telegram Handoff Error]:', e);
+        }
+      }
+    }
+  }, [isAdminView, isInsideTelegramMiniApp]);
+
   useEffect(() => {
     // 1. Manejo de URLs de administración y dev/preview
     const params = new URLSearchParams(window.location.search);
@@ -328,7 +359,43 @@ export default function App() {
   const displayName = modelDisplayName?.trim() || 'IAM Danii';
 
   const isInsideTelegram = typeof window !== 'undefined' && Boolean((window as any).Telegram?.WebApp);
-  const isAccessAllowed = telegramAuthorized || Boolean(tgUser) || isInsideTelegram;
+  // Si se abre el panel administrativo dentro de la Mini App de Telegram,
+  // mostramos pantalla de redirección limpia para pasar a Google Chrome / navegador externo.
+  if (isAdminView && isInsideTelegramMiniApp) {
+    const cleanUrl = window.location.origin + window.location.pathname + window.location.search;
+    const tg = (window as any).Telegram?.WebApp;
+    return (
+      <div className="fixed inset-0 z-[9999] bg-zinc-950 flex flex-col items-center justify-center p-6 text-center text-zinc-100 font-sans select-none">
+        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 to-amber-600/10 border border-amber-500/30 flex items-center justify-center mb-5 shadow-xl shadow-amber-500/10 animate-pulse">
+          <ExternalLink className="w-8 h-8 text-amber-400" />
+        </div>
+        <h2 className="text-xl font-black text-white mb-2 tracking-tight">Abriendo Panel en Navegador Web...</h2>
+        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+          El Panel Administrativo se ejecuta en tu navegador web (<strong className="text-amber-400 font-semibold">Google Chrome / Safari</strong>) como página web completa, sin marcos de Telegram ni botones de Mini App.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (tg?.openLink) {
+              tg.openLink(cleanUrl);
+              setTimeout(() => {
+                try { tg.close(); } catch {}
+              }, 400);
+            } else {
+              window.open(cleanUrl, '_system');
+            }
+          }}
+          className="w-full max-w-xs py-3.5 px-6 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-sm flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer border border-amber-400/40"
+        >
+          <ExternalLink className="w-4 h-4 text-zinc-950 stroke-[2.5]" />
+          <span>Abrir en Google Chrome</span>
+        </button>
+        <p className="text-[11px] text-zinc-500 mt-4">
+          Toca el botón si tu navegador no se abrió automáticamente.
+        </p>
+      </div>
+    );
+  }
 
   if (isAdminView) {
     return (
@@ -353,6 +420,8 @@ export default function App() {
       </div>
     );
   }
+
+  const isAccessAllowed = telegramAuthorized || Boolean(tgUser) || isInsideTelegram;
 
   if (accessChecking) {
     return (
@@ -577,7 +646,15 @@ export default function App() {
               </a>
               <button
                 type="button"
-                onClick={() => setIsAdminView(true)}
+                onClick={() => {
+                  const adminUrl = window.location.origin + '/?admin=true';
+                  const tg = (window as any).Telegram?.WebApp;
+                  if (tg?.openLink && isInsideTelegramMiniApp) {
+                    tg.openLink(adminUrl);
+                  } else {
+                    setIsAdminView(true);
+                  }
+                }}
                 title="Acceso Administrativo"
                 className="opacity-20 hover:opacity-100 hover:text-amber-400 transition-opacity text-[10px] cursor-pointer"
               >
