@@ -39,7 +39,7 @@ export const BotSimulator: React.FC<BotSimulatorProps> = ({
     {
       id: 'm_welcome',
       sender: 'bot',
-      text: `👑 ¡Bienvenido/a al Bot Oficial de ${profile.name}! (+18)\n\nAquí puedes explorar el Catálogo VIP Free, enterarte de los estrenos de la semana y adquirir contenido exclusivo sin intermediarios.`,
+      text: `👑 ¡Bienvenido/a al Bot Oficial de ${profile.name}! (+18)\n\nAquí puedes explorar el Catálogo VIP Free, enterarte de los estrenos de la semana y adquirir contenido exclusivo sin intermediarios.\n\n✨ Nota: Toda esta plataforma (Mini App + Bot + Canal) se adapta y personaliza al 100% para cualquier Creadora de Contenido, Modelo o Agencia.`,
       mediaUrl: profile.coverUrl,
       time: '12:00',
       buttons: [
@@ -300,3 +300,4 @@ export const BotSimulator: React.FC<BotSimulatorProps> = ({
     </div>
   );
 };
+

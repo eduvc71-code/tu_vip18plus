@@ -184,6 +184,22 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
         </button>
       </div>
 
+      {/* Banner Comercial de Adaptabilidad a Cualquier Creadora */}
+      <div className="mx-3.5 sm:mx-5 mt-3.5 p-3 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-transparent border border-amber-500/30 flex items-start gap-3">
+        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+          <Sparkles className="w-4 h-4" />
+        </div>
+        <div className="text-xs">
+          <h3 className="font-extrabold text-amber-300 flex items-center gap-1.5">
+            <span>Plataforma 100% Personalizable y Adaptable</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-200">A tu Medida</span>
+          </h3>
+          <p className="text-zinc-300 mt-1 leading-relaxed">
+            Esta aplicación, junto con su Canal y Bot de Telegram, <strong className="text-white">se adapta y modifica a la medida de cualquier Creadora de Contenido, Modelo o Agencia</strong>: tu nombre, tu foto de portada, tus enlaces (OnlyFans, Fansly, etc.), tus métodos de pago (QR Bolivia, USDT, Zelle) y tus publicaciones con venta directa en Estrellas de Telegram.
+          </p>
+        </div>
+      </div>
+
       {/* Pestañas de Navegación del Panel */}
       <div className="flex border-b border-zinc-800 bg-zinc-950/40 px-3 pt-2 gap-2">
         <button
@@ -484,6 +500,65 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
                 />
               </div>
 
+              {/* Fotos de Perfil y Portada Personalizables */}
+              <div className="pt-2 border-t border-zinc-800 space-y-3">
+                <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Personalizar Fotos del Perfil (Opcional - Reemplaza Siluetas Predeterminadas)</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Avatar */}
+                  <div className="p-3 bg-zinc-900/80 rounded-xl border border-zinc-800 space-y-2">
+                    <label className="block text-[11px] font-bold text-zinc-300 uppercase">
+                      Foto de Perfil (Avatar)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full overflow-hidden bg-zinc-800 border border-amber-400/50 shrink-0">
+                        <img src={profile.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            const dataUrl = await fileToDataUrl(f);
+                            onUpdateProfile({ ...profile, avatarUrl: dataUrl });
+                            showAlert('✅ Foto de perfil personalizada.');
+                          }
+                        }}
+                        className="w-full text-xs text-zinc-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Portada */}
+                  <div className="p-3 bg-zinc-900/80 rounded-xl border border-zinc-800 space-y-2">
+                    <label className="block text-[11px] font-bold text-zinc-300 uppercase">
+                      Foto de Portada (Cover)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <div className="w-16 h-12 rounded-lg overflow-hidden bg-zinc-800 border border-amber-400/50 shrink-0">
+                        <img src={profile.coverUrl} alt="Cover" className="w-full h-full object-cover" />
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            const dataUrl = await fileToDataUrl(f);
+                            onUpdateProfile({ ...profile, coverUrl: dataUrl });
+                            showAlert('✅ Foto de portada personalizada.');
+                          }
+                        }}
+                        className="w-full text-xs text-zinc-400 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-amber-400 hover:file:bg-zinc-700 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Enlaces a OnlyFans, Fanvue, Fansly, etc. */}
               <div className="pt-2 border-t border-zinc-800 space-y-3">
                 <h4 className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
@@ -598,3 +673,4 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
     </div>
   );
 };
+

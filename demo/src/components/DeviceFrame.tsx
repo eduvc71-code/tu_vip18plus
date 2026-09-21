@@ -32,8 +32,8 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
                 DEMO
               </span>
             </h1>
-            <p className="text-[10px] text-zinc-400 hidden xs:block">
-              Simulador Comercial para Creadoras & Agencias
+            <p className="text-[10px] text-amber-300/80 font-medium hidden xs:block">
+              Adaptable a cualquier Creadora de Contenido o Modelo
             </p>
           </div>
         </div>
@@ -111,8 +111,16 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
         </div>
       </header>
 
+      {/* Franja Comercial de Adaptabilidad */}
+      <div className="w-full bg-gradient-to-r from-amber-500/15 via-amber-400/10 to-amber-500/15 border-b border-amber-500/20 px-3 py-1.5 text-center">
+        <p className="text-[11px] text-amber-200 font-medium flex items-center justify-center gap-1.5">
+          <span>✨</span>
+          <span><strong>Plataforma 100% Personalizable:</strong> Se adapta y modifica a la medida de cualquier Creadora de Contenido, Modelo o Agencia.</span>
+        </p>
+      </div>
+
       {/* Contenedor del Simulador */}
-      <main className="w-full flex-1 flex items-center justify-center p-0 lg:p-4">
+      <main className="w-full flex-1 flex items-center justify-center p-0 lg:p-4 relative">
         {isPhoneFrame ? (
           <div className="relative w-full max-w-[412px] h-[100dvh] lg:h-[860px] bg-black lg:rounded-[48px] lg:border-[10px] lg:border-zinc-800 lg:shadow-2xl overflow-hidden flex flex-col">
             {/* Notch / Dynamic Island decorativo en modo marco */}
@@ -124,7 +132,7 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
             </div>
           </div>
         ) : (
-          <div className="w-full h-full flex-1 flex flex-col">
+          <div className="w-full h-full flex-1 flex flex-col relative overflow-hidden">
             {children}
           </div>
         )}
@@ -132,3 +140,4 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
     </div>
   );
 };
+

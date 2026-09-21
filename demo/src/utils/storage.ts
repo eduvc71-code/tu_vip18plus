@@ -1,8 +1,8 @@
 import { CreatorProfile } from '../types';
 import { initialDemoProfile } from '../data/defaultDemoData';
 
-const STORAGE_KEY = 'tu_vip_demo_profile_v2';
-const UNLOCKED_KEY = 'tu_vip_demo_unlocked_media_v2';
+const STORAGE_KEY = 'tu_vip_demo_profile_v3';
+const UNLOCKED_KEY = 'tu_vip_demo_unlocked_media_v3';
 
 export function getStoredDemoProfile(): CreatorProfile {
   if (typeof window === 'undefined') return initialDemoProfile;
@@ -73,3 +73,4 @@ export function fileToDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+

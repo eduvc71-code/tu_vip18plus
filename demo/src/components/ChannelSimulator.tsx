@@ -285,3 +285,4 @@ export const ChannelSimulator: React.FC<ChannelSimulatorProps> = ({
     </div>
   );
 };
+

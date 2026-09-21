@@ -20,6 +20,7 @@ export interface PaymentMethod {
 export interface MediaItem {
   id: string;
   url: string;
+  posterUrl?: string;
   type: 'photo' | 'video';
   isStarsLocked: boolean;
   starsPrice: number;
@@ -44,3 +45,4 @@ export interface CreatorProfile {
 }
 
 export type DemoView = 'admin' | 'miniapp' | 'channel' | 'bot';
+

@@ -114,6 +114,17 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
         )}
       </div>
 
+      {/* ── Insignia Comercial de Adaptabilidad a Cualquier Creadora ── */}
+      <div className="mx-3 mt-2.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2">
+        <span className="text-[10px] text-amber-300 font-medium flex items-center gap-1.5">
+          <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+          <span>Plataforma 100% adaptable a cualquier Creadora de Contenido o Modelo</span>
+        </span>
+        <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 shrink-0">
+          DEMO
+        </span>
+      </div>
+
       {/* ── Cuerpo del Catálogo ── */}
       <div className="flex-1 p-3 space-y-4 pb-12">
         
@@ -159,7 +170,7 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
               ) : (
                 <img
                   src={currentPhoto.url}
-                  alt="Contenido VIP"
+                  alt="VIP Content"
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
               )}
@@ -195,8 +206,8 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
                   {photos.map((_, idx) => (
                     <span
                       key={idx}
-                      className={`h-1 rounded-full transition-all ${
-                        photoIndex === idx ? 'w-3.5 bg-amber-400' : 'w-1 bg-zinc-700'
+                      className={`rounded-full transition-all duration-300 ${
+                        photoIndex === idx ? 'bg-amber-400 w-3.5 h-1' : 'bg-zinc-700 w-1 h-1'
                       }`}
                     />
                   ))}
@@ -240,6 +251,7 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
                 <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
                   <video
                     src={currentVideo.url}
+                    poster={currentVideo.posterUrl}
                     autoPlay
                     loop
                     muted
@@ -262,6 +274,7 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
               ) : (
                 <video
                   src={currentVideo.url}
+                  poster={currentVideo.posterUrl}
                   autoPlay
                   loop
                   muted
@@ -336,13 +349,13 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
         </button>
       </div>
 
-      {/* ── VISOR MODAL INMERSIVO DE PANTALLA COMPLETA ── */}
+      {/* ── VISOR MODAL INMERSIVO DENTRO DEL DISPOSITIVO ── */}
       {modalMedia && (
         <FullDetailModal
           mediaItem={modalMedia}
           allMedia={modalMedia.type === 'video' ? videos : photos}
-          isUnlocked={unlockedIds.has(modalMedia.id)}
-          onUnlock={() => handleUnlockStars(modalMedia.id)}
+          unlockedIds={unlockedIds}
+          onUnlockMedia={handleUnlockStars}
           onClose={() => setModalMedia(null)}
           onOpenPayments={() => {
             setModalMedia(null);
@@ -367,8 +380,8 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
 interface FullDetailModalProps {
   mediaItem: MediaItem;
   allMedia: MediaItem[];
-  isUnlocked: boolean;
-  onUnlock: () => void;
+  unlockedIds: Set<string>;
+  onUnlockMedia: (id: string) => void;
   onClose: () => void;
   onOpenPayments: () => void;
 }
@@ -376,8 +389,8 @@ interface FullDetailModalProps {
 const FullDetailModal: React.FC<FullDetailModalProps> = ({
   mediaItem,
   allMedia,
-  isUnlocked,
-  onUnlock,
+  unlockedIds,
+  onUnlockMedia,
   onClose,
   onOpenPayments
 }) => {
@@ -391,7 +404,7 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
   const soundToggledRef = useRef(false);
 
   const current = allMedia[activeIdx] || mediaItem;
-  const isLocked = current.isStarsLocked && !isUnlocked;
+  const isLocked = current.isStarsLocked && !unlockedIds.has(current.id);
   const isVid = current.type === 'video';
 
   // Ciclo de 10s en fotos
@@ -442,7 +455,7 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black text-zinc-100 select-none overflow-hidden">
+    <div className="absolute inset-0 z-50 flex flex-col bg-black text-zinc-100 select-none overflow-hidden">
       
       {/* Barra Superior Flotante */}
       <div className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 py-3 bg-gradient-to-b from-black/90 to-transparent">
@@ -482,6 +495,7 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
             {isVid ? (
               <video
                 src={current.url}
+                poster={current.posterUrl}
                 autoPlay
                 loop
                 muted
@@ -511,6 +525,7 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
         ) : isVid ? (
           <video
             src={current.url}
+            poster={current.posterUrl}
             autoPlay
             muted={isMuted}
             controls
@@ -558,7 +573,7 @@ const FullDetailModal: React.FC<FullDetailModalProps> = ({
           {isLocked ? (
             <button
               type="button"
-              onClick={onUnlock}
+              onClick={() => onUnlockMedia(current.id)}
               className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-zinc-950 font-black text-xs sm:text-sm tracking-wide shadow-xl shadow-amber-500/25 flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
             >
               <Sparkles className="w-4 h-4 text-zinc-950" />
@@ -617,7 +632,7 @@ interface PaymentsModalProps {
 
 const PaymentsModal: React.FC<PaymentsModalProps> = ({ methods, onClose }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md">
+    <div className="absolute inset-0 z-50 flex items-center justify-center p-3 bg-black/85 backdrop-blur-md">
       <div className="relative w-full max-w-sm rounded-3xl bg-zinc-900 border border-zinc-800 p-4 sm:p-5 shadow-2xl flex flex-col max-h-[85vh]">
         <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
           <div className="flex items-center gap-2">
@@ -658,3 +673,4 @@ const PaymentsModal: React.FC<PaymentsModalProps> = ({ methods, onClose }) => {
     </div>
   );
 };
+
