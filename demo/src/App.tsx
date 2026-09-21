@@ -53,8 +53,10 @@ export default function App() {
       {currentView === 'miniapp' && (
         <MiniAppSimulator
           profile={profile}
+          onNavigateToView={setCurrentView}
         />
       )}
+
 
 
       {currentView === 'channel' && (

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CreatorProfile, MediaItem, PaymentMethod } from '../types';
+import { CreatorProfile, MediaItem, PaymentMethod, DemoView } from '../types';
 import { unlockMediaId, getUnlockedMediaIds } from '../utils/storage';
 import {
   ArrowLeft,
+  Sliders,
   X,
   ChevronLeft,
   ChevronRight,
@@ -19,10 +20,11 @@ import {
 
 interface MiniAppSimulatorProps {
   profile: CreatorProfile;
+  onNavigateToView: (view: DemoView) => void;
 }
 
+export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile, onNavigateToView }) => {
 
-export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) => {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [videoIndex, setVideoIndex] = useState(0);
   const [modalMedia, setModalMedia] = useState<MediaItem | null>(null);
@@ -65,8 +67,57 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile }) =
   return (
     <div className="relative w-full h-full bg-black text-zinc-100 flex flex-col overflow-y-auto no-scrollbar select-none">
       
-      {/* ── Encabezado al Límite Superior ── */}
+      {/* ── Cabecera Nativa de Telegram Mini App (Idéntica a Bot y Canal con retorno a Admin) ── */}
+      <div className="bg-[#17212b] px-3 py-2.5 flex items-center justify-between border-b border-[#0f1821] shadow-md shrink-0 sticky top-0 z-30">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="p-1 -ml-1 rounded-full text-zinc-300 hover:text-white cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+            title="Volver al Panel Admin"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-300" />
+          </button>
+
+          <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800 border border-amber-400/40 shrink-0">
+            <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="text-xs sm:text-sm font-bold text-white truncate flex items-center gap-1.5">
+              <span>{profile.name}</span>
+              <span className="text-amber-400 text-xs">👑 VIP</span>
+            </h2>
+            <p className="text-[10px] text-[#70a5d6] truncate">
+              Mini App de Telegram
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-zinc-400">
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-amber-500/40 active:scale-95 shadow-sm"
+            title="Volver al Panel Admin"
+          >
+            <Sliders className="w-3 h-3 text-amber-400" />
+            <span>Admin</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+            title="Cerrar y volver al Admin"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* ── Perfil de la Creadora ── */}
       <div className="relative w-full border-b border-zinc-800 bg-zinc-950 px-3.5 py-3 sm:px-5 sm:py-4">
+
         <div className="flex items-start gap-3">
           {/* Avatar con borde dorado */}
           <div className="relative shrink-0">

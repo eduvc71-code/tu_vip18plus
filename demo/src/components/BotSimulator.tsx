@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CreatorProfile, DemoView } from '../types';
 import {
   ArrowLeft,
+  Sliders,
   MoreVertical,
   Send,
   Smartphone,
@@ -10,6 +11,7 @@ import {
   Info,
   ExternalLink
 } from 'lucide-react';
+
 
 interface BotSimulatorProps {
   profile: CreatorProfile;
@@ -158,10 +160,14 @@ export const BotSimulator: React.FC<BotSimulatorProps> = ({
       {/* ── Cabecera de Chat de Telegram ── */}
       <div className="bg-[#17212b] px-3 py-2.5 flex items-center justify-between border-b border-[#0f1821] shadow-md shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-1 text-zinc-300">
-            <ArrowLeft className="w-5 h-5" />
-          </div>
-
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="p-1 -ml-1 rounded-full text-zinc-300 hover:text-white cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+            title="Volver al Panel Admin"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-300" />
+          </button>
 
           <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800 border border-emerald-400/40 shrink-0">
             <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
@@ -178,10 +184,22 @@ export const BotSimulator: React.FC<BotSimulatorProps> = ({
           </div>
         </div>
 
-        <button type="button" className="p-1.5 rounded-full text-zinc-400 hover:bg-zinc-800 transition-colors">
-          <MoreVertical className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-1.5 text-zinc-400">
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-emerald-500/40 active:scale-95 shadow-sm"
+            title="Volver al Panel Admin"
+          >
+            <Sliders className="w-3 h-3 text-emerald-400" />
+            <span>Admin</span>
+          </button>
+          <button type="button" className="p-1.5 rounded-full text-zinc-400 hover:bg-zinc-800 transition-colors">
+            <MoreVertical className="w-4 h-4" />
+          </button>
+        </div>
       </div>
+
 
       {/* ── Zona de Mensajes con Fondo Telegram ── */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 no-scrollbar bg-[#0e1621]">

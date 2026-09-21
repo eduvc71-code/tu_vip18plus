@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CreatorProfile, DemoView } from '../types';
 import {
   ArrowLeft,
+  Sliders,
   Search,
   MoreVertical,
   Bell,
@@ -13,6 +14,7 @@ import {
   Lock,
   Volume2
 } from 'lucide-react';
+
 
 interface ChannelSimulatorProps {
   profile: CreatorProfile;
@@ -49,9 +51,14 @@ export const ChannelSimulator: React.FC<ChannelSimulatorProps> = ({
       {/* ── Cabecera Nativa de Canal de Telegram ── */}
       <div className="bg-[#17212b] px-3 py-2.5 flex items-center justify-between border-b border-[#0f1821] shadow-md shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-1 text-zinc-300">
-            <ArrowLeft className="w-5 h-5" />
-          </div>
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="p-1 -ml-1 rounded-full text-zinc-300 hover:text-white cursor-pointer active:scale-95 transition-all flex items-center gap-1"
+            title="Volver al Panel Admin"
+          >
+            <ArrowLeft className="w-5 h-5 text-zinc-300" />
+          </button>
           
           <div className="w-9 h-9 rounded-full overflow-hidden bg-zinc-800 border border-amber-400/40 shrink-0">
             <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
@@ -69,17 +76,24 @@ export const ChannelSimulator: React.FC<ChannelSimulatorProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5 text-zinc-400">
-          <button type="button" className="p-1.5 rounded-full hover:bg-zinc-800 transition-colors">
-            <Search className="w-4 h-4" />
+          <button
+            type="button"
+            onClick={() => onNavigateToView('admin')}
+            className="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-sky-500/40 active:scale-95 shadow-sm"
+            title="Volver al Panel Admin"
+          >
+            <Sliders className="w-3 h-3 text-sky-400" />
+            <span>Admin</span>
           </button>
           <button type="button" className="p-1.5 rounded-full hover:bg-zinc-800 transition-colors">
-            <Bell className="w-4 h-4" />
+            <Search className="w-4 h-4" />
           </button>
           <button type="button" className="p-1.5 rounded-full hover:bg-zinc-800 transition-colors">
             <MoreVertical className="w-4 h-4" />
           </button>
         </div>
       </div>
+
 
       {/* ── Mensaje Fijado Superior ── */}
       <div className="bg-[#17212b]/90 border-b border-[#0e1621] px-3 py-1.5 flex items-center justify-between text-xs text-zinc-300">

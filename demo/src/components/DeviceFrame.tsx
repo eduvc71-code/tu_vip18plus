@@ -32,15 +32,15 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
   const [isExiting, setIsExiting] = useState(false);
   const [splashInfo, setSplashInfo] = useState<{ title: string; subtitle: string; icon: string } | null>(null);
 
-  // Contador de permanencia: 9.5 segundos de lectura + 700ms de desvanecimiento suave (10.2s total)
+  // 1. Contador de permanencia del anuncio inicial: 40 segundos de lectura + 700ms de desvanecimiento
   useEffect(() => {
     const exitTimer = setTimeout(() => {
       setIsExiting(true);
-    }, 9500);
+    }, 40000);
 
     const removeTimer = setTimeout(() => {
       setShowIntro(false);
-    }, 10200);
+    }, 40700);
 
     return () => {
       clearTimeout(exitTimer);
@@ -48,7 +48,14 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
     };
   }, []);
 
-  // Pequeño splash descriptivo al cambiar a Mini App, Canal o Bot
+  // Al salir del panel admin para ver los simuladores, cerramos el intro modal si estaba abierto
+  useEffect(() => {
+    if (currentView !== 'admin') {
+      setShowIntro(false);
+    }
+  }, [currentView]);
+
+  // 2. Anuncios descriptivos grandes de cómo se verá en dispositivos clientes (9 segundos de permanencia)
   useEffect(() => {
     if (currentView === 'admin') {
       setSplashInfo(null);
@@ -60,19 +67,19 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
       info = {
         icon: '📱',
         title: 'Así se verá la Mini App para los suscriptores',
-        subtitle: 'Catálogo interactivo con fotos, videos y cobro en Estrellas'
+        subtitle: 'Catálogo interactivo exclusivo con fotos, videos, preview VIP difuminado y pasarela directa de cobro en Estrellas de Telegram o QR.'
       };
     } else if (currentView === 'channel') {
       info = {
         icon: '📢',
-        title: 'Así se verá el Canal Telegram para los suscriptores',
-        subtitle: 'Comunidad VIP con publicaciones, reacciones y vista previa'
+        title: 'Así se verá tu Canal de Telegram para tus suscriptores',
+        subtitle: 'Comunidad VIP con publicaciones automáticas, contador de vistas, reacciones emoji y venta directa de contenido exclusivo.'
       };
     } else if (currentView === 'bot') {
       info = {
         icon: '🤖',
-        title: 'Así se verá el Bot Telegram para los suscriptores',
-        subtitle: 'Atención 24/7, bienvenida automatizada y acceso rápido'
+        title: 'Así se verá tu Bot de Telegram para tus suscriptores',
+        subtitle: 'Atención automatizada 24/7, mensaje de bienvenida personalizado, entrega inmediata y enlace directo a tu Mini App.'
       };
     }
 
@@ -80,7 +87,7 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
 
     const timer = setTimeout(() => {
       setSplashInfo(null);
-    }, 3800);
+    }, 9000);
 
     return () => clearTimeout(timer);
   }, [currentView]);
@@ -95,109 +102,125 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
     setShowIntro(true);
   };
 
-  // Mini App, Canal y Bot siempre se presentan en contenedor de dispositivo independiente
+  // Mini App, Canal y Bot siempre se presentan en contenedor de dispositivo móvil independiente
   const isSubscriberView = currentView !== 'admin';
   const shouldRenderPhoneFrame = isSubscriberView || isPhoneFrame;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center select-none overflow-x-hidden">
       
-      {/* ── Barra Superior Global de Demostración ── */}
-      <header className="w-full bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-2.5 py-2 sm:px-6 sm:py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-        
-        {/* Logotipo y Botón para Reabrir el Anuncio Informativo */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xs flex items-center justify-center shadow-md">
-            VIP
+      {/* ── Barra Superior Global de Demostración (Visible solo en el Panel Admin para no alterar la vista de Mini App) ── */}
+      {currentView === 'admin' ? (
+        <header className="w-full bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-2.5 py-2 sm:px-6 sm:py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+          
+          {/* Logotipo y Botón para Reabrir el Anuncio Informativo */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xs flex items-center justify-center shadow-md">
+              VIP
+            </div>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-xs sm:text-sm font-bold text-white leading-tight">
+                Tú VIP
+              </h1>
+              <button
+                type="button"
+                onClick={handleTriggerIntro}
+                className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer flex items-center gap-0.5 active:scale-95"
+                title="Clic para volver a ver la información de la plataforma (~40s)"
+              >
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>DEMO</span>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-xs sm:text-sm font-bold text-white leading-tight">
-              Tú VIP
-            </h1>
+
+          {/* Selector de Vistas Independientes */}
+          <div className="flex items-center gap-0.5 sm:gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-[11px] sm:text-xs">
             <button
               type="button"
-              onClick={handleTriggerIntro}
-              className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer flex items-center gap-0.5 active:scale-95"
-              title="Clic para volver a ver la información de la plataforma"
+              onClick={() => onViewChange('admin')}
+              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                currentView === 'admin'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
             >
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>DEMO</span>
+              <Sliders className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">1. Admin</span>
+              <span className="sm:hidden text-[10px]">Admin</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onViewChange('miniapp')}
+              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                currentView === 'miniapp'
+                  ? 'bg-amber-500 text-zinc-950 shadow-md'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">2. Mini App</span>
+              <span className="sm:hidden text-[10px]">App</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onViewChange('channel')}
+              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                currentView === 'channel'
+                  ? 'bg-sky-500 text-white shadow-md'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">3. Canal</span>
+              <span className="sm:hidden text-[10px]">Canal</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onViewChange('bot')}
+              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                currentView === 'bot'
+                  ? 'bg-emerald-500 text-zinc-950 shadow-md'
+                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">4. Bot</span>
+              <span className="sm:hidden text-[10px]">Bot</span>
             </button>
           </div>
-        </div>
 
-        {/* Selector de Vistas Independientes */}
-        <div className="flex items-center gap-0.5 sm:gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-[11px] sm:text-xs">
+          {/* Toggle de Tamaño Marco Móvil / Completo (Para Vista Admin) */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={onTogglePhoneFrame}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
+              title={isPhoneFrame ? 'Ver en formato expandido' : 'Ver simulador en marco de móvil'}
+            >
+              {isPhoneFrame ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
+              <span className="hidden md:inline">{isPhoneFrame ? 'Expandir' : 'Marco Móvil'}</span>
+            </button>
+          </div>
+        </header>
+      ) : (
+        /* Acceso Flotante Rápido para Computadoras en Simuladores */
+        <div className="hidden lg:flex fixed top-4 left-6 z-50 items-center gap-2">
           <button
             type="button"
             onClick={() => onViewChange('admin')}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              currentView === 'admin'
-                ? 'bg-amber-500 text-zinc-950 shadow-md'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
+            className="px-3 py-1.5 rounded-xl bg-zinc-900/90 hover:bg-zinc-800 text-zinc-300 hover:text-white border border-zinc-700/80 text-xs font-bold flex items-center gap-1.5 shadow-xl transition-all cursor-pointer backdrop-blur-md active:scale-95"
+            title="Volver al Panel Administrativo"
           >
-            <Sliders className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">1. Admin</span>
-            <span className="sm:hidden text-[10px]">Admin</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onViewChange('miniapp')}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              currentView === 'miniapp'
-                ? 'bg-amber-500 text-zinc-950 shadow-md'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">2. Mini App</span>
-            <span className="sm:hidden text-[10px]">App</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onViewChange('channel')}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              currentView === 'channel'
-                ? 'bg-sky-500 text-white shadow-md'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            <Send className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">3. Canal</span>
-            <span className="sm:hidden text-[10px]">Canal</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onViewChange('bot')}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-              currentView === 'bot'
-                ? 'bg-emerald-500 text-zinc-950 shadow-md'
-                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">4. Bot</span>
-            <span className="sm:hidden text-[10px]">Bot</span>
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+            <span>Volver al Panel Admin</span>
           </button>
         </div>
+      )}
 
-        {/* Toggle de Tamaño Marco Móvil / Completo (Para Vista Admin) */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onTogglePhoneFrame}
-            className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
-            title={isPhoneFrame ? 'Ver en formato expandido' : 'Ver simulador en marco de móvil'}
-          >
-            {isPhoneFrame ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
-            <span className="hidden md:inline">{isPhoneFrame ? 'Expandir' : 'Marco Móvil'}</span>
-          </button>
-        </div>
-      </header>
 
       {/* ── Anuncio Descriptivo: Efecto Zoom al Centro, Más Grande y con el Tenor del Texto Original ── */}
       {showIntro && (
@@ -270,10 +293,10 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
               </div>
             </div>
 
-            {/* Temporizador Visual de 9.5 Segundos */}
+            {/* Temporizador Visual de 40 Segundos */}
             <div className="space-y-1.5 pt-1">
               <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
-                <span>Permanencia en pantalla (~10s)</span>
+                <span>Permanencia en pantalla (~40s)</span>
                 <span className="text-amber-400/90 font-mono">Auto-cierre</span>
               </div>
               <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
@@ -305,32 +328,46 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
               <div className="w-20 sm:w-24 h-3.5 sm:h-4 bg-zinc-900 rounded-full border border-zinc-700/50 shadow-inner" />
             </div>
 
-            {/* Pequeño Splash Descriptivo para Mini App, Canal o Bot */}
+            {/* Anuncio Descriptivo Prominente de Vista Cliente (~9s) */}
             {splashInfo && (
-              <div className="absolute top-8 inset-x-3 z-40 animate-splash-in pointer-events-auto">
-                <div className="mx-auto max-w-[340px] px-3.5 py-2.5 rounded-2xl bg-zinc-900/95 backdrop-blur-xl border border-amber-500/50 shadow-2xl shadow-amber-500/10 flex items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="text-lg shrink-0">{splashInfo.icon}</span>
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-black text-amber-300 leading-tight truncate">
-                        {splashInfo.title}
-                      </p>
-                      <p className="text-[10px] text-zinc-300 leading-tight truncate">
-                        {splashInfo.subtitle}
-                      </p>
+              <div className="absolute top-12 inset-x-2.5 sm:inset-x-3.5 z-40 animate-splash-in pointer-events-auto">
+                <div className="w-full rounded-2xl bg-zinc-900/98 backdrop-blur-2xl border-2 border-amber-500/70 p-3.5 sm:p-4 shadow-2xl shadow-black/90 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-amber-400/10 border border-amber-500/40 flex items-center justify-center text-xl shrink-0 shadow-md">
+                        {splashInfo.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block mb-0.5">
+                          Vista de Suscriptor
+                        </span>
+                        <h3 className="text-xs sm:text-sm font-extrabold text-white leading-snug">
+                          {splashInfo.title}
+                        </h3>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setSplashInfo(null)}
+                      className="p-1.5 rounded-full text-zinc-400 hover:text-white bg-zinc-800/90 hover:bg-zinc-700 cursor-pointer shrink-0 transition-colors"
+                      title="Cerrar aviso"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setSplashInfo(null)}
-                    className="p-1 rounded-full text-zinc-400 hover:text-white bg-zinc-800/80 cursor-pointer shrink-0"
-                    title="Cerrar aviso"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+
+                  <p className="text-[11px] sm:text-xs text-zinc-300 leading-relaxed pl-0.5">
+                    {splashInfo.subtitle}
+                  </p>
+
+                  {/* Barra de progreso de lectura (9 segundos) */}
+                  <div className="w-full bg-zinc-800/80 h-1 rounded-full overflow-hidden mt-1">
+                    <div className="bg-gradient-to-r from-amber-500 to-amber-300 h-full rounded-full animate-shrink-splash" />
+                  </div>
                 </div>
               </div>
             )}
+
 
             {/* Pantalla Interna del Móvil */}
             <div className="flex-1 w-full h-full overflow-hidden flex flex-col relative rounded-[26px] sm:rounded-[36px] lg:rounded-[38px]">
