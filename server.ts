@@ -63,6 +63,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
+    // Standalone Demo PWA route
+    const demoDistPath = path.join(process.cwd(), 'demo', 'dist');
+    if (fs.existsSync(demoDistPath)) {
+      app.use('/demo', express.static(demoDistPath));
+      app.get(['/demo', '/demo/*'], (_req, res) => {
+        res.sendFile(path.join(demoDistPath, 'index.html'));
+      });
+    }
+
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {

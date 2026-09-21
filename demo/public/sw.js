@@ -1,5 +1,5 @@
-// Service Worker for Danii VIP PWA
-const CACHE_NAME = 'danii-pwa-v1';
+// Service Worker for Tú VIP Demo PWA
+const CACHE_NAME = 'tu-vip-demo-v1';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -10,15 +10,8 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Let browser handle network requests normally, fallback to cache if offline
   if (event.request.method !== 'GET') return;
-  // Ignore API requests and range streaming requests
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api') || url.pathname.startsWith('/telegram-media')) {
-    return;
-  }
   event.respondWith(
     fetch(event.request).catch(() => caches.match(event.request))
   );
 });
-
