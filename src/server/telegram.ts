@@ -279,7 +279,7 @@ export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) 
   return {
     keyboard: [
       [
-        { text: '👑 Abrir Panel Web', web_app: { url: adminLink } },
+        { text: '👑 Abrir Panel Web' },
         { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
       ],
       [
@@ -1151,11 +1151,11 @@ export async function processTelegramUpdate(update: any) {
       const { baseUrl, brandName } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
       const adminLink = buildAdminWebLink(baseUrl, adminToken);
-      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y Canal VIP Free.\n\n👇 *Toca para ingresar a tu Panel de Control:*`, {
+      await sendMessage(chatId, `👑 *¡Identidad Confirmada!* 👑\n\nTu Telegram ID (\`${fromId}\`) ha sido registrado exitosamente como *Administradora Autorizada* de ${brandName || 'IAM DANII VIP'}.\n\nA partir de ahora tienes acceso permanente a las funciones de administración y Canal VIP Free.\n\n👇 *Toca para abrir tu Panel de Control en el Navegador Web:*`, {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '👑 Abrir Panel Web Administrativo', web_app: { url: adminLink } }
+              { text: '🌐 Abrir Panel Web (Navegador)', url: adminLink }
             ]
           ]
         }
@@ -1186,15 +1186,15 @@ export async function processTelegramUpdate(update: any) {
   }
 
   // Administrative tools never run in a group or channel.
-  if (text === '/panel' || text === '/admin' || text.toLowerCase() === 'admin') {
+  if (text === '/panel' || text === '/admin' || text.toLowerCase() === 'admin' || text === '👑 Abrir Panel Web' || text.includes('Abrir Panel Web')) {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
     const adminLink = buildAdminWebLink(baseUrl, adminToken);
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nEste enlace personal vence en 4 horas y solo habilita el panel administrativo:\n\n👉 [Ingresar al Panel Web](${adminLink})`, {
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (Google Chrome, Safari, etc.):\n\n👉 [Ingresar al Panel Web en Navegador](${adminLink})`, {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '👑 Abrir Panel Web Administrativo', web_app: { url: adminLink } }
+            { text: '🌐 Abrir Panel Web (Navegador)', url: adminLink }
           ],
           [
             { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
@@ -1232,7 +1232,7 @@ export async function processTelegramUpdate(update: any) {
     await sendMessage(chatId, msg, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '👑 Gestionar Botones en Panel Web', web_app: { url: adminLink } }]
+          [{ text: '🌐 Gestionar Botones en Panel Web', url: adminLink }]
         ]
       }
     });
@@ -1252,7 +1252,7 @@ export async function processTelegramUpdate(update: any) {
     await sendMessage(chatId, msg, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '👑 Crear Dinámica en Panel Web', web_app: { url: adminLink } }]
+          [{ text: '🌐 Crear Dinámica en Panel Web', url: adminLink }]
         ]
       }
     });
@@ -1693,7 +1693,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '👑 Ver en Panel Web', web_app: { url: adminLink } },
+            { text: '🌐 Ver en Panel Web (Navegador)', url: adminLink },
             { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
           ]
         ]
@@ -2307,7 +2307,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '👑 Abrir Panel Admin (Web App)', web_app: { url: adminLink } }
+          { text: '🌐 Abrir Panel Admin (Página Web)', url: adminLink }
         ],
         [
           { text: '💎 Abrir Canal VIP Free (Mini App Cliente)', web_app: { url: baseUrl } }

@@ -1704,6 +1704,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <span className="hidden md:inline">{syncingDb ? 'Guardando...' : 'Servidor DB'}</span>
               </button>
             )}
+            {/* Abrir en Navegador Web (Chrome / Safari) */}
+            <button
+              type="button"
+              onClick={() => {
+                const currentUrl = window.location.href;
+                const tg = (window as any).Telegram?.WebApp;
+                if (tg?.openLink) {
+                  tg.openLink(currentUrl);
+                } else {
+                  window.open(currentUrl, '_blank');
+                }
+              }}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-sky-400 transition-colors cursor-pointer text-xs font-bold flex items-center gap-1 border border-zinc-700/60"
+              title="Abrir como Página Web en tu Navegador (Chrome / Safari)"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Navegador</span>
+            </button>
             {isAuthenticated && (
               <button
                 type="button"
