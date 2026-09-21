@@ -198,21 +198,22 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               title={isImageStarsLocked ? "Contenido de pago con Estrellas - Toca para desbloquear" : "Toca para ampliar"}
             >
               {isImageStarsLocked ? (
-                <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[190px]">
+                <div className="relative h-full w-full bg-zinc-950 flex items-center justify-center overflow-hidden select-none min-h-[190px]">
                   <img
                     src={selectedImage}
                     alt="Contenido VIP"
                     draggable={false}
-                    className="w-full h-full object-cover filter blur-xl scale-110 opacity-40 select-none"
+                    className="absolute inset-0 w-full h-full object-cover filter blur-lg scale-110 opacity-90 select-none"
                   />
-                  <div className="absolute inset-0 bg-black/40" />
+                  <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
                   <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
-                    <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-1.5">
-                      <Lock className="w-5 h-5 animate-pulse" />
+                    <div className="px-3.5 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                      <span className="font-bold text-xs">Desbloquear por</span>
+                      <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs">
+                        ⭐ {imageStars}
+                      </span>
                     </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md">
-                      ⭐ {imageStars} Estrellas
-                    </span>
                   </div>
                 </div>
               ) : images.length === 0 ? (
@@ -301,15 +302,25 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 title={isVideoStarsLocked ? "Video de pago con Estrellas - Toca para desbloquear" : "Toca para ampliar video"}
               >
                 {isVideoStarsLocked ? (
-                  <div className="relative h-full w-full bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none min-h-[180px]">
-                    <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-black to-zinc-950 opacity-95" />
+                  <div className="relative h-full w-full bg-zinc-950 flex items-center justify-center overflow-hidden select-none min-h-[180px]">
+                    <video
+                      key={selectedVideo}
+                      src={selectedVideo}
+                      autoPlay
+                      loop
+                      muted
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover filter blur-lg scale-110 opacity-90 select-none"
+                    />
+                    <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
                     <div className="relative z-10 flex flex-col items-center justify-center p-3 text-center">
-                      <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/20 mb-1.5">
-                        <Lock className="w-5 h-5 animate-pulse" />
+                      <div className="px-3.5 py-1.5 rounded-full bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
+                        <Lock className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                        <span className="font-bold text-xs">Desbloquear por</span>
+                        <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs">
+                          ⭐ {profile.media_stars?.[selectedVideo]}
+                        </span>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-[10px] font-black uppercase tracking-wide shadow-md">
-                        ⭐ {profile.media_stars?.[selectedVideo]} Estrellas
-                      </span>
                     </div>
                   </div>
                 ) : (

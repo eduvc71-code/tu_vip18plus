@@ -336,23 +336,36 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         {/* CONTENIDO BLOQUEADO CON ESTRELLAS ESTILO TELEGRAM (Preview difuminado + Candado discreto) */}
         {isCurrentMediaLocked ? (
           <div className="relative w-full h-full flex items-center justify-center overflow-hidden select-none">
-            {/* Foto de fondo difuminada como Telegram Paid Media */}
-            <img
-              src={currentMediaUrl}
-              alt="Vista previa exclusiva"
-              draggable={false}
-              className="w-full h-full object-cover filter blur-2xl scale-110 opacity-35 select-none"
-            />
-            <div className="absolute inset-0 bg-black/40" />
+            {/* Foto o Video difuminado como Telegram Paid Media */}
+            {isVideo ? (
+              <video
+                key={currentMediaUrl}
+                src={currentMediaUrl}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className="w-full h-full object-cover filter blur-2xl scale-110 opacity-85 select-none"
+              />
+            ) : (
+              <img
+                src={currentMediaUrl}
+                alt="Vista previa exclusiva"
+                draggable={false}
+                className="w-full h-full object-cover filter blur-2xl scale-110 opacity-90 select-none"
+              />
+            )}
+            <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" />
 
-            {/* Insignia Central Discreta */}
+            {/* Insignia Central Estilo Nativo Telegram */}
             <div className="relative z-10 flex flex-col items-center justify-center p-4 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/50 backdrop-blur-md flex items-center justify-center text-amber-400 shadow-2xl shadow-amber-500/30 mb-2">
-                <Lock className="w-6 h-6 animate-pulse text-amber-400" />
+              <div className="px-4 py-2 rounded-2xl bg-black/65 backdrop-blur-md border border-amber-500/40 text-white shadow-2xl flex items-center gap-2">
+                <Lock className="w-4 h-4 text-amber-400 animate-pulse" />
+                <span className="font-bold text-xs sm:text-sm">Desbloquear por</span>
+                <span className="inline-flex items-center gap-0.5 font-black text-amber-400 text-xs sm:text-sm">
+                  ⭐ {currentStars}
+                </span>
               </div>
-              <span className="px-3 py-0.5 rounded-full bg-amber-500 text-zinc-950 text-xs font-black uppercase tracking-wider shadow-md">
-                ⭐ {currentStars} Estrellas
-              </span>
             </div>
           </div>
         ) : isVideo ? (
