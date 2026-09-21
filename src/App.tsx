@@ -52,10 +52,13 @@ export default function App() {
   const [isAdminView, setIsAdminView] = useState(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
+    const path = window.location.pathname.toLowerCase();
     return Boolean(
       params.get('admin_token') ||
       params.get('admin') === 'true' ||
-      params.get('panel') === 'true'
+      params.get('panel') === 'true' ||
+      path === '/admin' ||
+      path.startsWith('/admin/')
     );
   });
   const [isAdminClosed, setIsAdminClosed] = useState(false);
@@ -97,7 +100,14 @@ export default function App() {
   useEffect(() => {
     // 1. Manejo de URLs de administración y dev/preview
     const params = new URLSearchParams(window.location.search);
-    if (params.get('admin_token') || params.get('admin') === 'true' || params.get('panel') === 'true') {
+    const path = window.location.pathname.toLowerCase();
+    if (
+      params.get('admin_token') ||
+      params.get('admin') === 'true' ||
+      params.get('panel') === 'true' ||
+      path === '/admin' ||
+      path.startsWith('/admin/')
+    ) {
       setIsAdminView(true);
       setAccessChecking(false);
       return;

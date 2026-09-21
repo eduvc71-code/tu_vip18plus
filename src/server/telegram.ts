@@ -661,7 +661,7 @@ export function generateAdminMagicToken(telegramUserId: string | number): string
   return jwt.sign(
     { sub: String(telegramUserId), role: 'admin', isPinAuth: true, iat: Math.floor(Date.now() / 1000) },
     signingSecret,
-    { expiresIn: '24h' }
+    { expiresIn: '30d' }
   );
 }
 
@@ -1035,6 +1035,32 @@ export async function processTelegramUpdate(update: any) {
   }
 
   const normText = text.toLowerCase().trim();
+
+  // 1.1.b. Acceso Rápido y Reconocimiento ID para la PWA Admin
+  if (normText.startsWith('/start admin_login') || normText === '/login') {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Por seguridad, abre el chat privado para acceder al Panel Administrativo.');
+      return;
+    }
+    if (isAdminUser(fromId)) {
+      const { baseUrl } = getBotConfig();
+      const adminToken = generateAdminMagicToken(String(fromId));
+      const adminLink = buildAdminWebLink(baseUrl, adminToken);
+      await sendMessage(chatId, `👑 *¡Identidad Confirmada, ${message.from?.first_name || 'Administradora'}!* 👑\n\nTu Telegram ID (\`${fromId}\`) está autorizado.\n\n👇 *Toca el botón para ingresar directo a tu Panel PWA sin contraseñas:*`, {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🚀 Entrar a mi Panel Admin PWA', url: adminLink }
+            ]
+          ]
+        }
+      });
+      return;
+    } else {
+      await sendMessage(chatId, `⚠️ *Acceso Restringido*\n\nTu Telegram ID (\`${fromId}\`) no figura actualmente como Administradora autorizada.`);
+      return;
+    }
+  }
 
   // 1.2. Client Commands & Menus (Interactive for all users)
   if (

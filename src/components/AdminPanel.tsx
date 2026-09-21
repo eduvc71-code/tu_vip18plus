@@ -42,7 +42,9 @@ import {
   Bot,
   RotateCcw,
   Save,
-  HelpCircle
+  HelpCircle,
+  Download,
+  Smartphone
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -223,6 +225,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [showPinText, setShowPinText] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
+
+  // PWA installation state
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+  const [showIosInstallGuide, setShowIosInstallGuide] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: any) => {
+      e.preventDefault();
+      setDeferredInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    const isStandalone = typeof window !== 'undefined' && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    );
+    if (isStandalone) {
+      setIsAppInstalled(true);
+    }
+
+    const handleAppInstalled = () => {
+      setIsAppInstalled(true);
+      setDeferredInstallPrompt(null);
+    };
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallPwa = async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      try {
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          setIsAppInstalled(true);
+        }
+      } catch {}
+      setDeferredInstallPrompt(null);
+    } else {
+      setShowIosInstallGuide(true);
+    }
+  };
 
   // Detección y autoajuste del dispositivo en tiempo real
   const [deviceLayout, setDeviceLayout] = useState<{
@@ -1587,7 +1636,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-md overflow-y-auto">
         <div className="w-full max-w-sm rounded-3xl border border-amber-500/30 bg-zinc-900 p-6 text-center shadow-2xl space-y-4">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-400 shadow-lg shadow-amber-500/10">
             <Lock className="h-7 w-7" />
           </div>
           
@@ -1596,11 +1645,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               Panel Administrativo VIP
             </h2>
             <p className="mt-1 text-xs text-zinc-400">
-              Ingresa con tu PIN autorizado o Telegram ID
+              Aplicación Web Progresiva (PWA) e Instalable
             </p>
           </div>
 
-          <form onSubmit={handleLoginWithPin} className="space-y-3 pt-2 text-left">
+          {/* 1. Botón Principal: Acceso Directo con Telegram Bot (Sin contraseña) */}
+          <div className="pt-1 space-y-1.5">
+            <a
+              href={`https://t.me/${botUsername}?start=admin_login`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full min-h-12 rounded-2xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer px-3 text-center"
+            >
+              <Send className="w-4 h-4 text-white shrink-0" />
+              <span>Ingresar con Telegram (Sin Contraseña)</span>
+            </a>
+            <p className="text-[10.5px] text-zinc-400 leading-tight">
+              Reconoce tu Telegram ID y te abre la PWA al instante sin contraseñas.
+            </p>
+          </div>
+
+          <div className="relative flex py-1 items-center">
+            <div className="flex-grow border-t border-zinc-800"></div>
+            <span className="flex-shrink mx-3 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">o ingresa con tu PIN</span>
+            <div className="flex-grow border-t border-zinc-800"></div>
+          </div>
+
+          {/* 2. Formulario alternativo de PIN / ID */}
+          <form onSubmit={handleLoginWithPin} className="space-y-3 text-left">
             <div>
               <label className="block text-[11px] font-bold uppercase text-zinc-300 mb-1">
                 PIN de Acceso o ID Administrador
@@ -1612,13 +1684,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setPinInput(e.target.value)}
                   placeholder="Ingresa tu PIN o ID Telegram"
                   className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 pr-10 text-sm text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none"
-                  autoFocus
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPinText(prev => !prev)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors p-1"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors p-1 cursor-pointer"
                   title={showPinText ? "Ocultar PIN" : "Mostrar PIN"}
                 >
                   {showPinText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -1636,19 +1707,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
               {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-              <span>{authLoading ? 'Verificando...' : 'Entrar al Panel Admin'}</span>
+              <span>{authLoading ? 'Verificando...' : 'Entrar con PIN'}</span>
             </button>
           </form>
 
-          <div className="pt-2 border-t border-zinc-800 space-y-2">
-            <a
-              href={`https://t.me/${botUsername}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-xs text-sky-400 hover:text-sky-300 font-medium"
-            >
-              👉 O pide un enlace directo enviando /admin en el Bot
-            </a>
+          {/* 3. Botón de Instalación PWA en Pantalla de Inicio */}
+          {!isAppInstalled && (
+            <div className="pt-2 border-t border-zinc-800/80 space-y-1">
+              <button
+                type="button"
+                onClick={handleInstallPwa}
+                className="w-full py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer active:scale-95"
+              >
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>📲 Instalar Panel Admin en mi Teléfono</span>
+              </button>
+              <p className="text-[10px] text-zinc-500">
+                Se guardará con su propio icono en tu pantalla de inicio.
+              </p>
+            </div>
+          )}
+
+          <div className="pt-1">
             <button
               onClick={onClose}
               type="button"
@@ -1658,6 +1738,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Modal de Instrucciones de Instalación iOS Safari */}
+        {showIosInstallGuide && (
+          <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <div className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Instalar en Pantalla de Inicio</h3>
+                <p className="text-xs text-zinc-400 mt-1">Sigue estos sencillos pasos para tener el Panel Admin en tu teléfono:</p>
+              </div>
+              <div className="space-y-2.5 text-left text-xs bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
+                <div className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">1</span>
+                  <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>⋮</strong>).</p>
+                </div>
+                <div className="flex items-start gap-2.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">2</span>
+                  <p className="text-zinc-300">Selecciona <strong>"Agregar a pantalla de inicio"</strong> (o "Instalar aplicación").</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowIosInstallGuide(false)}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-all cursor-pointer"
+              >
+                ¡Entendido!
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1712,6 +1824,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               >
                 <HardDrive className="w-3.5 h-3.5" />
                 <span className="hidden md:inline">{syncingDb ? 'Guardando...' : 'Servidor DB'}</span>
+              </button>
+            )}
+            {isAuthenticated && !isAppInstalled && (
+              <button
+                type="button"
+                onClick={handleInstallPwa}
+                className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/40 transition-colors cursor-pointer text-xs font-bold flex items-center gap-1"
+                title="Instalar Panel Admin en mi Teléfono / PC (PWA)"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Instalar App</span>
               </button>
             )}
             {/* Abrir en Navegador Web (Chrome / Safari) */}
@@ -5313,6 +5436,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           onFinish={() => setShowSplashPreview(false)}
           isPreview={true}
         />
+      )}
+
+      {/* Modal de Instrucciones de Instalación iOS Safari */}
+      {showIosInstallGuide && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center">
+              <Smartphone className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">Instalar en Pantalla de Inicio</h3>
+              <p className="text-xs text-zinc-400 mt-1">Sigue estos sencillos pasos para tener el Panel Admin en tu teléfono:</p>
+            </div>
+            <div className="space-y-2.5 text-left text-xs bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">1</span>
+                <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>⋮</strong>).</p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">2</span>
+                <p className="text-zinc-300">Selecciona <strong>"Agregar a pantalla de inicio"</strong> (o "Instalar aplicación").</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowIosInstallGuide(false)}
+              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs transition-all cursor-pointer"
+            >
+              ¡Entendido!
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
