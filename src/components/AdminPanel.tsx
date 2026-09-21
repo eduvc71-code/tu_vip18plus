@@ -1654,7 +1654,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               type="button"
               className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer"
             >
-              Ir al Canal VIP Free
+              Cerrar página
             </button>
           </div>
         </div>

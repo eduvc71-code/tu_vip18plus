@@ -58,6 +58,7 @@ export default function App() {
       params.get('panel') === 'true'
     );
   });
+  const [isAdminClosed, setIsAdminClosed] = useState(false);
 
   // Telegram User Context state
   const [tgUser, setTgUser] = useState<TelegramUserContext | null>(null);
@@ -397,22 +398,60 @@ export default function App() {
     );
   }
 
+  if (isAdminView && isAdminClosed) {
+    return (
+      <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center p-6 text-center select-none font-sans">
+        <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-5 shadow-2xl">
+          <CheckCircle2 className="w-8 h-8 text-amber-400" />
+        </div>
+        <h2 className="text-xl font-black text-white mb-2 tracking-tight">Panel Administrativo Cerrado</h2>
+        <p className="text-xs text-zinc-400 max-w-sm mb-6 leading-relaxed">
+          Has cerrado el Panel de Administración. Puedes cerrar esta pestaña en tu navegador con total seguridad.
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            type="button"
+            onClick={() => {
+              try { window.close(); } catch {}
+              try { window.open('', '_self', ''); window.close(); } catch {}
+            }}
+            className="w-full py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-zinc-700/60 transition-all cursor-pointer"
+          >
+            <X className="w-4 h-4 text-zinc-400" />
+            <span>Cerrar Pestaña</span>
+          </button>
+          <a
+            href={`https://t.me/${botUsername}`}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+          >
+            <Send className="w-4 h-4" />
+            <span>Volver al Bot de Telegram</span>
+          </a>
+          <button
+            type="button"
+            onClick={() => setIsAdminClosed(false)}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer pt-2"
+          >
+            Reabrir Panel Admin
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isAdminView) {
     return (
       <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-zinc-950 text-zinc-100 font-sans p-0 m-0 flex flex-col overflow-hidden">
         <AdminPanel
           isOpen={true}
           onClose={() => {
-            setIsAdminView(false);
             try {
-              const urlParams = new URLSearchParams(window.location.search);
-              urlParams.delete('admin');
-              urlParams.delete('panel');
-              urlParams.delete('admin_token');
-              const newQuery = urlParams.toString();
-              const newUrl = window.location.pathname + (newQuery ? `?${newQuery}` : '');
-              window.history.replaceState({}, document.title, newUrl);
+              const tg = (window as any).Telegram?.WebApp;
+              if (tg?.close) tg.close();
             } catch {}
+            try { window.close(); } catch {}
+            try { window.open('', '_self', ''); window.close(); } catch {}
+            setIsAdminClosed(true);
           }}
           botUsername={botUsername}
           channelId={channelId}
