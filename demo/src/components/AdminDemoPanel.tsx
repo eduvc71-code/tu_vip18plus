@@ -210,11 +210,11 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
       </div>
 
       {/* Pestañas de Navegación del Panel */}
-      <div className="flex border-b border-zinc-800 bg-zinc-950/40 px-3 pt-2 gap-2">
+      <div className="flex flex-wrap border-b border-zinc-800 bg-zinc-950/40 px-3 pt-2 gap-1">
         <button
           type="button"
           onClick={() => setActiveTab('contenido')}
-          className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-2.5 py-1.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1 ${
             activeTab === 'contenido'
               ? 'bg-zinc-900 text-amber-400 border-t-2 border-amber-400 border-x border-zinc-800'
               : 'text-zinc-400 hover:text-white'
@@ -227,7 +227,7 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('perfil')}
-          className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-2.5 py-1.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1 ${
             activeTab === 'perfil'
               ? 'bg-zinc-900 text-amber-400 border-t-2 border-amber-400 border-x border-zinc-800'
               : 'text-zinc-400 hover:text-white'
@@ -240,7 +240,7 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
         <button
           type="button"
           onClick={() => setActiveTab('pagos')}
-          className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+          className={`px-2.5 py-1.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center gap-1 ${
             activeTab === 'pagos'
               ? 'bg-zinc-900 text-amber-400 border-t-2 border-amber-400 border-x border-zinc-800'
               : 'text-zinc-400 hover:text-white'
