@@ -1,0 +1,20 @@
+<svg width="800" height="800" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="800" rx="180" fill="#0F0F12"/>
+  <rect x="120" y="120" width="560" height="560" rx="120" fill="url(#paint0_linear_1_2)" fill-opacity="0.18" stroke="#FBBF24" stroke-opacity="0.45"/>
+  <circle cx="400" cy="330" r="156" fill="url(#paint1_radial_1_2)" fill-opacity="0.22"/>
+  <path d="M278 467.5V284.5C278 250.863 305.863 223 339.5 223H459.5C493.137 223 521 250.863 521 284.5V467.5C521 501.137 493.137 529 459.5 529H339.5C305.863 529 278 501.137 278 467.5Z" stroke="#F5F5F5" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M351 286L400 343L449 286" stroke="#FBBF24" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M330 392C350.271 371.696 372.972 361 397 361C420.915 361 444.343 371.467 464.5 391.5" stroke="#FBBF24" stroke-width="22" stroke-linecap="round"/>
+  <path d="M318 468H482" stroke="#F5F5F5" stroke-width="20" stroke-linecap="round"/>
+  <text x="400" y="610" text-anchor="middle" fill="#F5F5F5" font-family="Inter, Arial, sans-serif" font-size="96" font-weight="800" letter-spacing="8">VIP</text>
+  <defs>
+    <linearGradient id="paint0_linear_1_2" x1="120" y1="120" x2="680" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#F59E0B" stop-opacity="0.12"/>
+    </linearGradient>
+    <radialGradient id="paint1_radial_1_2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(400 330) rotate(90) scale(156)">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#FBBF24" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+</svg>

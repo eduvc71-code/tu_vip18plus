@@ -30,8 +30,24 @@
         justify-content: center;
         padding: 16px;
         text-align: center;
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.45s ease, visibility 0.45s ease;
+      }
+      #initial-splash.is-hiding {
+        opacity: 0;
+        visibility: hidden;
       }
       #initial-splash .splash-card { max-width: 26rem; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+      #initial-splash .splash-image {
+        width: min(12rem, 58vw);
+        margin: 0 auto;
+        display: block;
+        border-radius: 26px;
+        box-shadow: 0 20px 40px rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        background: rgba(24, 24, 27, 0.75);
+      }
       #initial-splash .splash-badge {
         width: 56px; height: 56px; margin: 0 auto;
         border-radius: 18px; display: flex; align-items: center; justify-content: center;
@@ -65,6 +81,7 @@
       <!-- Portada de Carga Inicial (estática). React la reemplaza al montar. -->
       <div id="initial-splash">
         <div class="splash-card">
+          <img class="splash-image" src="/splash.svg" alt="Tú VIP Demo" />
           <div class="splash-badge">VIP</div>
           <h1>Demostración Interactiva</h1>
           <p class="sub">Plataforma 100% Personalizable y Adaptable a tu Medida. Cargando la demostración...</p>

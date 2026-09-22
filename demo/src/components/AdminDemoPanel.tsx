@@ -19,7 +19,8 @@ import {
   Image as ImageIcon,
   Lock,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 
 interface AdminDemoPanelProps {
@@ -49,6 +50,7 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
   const [caption, setCaption] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [alertMsg, setAlertMsg] = useState<string>('');
+  const [showAppInfo, setShowAppInfo] = useState(false);
 
   const showAlert = (msg: string) => {
     setAlertMsg(msg);
@@ -175,27 +177,15 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <a
-            href="https://t.me/edu_vc01"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-sky-500/40"
-            title="Te interesa? Escríbeme por Telegram @edu_vc01"
+          <button
+            type="button"
+            onClick={() => setShowAppInfo(true)}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-amber-500/40"
+            title="Más información de la app"
           >
-            <Send className="w-3.5 h-3.5 text-sky-400" />
-            <span>Te interesa? Telegram</span>
-          </a>
-
-          <a
-            href="https://wa.me/59163127007"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-emerald-500/40"
-            title="Te interesa? Escríbeme por WhatsApp +59163127007"
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Te interesa? WhatsApp</span>
-          </a>
+            <Plus className="w-3.5 h-3.5 text-amber-300" />
+            <span>+ Inf. de la App</span>
+          </button>
 
           <button
             type="button"
@@ -208,6 +198,59 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           </button>
         </div>
       </div>
+
+      {showAppInfo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-amber-500/40 bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 p-5 shadow-[0_30px_80px_rgba(0,0,0,0.7)]">
+            <div className="absolute inset-x-8 top-0 h-24 bg-gradient-to-b from-amber-500/15 to-transparent blur-2xl" />
+
+            <button
+              type="button"
+              onClick={() => setShowAppInfo(false)}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 transition hover:bg-zinc-700 hover:text-white"
+              aria-label="Cerrar información de la app"
+              title="Cerrar"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="relative z-10 space-y-5 pt-3 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500/25 via-amber-400/10 to-zinc-900 text-amber-300 ring-1 ring-amber-500/30 shadow-lg shadow-amber-500/10">
+                <Sparkles className="h-8 w-8" />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.28em] text-amber-400">Atención 24/7</p>
+                <h3 className="text-2xl font-black leading-tight text-white">Nos adecuamos a tu presupuesto</h3>
+              </div>
+
+              <div className="flex items-center justify-center gap-4 pt-2">
+                <a
+                  href="https://t.me/edu_vc01"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl bg-sky-500/15 text-sky-300 ring-1 ring-sky-500/40 transition duration-200 hover:-translate-y-0.5 hover:bg-sky-500/25"
+                  aria-label="Abrir Telegram"
+                  title="Telegram"
+                >
+                  <Send className="h-7 w-7 text-sky-400" />
+                </a>
+
+                <a
+                  href="https://wa.me/59163127007"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/40 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-500/25"
+                  aria-label="Abrir WhatsApp"
+                  title="WhatsApp"
+                >
+                  <MessageSquare className="h-7 w-7 text-emerald-400" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pestañas de Navegación del Panel */}
       <div className="flex flex-wrap border-b border-zinc-800 bg-zinc-950/40 px-3 pt-2 gap-1">
