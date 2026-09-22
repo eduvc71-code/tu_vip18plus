@@ -8,6 +8,7 @@ import {
   Maximize2,
   Minimize2,
   X,
+  LogOut,
   Sparkles,
   CheckCircle2,
   ArrowRight
@@ -31,6 +32,7 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
   const [showIntro, setShowIntro] = useState(true);
   const [isExiting, setIsExiting] = useState(false);
   const [splashInfo, setSplashInfo] = useState<{ title: string; subtitle: string; icon: string } | null>(null);
+  const [exitNotice, setExitNotice] = useState(false);
 
   // 1. Contador de permanencia del anuncio inicial: 40 segundos de lectura + 700ms de desvanecimiento
   useEffect(() => {
@@ -102,17 +104,34 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
     setShowIntro(true);
   };
 
+  // Intenta cerrar la ventana/pestaña por todos los medios posibles.
+  // Si el navegador bloquea el cierre, redirige a Telegram como respaldo.
+  const handleExit = () => {
+    try {
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg?.close) tg.close();
+    } catch {}
+    try { window.close(); } catch {}
+    try { window.open('', '_self', ''); window.close(); } catch {}
+
+    // Respaldo: si nada cerró la ventana, avisamos y ofrecemos volver a Telegram
+    setExitNotice(true);
+    setTimeout(() => {
+      try { window.location.href = 'https://t.me/'; } catch {}
+    }, 1400);
+  };
+
   // Mini App, Canal y Bot siempre se presentan en contenedor de dispositivo móvil independiente
   const isSubscriberView = currentView !== 'admin';
   const shouldRenderPhoneFrame = isSubscriberView || isPhoneFrame;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center select-none overflow-x-hidden">
-      
+
       {/* ── Barra Superior Global de Demostración (Visible solo en el Panel Admin para no alterar la vista de Mini App) ── */}
       {currentView === 'admin' ? (
         <header className="w-full bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-2.5 py-2 sm:px-6 sm:py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm">
-          
+
           {/* Logotipo y Botón para Reabrir el Anuncio Informativo */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xs flex items-center justify-center shadow-md">
@@ -203,6 +222,16 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
             >
               {isPhoneFrame ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
               <span className="hidden md:inline">{isPhoneFrame ? 'Expandir' : 'Marco Móvil'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExit}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95"
+              title="Salir de la demostración"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Salir</span>
             </button>
           </div>
         </header>
@@ -313,6 +342,28 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
               <span>Entendido, Explorar Demostración</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Aviso de Fallback al Salir (si el navegador no permite cerrar la pestaña) ── */}
+      {exitNotice && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="w-full max-w-sm rounded-3xl bg-zinc-900 border-2 border-rose-500/50 p-6 shadow-2xl text-center flex flex-col items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-rose-300">
+              <LogOut className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-extrabold text-white">Saliendo de la demostración...</h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Si tu navegador no cierra la pestaña automáticamente, serás redirigido a Telegram. También puedes cerrar esta pestaña manualmente (Ctrl+W / Cmd+W).
+            </p>
+            <a
+              href="https://t.me/"
+              className="w-full py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+            >
+              <Send className="w-4 h-4" />
+              <span>Ir a Telegram</span>
+            </a>
           </div>
         </div>
       )}

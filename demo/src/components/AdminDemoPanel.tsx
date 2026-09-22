@@ -62,9 +62,10 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
       name: name.trim() || 'Modelo VIP',
       username: username.trim() || 'modelo_vip',
       bio: bio.trim()
+      // Nota: las redes sociales (links) se conservan tal cual, no se editan en la versión demo
     };
     onUpdateProfile(updated);
-    showAlert('✅ Datos de la Creadora guardados correctamente.');
+    showAlert('Version Demo Grabado');
   };
 
   const handleLinkChange = (id: string, url: string, active: boolean) => {
@@ -173,15 +174,39 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onResetDefault}
-          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
-          title="Restablecer los 16 contenidos iniciales predeterminados"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-          <span>Restablecer Demo</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="https://t.me/edu_vc01"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-sky-500/40"
+            title="Te interesa? Escríbeme por Telegram @edu_vc01"
+          >
+            <Send className="w-3.5 h-3.5 text-sky-400" />
+            <span>Te interesa? Telegram</span>
+          </a>
+
+          <a
+            href="https://wa.me/59163127007"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-emerald-500/40"
+            title="Te interesa? Escríbeme por WhatsApp +59163127007"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Te interesa? WhatsApp</span>
+          </a>
+
+          <button
+            type="button"
+            onClick={onResetDefault}
+            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
+            title="Restablecer los 16 contenidos iniciales predeterminados"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Restablecer Demo</span>
+          </button>
+        </div>
       </div>
 
       {/* Pestañas de Navegación del Panel */}
@@ -557,10 +582,12 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
                         {link.title}:
                       </span>
                       <input
-                        type="url"
-                        value={link.url}
-                        onChange={(e) => handleLinkChange(link.id, e.target.value, link.is_active)}
-                        className="flex-1 bg-zinc-950 border border-zinc-700/80 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-amber-500"
+                        type="text"
+                        value="Tu link"
+                        readOnly
+                        disabled
+                        title="Disponible solo en la versión completa"
+                        className="flex-1 bg-zinc-950 border border-zinc-700/80 rounded-lg px-2.5 py-1 text-xs text-zinc-500 italic cursor-not-allowed select-none"
                       />
                       <button
                         type="button"
@@ -590,13 +617,13 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
 
         {/* PESTAÑA 3: MÉTODOS DE PAGO */}
         {activeTab === 'pagos' && (
-          <div className="bg-zinc-950 p-4 sm:p-5 rounded-2xl border border-zinc-800 space-y-4">
-            <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+          <div className="bg-zinc-950 p-4 sm:p-5 rounded-2xl border border-zinc-800 flex flex-col max-h-[70vh]">
+            <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2 shrink-0 pb-3 border-b border-zinc-800">
               <CreditCard className="w-4 h-4 text-amber-400" />
               <span>Métodos de Pago Activos</span>
             </h3>
 
-            <div className="space-y-3">
+            <div className="space-y-3 overflow-y-auto pt-3 pr-1">
               {profile.paymentMethods.map((pm) => (
                 <div key={pm.id} className="p-3.5 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-1.5">
                   <div className="flex items-center justify-between">
