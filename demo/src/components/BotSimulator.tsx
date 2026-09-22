@@ -187,12 +187,17 @@ export const BotSimulator: React.FC<BotSimulatorProps> = ({
         <div className="flex items-center gap-1.5 text-zinc-400">
           <button
             type="button"
-            onClick={() => onNavigateToView('admin')}
+            onClick={() => {
+              try { const tg = (window as any).Telegram?.WebApp; if (tg?.close) tg.close(); } catch {}
+              try { window.close(); } catch {}
+              try { window.open('', '_self', ''); window.close(); } catch {}
+              try { window.location.href = 'https://t.me/'; } catch {}
+            }}
             className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-emerald-500/40 active:scale-95 shadow-sm"
-            title="Volver al Panel Admin"
+            title="Salir de la demostración"
           >
             <Sliders className="w-3 h-3 text-emerald-400" />
-            <span>Admin</span>
+            <span>Salir</span>
           </button>
           <button type="button" className="p-1.5 rounded-full text-zinc-400 hover:bg-zinc-800 transition-colors">
             <MoreVertical className="w-4 h-4" />

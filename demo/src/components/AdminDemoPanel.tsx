@@ -248,22 +248,9 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
                 </a>
               </div>
 
-              <div className="flex items-center justify-center gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowAppInfo(false)}
-                  className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-bold text-zinc-200 transition hover:bg-zinc-700"
-                >
-                  Cerrar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowAppInfo(false)}
-                  className="rounded-xl bg-amber-400 px-4 py-2 text-xs font-black text-black transition hover:bg-amber-300"
-                >
-                  Salir
-                </button>
-              </div>
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-zinc-300">
+                IMPORTANTE: ESTA APP NO GESTIONA TU GRUPO PRIVADO VIP.
+              </p>
             </div>
           </div>
         </div>

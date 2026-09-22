@@ -97,18 +97,28 @@ export const MiniAppSimulator: React.FC<MiniAppSimulatorProps> = ({ profile, onN
         <div className="flex items-center gap-1.5 text-zinc-400">
           <button
             type="button"
-            onClick={() => onNavigateToView('admin')}
+            onClick={() => {
+              try { const tg = (window as any).Telegram?.WebApp; if (tg?.close) tg.close(); } catch {}
+              try { window.close(); } catch {}
+              try { window.open('', '_self', ''); window.close(); } catch {}
+              try { window.location.href = 'https://t.me/'; } catch {}
+            }}
             className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer border border-amber-500/40 active:scale-95 shadow-sm"
-            title="Volver al Panel Admin"
+            title="Salir de la demostración"
           >
             <Sliders className="w-3 h-3 text-amber-400" />
-            <span>Admin</span>
+            <span>Salir</span>
           </button>
           <button
             type="button"
-            onClick={() => onNavigateToView('admin')}
+            onClick={() => {
+              try { const tg = (window as any).Telegram?.WebApp; if (tg?.close) tg.close(); } catch {}
+              try { window.close(); } catch {}
+              try { window.open('', '_self', ''); window.close(); } catch {}
+              try { window.location.href = 'https://t.me/'; } catch {}
+            }}
             className="p-1.5 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-            title="Cerrar y volver al Admin"
+            title="Salir de la demostración"
           >
             <X className="w-4 h-4" />
           </button>
