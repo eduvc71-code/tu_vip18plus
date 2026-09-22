@@ -158,43 +158,43 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col bg-zinc-900 border border-zinc-800 rounded-none sm:rounded-3xl shadow-2xl overflow-hidden my-0 sm:my-3">
       {/* Encabezado del Panel Demo */}
-      <div className="p-3.5 sm:p-5 border-b border-zinc-800 bg-zinc-950/80 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+      <div className="p-3.5 sm:p-5 border-b border-zinc-800 bg-zinc-950/80 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
             <Sliders className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-              <span>Panel Administrativo</span>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2 flex-wrap">
+              <span className="truncate">Panel Administrativo</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
                 DEMO
               </span>
             </h2>
-            <p className="text-xs text-zinc-400">
+            <p className="text-[11px] text-zinc-400 sm:text-xs leading-snug">
               Modifica datos o sube contenido y prueba en vivo los 3 simuladores.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-stretch gap-2 sm:w-auto sm:justify-end">
           <button
             type="button"
             onClick={() => setShowAppInfo(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-400 text-black text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-amber-300 shadow-lg shadow-amber-500/20 hover:bg-amber-300"
+            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-xl bg-amber-400 text-black text-[10px] sm:text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-300 shadow-lg shadow-amber-500/20 hover:bg-amber-300"
             title="Más información de la app"
           >
             <Plus className="w-3.5 h-3.5 text-black" />
-            <span>Te gusto la App? Contactanos...</span>
+            <span className="truncate">Te gusto la App? Contactanos...</span>
           </button>
 
           <button
             type="button"
             onClick={onResetDefault}
-            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
+            className="flex-1 sm:flex-none px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] sm:text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
             title="Restablecer los 16 contenidos iniciales predeterminados"
           >
             <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Restablecer Demo</span>
+            <span className="truncate">Restablecer Demo</span>
           </button>
         </div>
       </div>
