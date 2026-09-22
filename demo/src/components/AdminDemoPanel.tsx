@@ -180,11 +180,11 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           <button
             type="button"
             onClick={() => setShowAppInfo(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-amber-500/40"
+            className="px-3 py-1.5 rounded-xl bg-amber-400 text-black text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer border border-amber-300 shadow-lg shadow-amber-500/20 hover:bg-amber-300"
             title="Más información de la app"
           >
-            <Plus className="w-3.5 h-3.5 text-amber-300" />
-            <span>+ Inf. de la App</span>
+            <Plus className="w-3.5 h-3.5 text-black" />
+            <span>Te gusto la App? Contactanos...</span>
           </button>
 
           <button
@@ -246,6 +246,23 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
                 >
                   <MessageSquare className="h-7 w-7 text-emerald-400" />
                 </a>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowAppInfo(false)}
+                  className="rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2 text-xs font-bold text-zinc-200 transition hover:bg-zinc-700"
+                >
+                  Cerrar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAppInfo(false)}
+                  className="rounded-xl bg-amber-400 px-4 py-2 text-xs font-black text-black transition hover:bg-amber-300"
+                >
+                  Salir
+                </button>
               </div>
             </div>
           </div>
