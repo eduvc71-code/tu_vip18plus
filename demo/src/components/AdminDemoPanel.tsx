@@ -221,7 +221,7 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           }`}
         >
           <Upload className="w-3.5 h-3.5" />
-          <span>Subir & Gestionar Contenido ({profile.media.length})</span>
+          <span>Subir/Contenido ({profile.media.length})</span>
         </button>
 
         <button
@@ -234,7 +234,7 @@ export const AdminDemoPanel: React.FC<AdminDemoPanelProps> = ({
           }`}
         >
           <User className="w-3.5 h-3.5" />
-          <span>Datos & Redes Sociales</span>
+          <span>Datos/RRSS</span>
         </button>
 
         <button
