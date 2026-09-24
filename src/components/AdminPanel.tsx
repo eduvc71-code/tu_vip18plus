@@ -419,7 +419,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     age: 18,
     zone: 'Contenido +18 VIP',
     description: '',
-    rate_bs: 0,
+    rate_bs: '' as number | '',
     commission_bs: 0,
     status: 'disponible' as Profile['status'],
     priority_order: 0
@@ -489,7 +489,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // VIP Upload State (4-step linear flow: Guardar -> Previsualizar -> Editar -> Publicar)
   const [vipFile, setVipFile] = useState<File | null>(null);
-  const [vipStarCount, setVipStarCount] = useState<number>(50);
+  const [vipStarCount, setVipStarCount] = useState<number | ''>(50);
   const [vipCaption, setVipCaption] = useState<string>('');
   const [vipDraftMediaUrl, setVipDraftMediaUrl] = useState<string | null>(null);
   const [vipPhase, setVipPhase] = useState<'upload' | 'preview' | 'edit'>('upload');
@@ -505,7 +505,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Paid media with Telegram Stars state
   const [paidModalMediaUrl, setPaidModalMediaUrl] = useState<string | null>(null);
-  const [paidModalStarCount, setPaidModalStarCount] = useState<number>(50);
+  const [paidModalStarCount, setPaidModalStarCount] = useState<number | ''>(50);
   const [paidModalCaption, setPaidModalCaption] = useState<string>('');
   const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
 
@@ -581,7 +581,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         age: p.age ?? 18,
         zone: p.zone,
         description: p.description,
-        rate_bs: p.rate_bs ?? 0,
+        rate_bs: p.rate_bs ?? '',
         commission_bs: 0,
         status: p.status,
         priority_order: p.priority_order || 0
@@ -2078,7 +2078,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           type="number"
                           value={formData.rate_bs}
                           placeholder="Ej: 0 o 350"
-                          onChange={(e) => setFormData({ ...formData, rate_bs: Number(e.target.value) })}
+                          onChange={(e) => setFormData({ ...formData, rate_bs: e.target.value === '' ? '' : Number(e.target.value) })}
                           className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
                         />
                       </div>
@@ -2371,7 +2371,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       min={1}
                                       max={2500}
                                       value={vipStarCount}
-                                      onChange={(e) => setVipStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                      onChange={(e) => setVipStarCount(e.target.value === '' ? '' : Math.max(1, Math.min(2500, Number(e.target.value))))}
                                       placeholder="Otro"
                                       className="w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded-lg text-white font-mono text-xs text-center focus:outline-none focus:border-amber-500"
                                     />
@@ -2494,7 +2494,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                           min={1}
                                           max={2500}
                                           value={vipStarCount}
-                                          onChange={(e) => setVipStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                          onChange={(e) => setVipStarCount(e.target.value === '' ? '' : Math.max(1, Math.min(2500, Number(e.target.value))))}
                                           className="w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-500"
                                         />
                                         {[25, 50, 100, 250].map((s) => (
@@ -3922,7 +3922,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     min="1"
                                     max="2500"
                                     value={paidModalStarCount}
-                                    onChange={(e) => setPaidModalStarCount(Math.max(1, Math.min(2500, Number(e.target.value) || 1)))}
+                                    onChange={(e) => setPaidModalStarCount(e.target.value === '' ? '' : Math.max(1, Math.min(2500, Number(e.target.value))))}
                                     className="w-full pl-9 pr-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-white font-mono font-bold text-sm focus:outline-none focus:border-amber-500"
                                   />
                                   <Star className="w-4 h-4 text-amber-400 fill-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -4439,7 +4439,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <input 
                          type="text"
                          value={reactionsList.join(' ')}
-                         onChange={(e) => setReactionsList(e.target.value.split(/s+/).filter(Boolean))}
+                         onChange={(e) => setReactionsList(e.target.value.split(/\s+/).filter(Boolean))}
                          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-base focus:outline-none focus:border-amber-500"
                          placeholder="?? ?? ?? ?? ??"
                       />

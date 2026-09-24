@@ -1535,6 +1535,12 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     if (splash_description !== undefined) {
       saveSystemSetting('splash_description', String(splash_description).trim());
     }
+    if (reactions_enabled !== undefined) {
+      saveSystemSetting('reactions_enabled', reactions_enabled ? 'true' : 'false');
+    }
+    if (reactions_list !== undefined && Array.isArray(reactions_list)) {
+      saveSystemSetting('reactions_list', JSON.stringify(reactions_list));
+    }
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración de modo y parámetros actualizada');
     const updatedConfig = getBotConfig();
@@ -1552,7 +1558,9 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'Danii_Catalogo_SCZ_bot',
       model_display_name: getSystemSetting('model_display_name') || 'Tú',
       model_vip_link: getSystemSetting('model_vip_link') || '',
-      splash_description: getSystemSetting('splash_description') || ''
+      splash_description: getSystemSetting('splash_description') || '',
+      reactions_enabled: getSystemSetting('reactions_enabled') === 'true',
+      reactions_list: JSON.parse(getSystemSetting('reactions_list') || '["❤️", "🔥", "😍", "😘", "💦"]')
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar configuración' });
