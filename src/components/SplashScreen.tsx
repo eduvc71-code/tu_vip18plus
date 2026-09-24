@@ -185,7 +185,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             }}
             className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
           >
-            <span>{isPreview ? 'Entendido (Cerrar)' : 'Entrar al Catálogo'}</span>
+            <span>{isPreview ? 'Entendido (Cerrar)' : 'Entrar al Espacio Exclusivo'}</span>
             <ArrowRight className="w-4 h-4 text-zinc-950" />
           </button>
 
