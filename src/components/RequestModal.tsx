@@ -8,7 +8,10 @@ export interface TelegramUserContext {
   username?: string;
 }
 
+import { PaymentMethod } from "../types";
+
 interface RequestModalProps {
+  paymentMethods?: PaymentMethod[];
   profile: Profile | null;
   modelName?: string;
   tgUserContext?: TelegramUserContext | null;
@@ -19,12 +22,13 @@ interface RequestModalProps {
 type Step = 'menu' | 'mensual' | 'country';
 type PlanType = 'mensual' | 'semestral' | 'permanente' | null;
 
-const COUNTRIES = [
-  'Argentina', 'Bolivia', 'Chile', 'Colombia', 'Ecuador', 
-  'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'
-];
 
-export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, tgUserContext, onOpenPaymentMethods, onClose }) => {
+
+export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, tgUserContext, onOpenPaymentMethods, onClose, paymentMethods = [] }) => {
+  const dynamicCountries = React.useMemo(() => {
+    const list = paymentMethods.filter(p => p.category === "international" || p.category === "national").map(p => p.title.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "").trim()).filter(t => t.length > 0);
+    return list.length > 0 ? Array.from(new Set(list)) : ['Bolivia', 'Argentina', 'Chile', 'Colombia', 'Ecuador', 'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'];
+  }, [paymentMethods]);
   const [step, setStep] = useState<Step>('menu');
   const [selectedPlan, setSelectedPlan] = useState<PlanType>(null);
   const [country, setCountry] = useState('');
@@ -231,7 +235,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
                   required
                 >
                   <option value="" disabled>Selecciona un país...</option>
-                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  {dynamicCountries.map(c => <option key={c} value={c}>{c}</option>)}
                   <option value="Otro">Otro (Especificar)</option>
                 </select>
               </div>

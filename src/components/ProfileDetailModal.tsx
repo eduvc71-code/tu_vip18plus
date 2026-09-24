@@ -86,10 +86,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       hideIndicatorsTimerRef.current = null;
     }
 
-    if (isCurrentVideo) {
-      setShowSlideIndicators(true);
-      return; // Los videos se controlan por interacción de sonido y tiempo
-    }
+
 
     setShowSlideIndicators(true);
 
@@ -504,6 +501,14 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       {/* Barra Inferior Flotante: Acciones y Sonido */}
       <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-5 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex flex-col items-center gap-2">
+          {/* Reactions */}
+          <div className="flex items-center justify-between gap-4 bg-zinc-950/60 border border-zinc-800/80 backdrop-blur-md rounded-full px-5 py-1.5 shadow-lg w-auto">
+            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
+            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
+            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
+            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
+            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
+          </div>
           <div className="flex items-center gap-2">
             {currentStars && currentStars > 0 ? (
               isCurrentMediaLocked ? (
