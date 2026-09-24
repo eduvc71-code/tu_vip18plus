@@ -36,7 +36,7 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
         paddingTop: 'max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 0px)'
       }}
     >
-      <div className="mx-auto max-w-7xl px-2.5 sm:px-6 lg:px-8">
+      <div className={`mx-auto max-w-7xl px-2.5 sm:px-6 lg:px-8 ${isTgMiniApp ? "pt-12 pb-2" : ""}`}>
         <div className="flex h-12 sm:h-13 items-center justify-between gap-2">
           
           {/* Left: Balanced Brand Badge */}

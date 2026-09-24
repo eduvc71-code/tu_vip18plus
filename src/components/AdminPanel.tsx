@@ -2082,7 +2082,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                             Descripción del Contenido VIP (Publicación y Mini App)
                           </label>
-                          <span className="text-[10px] text-amber-400/80">Opcional</span>
+                          <span className="text-[10px] text-rose-400 font-bold">* Obligatorio</span>
                         </div>
                         <textarea
                           rows={3}

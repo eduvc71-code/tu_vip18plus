@@ -37,7 +37,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   useEffect(() => {
     if (isPreview) return;
 
-    const duration = 2800;
+    const duration = 12800;
     const intervalTime = 40;
     const step = (intervalTime / duration) * 100;
 
