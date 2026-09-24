@@ -3958,7 +3958,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             </button>
                             <button
                               type="button"
-                              disabled={publishingPaidMedia || paidModalStarCount <= 0}
+                              disabled={publishingPaidMedia || paidModalStarCount === '' || paidModalStarCount <= 0}
                               onClick={handlePublishPaidMediaSubmit}
                               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
                             >
