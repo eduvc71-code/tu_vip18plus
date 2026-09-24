@@ -130,109 +130,51 @@ export const DeviceFrame: React.FC<DeviceFrameProps> = ({
 
       {/* ── Barra Superior Global de Demostración (Visible solo en el Panel Admin para no alterar la vista de Mini App) ── */}
       {currentView === 'admin' ? (
-        <header className="w-full bg-zinc-900/95 backdrop-blur-md border-b border-zinc-800 px-2.5 py-2 sm:px-6 sm:py-2.5 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <header className="sticky top-0 z-50 w-full border-b border-zinc-800 bg-zinc-900/95 px-2 py-2 shadow-sm backdrop-blur-md sm:px-4 sm:py-2.5">
+          <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2">
+            <div className="flex flex-1 items-center justify-center min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-[10px] font-black text-zinc-950 shadow-md">
+                  VIP
+                </div>
+                <div className="flex items-center gap-1 min-w-0">
+                  <h1 className="truncate text-[11px] font-bold leading-tight text-white sm:text-sm">
+                    Tú VIP
+                  </h1>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleTriggerIntro}
+                    className="flex items-center gap-0.5 rounded-full border border-amber-500/40 bg-amber-500/20 px-1.5 py-0.5 text-[8px] font-extrabold text-amber-300 transition-all hover:bg-amber-500/30 active:scale-95"
+                    title="Clic para volver a ver la información de la plataforma (~40s)"
+                  >
+                    <Sparkles className="h-2.5 w-2.5" />
+                    <span>DEMO</span>
+                  </button>
 
-          {/* Logotipo y Botón para Reabrir el Anuncio Informativo */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xs flex items-center justify-center shadow-md">
-              VIP
+                  <button
+                    type="button"
+                    onClick={onTogglePhoneFrame}
+                    className="flex items-center gap-1 rounded-xl border border-zinc-700/60 bg-zinc-800 px-1.5 py-1.5 text-[10px] font-semibold text-zinc-300 transition-all hover:bg-zinc-700 sm:px-2.5 sm:py-1.5 sm:text-xs"
+                    title={isPhoneFrame ? 'Ver en formato expandido' : 'Ver simulador en marco de móvil'}
+                  >
+                    {isPhoneFrame ? <Maximize2 className="h-3.5 w-3.5" /> : <Minimize2 className="h-3.5 w-3.5" />}
+                    <span className="hidden md:inline">{isPhoneFrame ? 'Expandir' : 'Marco Móvil'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleExit}
+                    className="flex items-center gap-1 rounded-xl bg-rose-600/90 px-1.5 py-1.5 text-[10px] font-bold text-white shadow-md transition-all hover:bg-rose-500 active:scale-95 sm:px-2.5 sm:py-1.5 sm:text-xs"
+                    title="Salir de la demostración"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">Salir</span>
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-xs sm:text-sm font-bold text-white leading-tight">
-                Tú VIP
-              </h1>
-              <button
-                type="button"
-                onClick={handleTriggerIntro}
-                className="px-1.5 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 transition-all cursor-pointer flex items-center gap-0.5 active:scale-95"
-                title="Clic para volver a ver la información de la plataforma (~40s)"
-              >
-                <Sparkles className="w-2.5 h-2.5" />
-                <span>DEMO</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Selector de Vistas Independientes */}
-          <div className="flex items-center gap-0.5 sm:gap-1 bg-zinc-950 p-1 rounded-2xl border border-zinc-800 text-[11px] sm:text-xs">
-            <button
-              type="button"
-              onClick={() => onViewChange('admin')}
-              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                currentView === 'admin'
-                  ? 'bg-amber-500 text-zinc-950 shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">1. Admin</span>
-              <span className="sm:hidden text-[10px]">Admin</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onViewChange('miniapp')}
-              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                currentView === 'miniapp'
-                  ? 'bg-amber-500 text-zinc-950 shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">2. Mini App</span>
-              <span className="sm:hidden text-[10px]">App</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onViewChange('channel')}
-              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                currentView === 'channel'
-                  ? 'bg-sky-500 text-white shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">3. Canal</span>
-              <span className="sm:hidden text-[10px]">Canal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onViewChange('bot')}
-              className={`px-2 sm:px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                currentView === 'bot'
-                  ? 'bg-emerald-500 text-zinc-950 shadow-md'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">4. Bot</span>
-              <span className="sm:hidden text-[10px]">Bot</span>
-            </button>
-          </div>
-
-          {/* Toggle de Tamaño Marco Móvil / Completo (Para Vista Admin) */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={onTogglePhoneFrame}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border border-zinc-700/60"
-              title={isPhoneFrame ? 'Ver en formato expandido' : 'Ver simulador en marco de móvil'}
-            >
-              {isPhoneFrame ? <Maximize2 className="w-3.5 h-3.5" /> : <Minimize2 className="w-3.5 h-3.5" />}
-              <span className="hidden md:inline">{isPhoneFrame ? 'Expandir' : 'Marco Móvil'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleExit}
-              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-md active:scale-95"
-              title="Salir de la demostración"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Salir</span>
-            </button>
           </div>
         </header>
       ) : (

@@ -747,6 +747,8 @@ export default function App() {
         profile={requestProfile}
         modelName={displayName}
         tgUserContext={tgUser}
+        onOpenPaymentMethods={() => setShowPaymentModal(true)}
+
         onClose={() => {
           setRequestProfile(null);
           try {

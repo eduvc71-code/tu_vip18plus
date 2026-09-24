@@ -13,7 +13,7 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
   const safeBot = (botUsername || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
 
   const cleanModelName = (modelName || 'Danii').trim();
-  const headerTitle = `Canal Free • ${cleanModelName}`;
+  const headerTitle = cleanModelName;
 
   const isTgMiniApp = Boolean(
     typeof window !== 'undefined' &&

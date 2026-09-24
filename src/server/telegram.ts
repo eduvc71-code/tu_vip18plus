@@ -280,7 +280,7 @@ export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) 
     keyboard: [
       [
         { text: '👑 Abrir Panel Web' },
-        { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
+        { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
       ],
       [
         { text: btnCanal },
@@ -288,7 +288,10 @@ export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) 
       ],
       [
         { text: btnNuevo },
-        { text: '🔘 Botones' }
+          { text: '📌 Anclar Anuncio' }
+        ],
+        [
+          { text: '🔘 Botones' }
       ],
       [
         { text: '📊 Dinámicas / Encuestas' },
@@ -582,24 +585,7 @@ export function notifyReactionListeners(data: { profileId: string; reactions: an
 }
 
 export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string, username: string) {
-  const reactions: any = profile.reactions || {};
-  const reactionRow1 = [
-    { text: `❤️ ${reactions.hearts || 0}`, callback_data: `react_heart_${profile.id}` },
-    { text: `🔥 ${reactions.fires || 0}`, callback_data: `react_fire_${profile.id}` },
-    { text: `👍 ${reactions.likes || 0}`, callback_data: `react_like_${profile.id}` },
-    { text: `🥰 ${reactions.in_love || 0}`, callback_data: `react_in_love_${profile.id}` },
-    { text: `💋 ${reactions.kiss || 0}`, callback_data: `react_kiss_${profile.id}` }
-  ];
-  const reactionRow2 = [
-    { text: `⭐ ${reactions.stars || 0}`, callback_data: `react_star_${profile.id}` },
-    { text: `😍 ${reactions.heart_eyes || 0}`, callback_data: `react_heart_eyes_${profile.id}` },
-    { text: `👏 ${reactions.clap || 0}`, callback_data: `react_clap_${profile.id}` },
-    { text: `🎉 ${reactions.party || 0}`, callback_data: `react_party_${profile.id}` },
-    { text: `🤩 ${reactions.star_struck || 0}`, callback_data: `react_star_struck_${profile.id}` }
-  ];
-
   const { appShortName } = getBotConfig();
-  const reqUrl = `https://t.me/${username}?start=req_${profile.id}`;
   const botAppUrl = `https://t.me/${username}/${appShortName || 'canalVipFreeIamDanii'}?startapp=ver_${profile.id}`;
 
   let customButtonRows: any[] = [];
@@ -612,14 +598,8 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
 
   return {
     inline_keyboard: [
-      reactionRow1,
-      reactionRow2,
       [
-        { text: '📱 Solicitar Disponibilidad', url: reqUrl },
-        { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
-      ],
-      [
-        { text: '💎 Abrir Canal VIP Free', url: botAppUrl }
+        { text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }
       ],
       ...customButtonRows
     ]
@@ -1007,10 +987,7 @@ export async function processTelegramUpdate(update: any) {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: profileUrl } }
-            ],
-            [
-              { text: '📱 Solicitar Disponibilidad', callback_data: `req_${profile.id}` }
+              { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: profileUrl } }
             ]
           ]
         }
@@ -1331,7 +1308,7 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  if (text === '/anclar' || text === '/pin') {
+  if (text === '/anclar' || text === '/pin' || text.includes('Anclar Anuncio')) {
     const { username } = getBotConfig();
     let cleanUsername = username || process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot';
     if (!cleanUsername || /ruti|flavia|iam_danii_vip_bot/i.test(cleanUsername)) {
@@ -1730,7 +1707,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
         inline_keyboard: [
           [
             { text: '🌐 Ver en Panel Web (Navegador)', url: adminLink },
-            { text: '💎 Abrir Canal VIP Free', web_app: { url: baseUrl } }
+            { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
           ]
         ]
       }
@@ -1766,12 +1743,9 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     ]);
   }
   inlineKeyboard.push([
-    { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+    { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
   ]);
-  inlineKeyboard.push([
-    { text: '💳 Métodos de Pago', callback_data: 'client_cmd_pagos' }
-  ]);
-  inlineKeyboard.push([
+    inlineKeyboard.push([
     { text: btnPrecios, callback_data: 'client_cmd_precios' },
     { text: btnInfo, callback_data: 'client_cmd_info' }
   ]);
@@ -1824,7 +1798,7 @@ export async function sendClientCanal(chatId: string | number) {
     ]);
   }
   inlineKeyboard.push([
-    { text: '💎 Abrir Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+    { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
     { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
@@ -1849,17 +1823,15 @@ export async function sendClientPrecios(chatId: string | number) {
     `• Trato confidencial y atención directa 1 a 1.\n\n` +
     `💵 *Tarifa Oficial:* Bs. 450 / mes (o pack promocional)\n\n` +
     `🔒 *Forma de Pago Segura:* La Administradora entrega el *QR oficial de pago* de forma 100% privada. Tras validar tu comprobante, recibirás el link privado y confidencial para unirte al Grupo/Canal VIP.\n\n` +
-    `_Explora el contenido en la Mini App y pulsa "Adquirir Contenido" para solicitar disponibilidad._`;
+    `_Explora el contenido en la Mini App y pulsa en Ver lo Exclusivo._`;
 
   return await sendMessage(chatId, text, {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
         ],
-        [
-          { text: '💳 Ver Métodos de Pago', callback_data: 'client_cmd_pagos' }
-        ],
+        
         [
           { text: btnInfo, callback_data: 'client_cmd_info' },
           { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
@@ -2005,11 +1977,9 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
   const botUsername = (username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
   const directMiniAppUrl = `https://t.me/${botUsername}/${appShortName || 'canalVipFreeIamDanii'}`;
   const inlineKeyboard = [
+    
     [
-      { text: '💳 Ver Métodos de Pago', url: `https://t.me/${botUsername}?start=pagos` }
-    ],
-    [
-      { text: '💎 Abrir Canal VIP Free', url: directMiniAppUrl }
+      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }
     ]
   ];
 
@@ -2041,7 +2011,7 @@ export async function sendClientInfo(chatId: string | number) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
         ],
         [
           { text: btnPrecios, callback_data: 'client_cmd_precios' },
@@ -2070,7 +2040,7 @@ export async function sendClientAyuda(chatId: string | number) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '💎 Ver Canal VIP Free (Mini App)', web_app: { url: baseUrl } }
+          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
         ],
         [
           { text: btnPrecios, callback_data: 'client_cmd_precios' },
@@ -2346,7 +2316,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
           { text: '🌐 Abrir Panel Admin (Chrome / Safari)', url: adminLink }
         ],
         [
-          { text: '💎 Abrir Canal VIP Free (Mini App Cliente)', web_app: { url: baseUrl } }
+          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
         ],
         [
           { text: btnNuevo, callback_data: 'admin_btn_new' },

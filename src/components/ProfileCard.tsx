@@ -173,7 +173,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
         
         {/* Columna Multimedia: Imágenes ARRIBA y Videos DEBAJO */}
-        <div className="bg-zinc-950 p-2 sm:p-4 space-y-2.5">
+        <div className="bg-zinc-950 p-2 sm:p-4 space-y-1">
           
           {/* 1. SECCIÓN IMÁGENES */}
           <div>
@@ -245,37 +245,39 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                   </span>
                 </div>
               )}
-            </div>
 
-            {/* Controles al pie: {< .......... >} centrados */}
-            {images.length > 1 && (
-              <div className="mt-1.5 flex items-center justify-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
-                  aria-label="Foto anterior"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </button>
-                <div className="flex gap-1">
-                  {images.map((_, idx) => (
-                    <span
-                      key={idx}
-                      className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                    />
-                  ))}
+              {/* Controles al pie: {< .......... >} centrados y SUPERPUESTOS */}
+              {images.length > 1 && (
+                <div className="absolute bottom-2 left-0 right-0 z-20 flex items-center justify-center gap-2.5 pointer-events-none">
+                  <button
+                    type="button"
+                    style={{ pointerEvents: 'auto' }}
+                    onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
+                    aria-label="Foto anterior"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex gap-1 bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+                    {images.map((_, idx) => (
+                      <span
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all ${idx === imageIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-400'}`}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    style={{ pointerEvents: 'auto' }}
+                    onClick={(e) => { e.stopPropagation(); moveImage(1); }}
+                    aria-label="Foto siguiente"
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); moveImage(1); }}
-                  aria-label="Foto siguiente"
-                  className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* 2. SECCIÓN VIDEOS (DEBAJO DE IMÁGENES CON SEPARADOR REDUCIDO) */}
@@ -342,37 +344,39 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                     </span>
                   </div>
                 )}
-              </div>
 
-              {/* Controles al pie: {< .......... >} centrados */}
-              {videos.length > 1 && (
-                <div className="mt-1.5 flex items-center justify-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
-                    aria-label="Video anterior"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                  >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </button>
-                  <div className="flex gap-1">
-                    {videos.map((_, idx) => (
-                      <span
-                        key={idx}
-                        className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-700'}`}
-                      />
-                    ))}
+                {/* Controles al pie: {< .......... >} centrados y SUPERPUESTOS */}
+                {videos.length > 1 && (
+                  <div className="absolute bottom-2 left-0 right-0 z-20 flex items-center justify-center gap-2.5 pointer-events-none">
+                    <button
+                      type="button"
+                      style={{ pointerEvents: 'auto' }}
+                      onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
+                      aria-label="Video anterior"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="flex gap-1 bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+                      {videos.map((_, idx) => (
+                        <span
+                          key={idx}
+                          className={`h-1.5 rounded-full transition-all ${idx === videoIndex ? 'w-3.5 bg-amber-400' : 'w-1.5 bg-zinc-400'}`}
+                        />
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      style={{ pointerEvents: 'auto' }}
+                      onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
+                      aria-label="Video siguiente"
+                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
-                    aria-label="Video siguiente"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
@@ -401,28 +405,17 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
               </a>
             )}
 
-            {/* Botones de Acción Ajustados y Reducidos (Grid de 2 Columnas) */}
-            <div className="pt-2 grid grid-cols-2 gap-2">
+            {/* Botones de Acción Ajustados (Un solo botón grande) */}
+            <div className="pt-2 flex">
               <button
                 type="button"
                 onClick={() => onRequestAvailability(profile)}
                 id={`btn-request-${profile.id}`}
-                className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/10 active:scale-95 transition-all cursor-pointer truncate"
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-sm font-black uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
               >
-                <Send className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Adquirir Contenido</span>
+                <Send className="h-4 w-4 shrink-0" />
+                <span>Adquirir Contenido</span>
               </button>
-
-              {onOpenPaymentMethods && (
-                <button
-                  type="button"
-                  onClick={onOpenPaymentMethods}
-                  className="py-2.5 px-3 rounded-xl border border-amber-500/35 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-amber-600/20 hover:from-amber-500/25 hover:to-amber-600/30 text-amber-300 hover:text-amber-200 text-xs font-extrabold flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-sm cursor-pointer truncate"
-                >
-                  <span className="shrink-0">💳</span>
-                  <span className="truncate">Métodos de Pago</span>
-                </button>
-              )}
             </div>
           </div>
 

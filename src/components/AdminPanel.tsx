@@ -3446,7 +3446,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       type="button"
                                       className="w-full py-2 px-3 rounded-lg bg-[#2b5278] text-white font-bold text-[11px] flex items-center justify-center gap-1.5 pointer-events-none"
                                     >
-                                      🔥 Abrir Canal VIP Free (Mini App)
+                                      🔥 Ver lo Exclusivo 🔥🔥🔥
                                     </button>
                                     <button
                                       type="button"
