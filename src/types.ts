@@ -14,17 +14,7 @@ export interface EphemeralMediaConfig {
 }
 
 export interface ProfileReactions {
-  likes?: number;       // 👍 Likes
-  hearts?: number;      // ❤️ Corazones
-  stars?: number;       // ⭐ Estrellas
-  fires?: number;       // 🔥 Fuego
-  in_love?: number;     // 🥰 Enamorado
-  kiss?: number;        // 💋 Beso
-  heart_eyes?: number;  // 😍 Ojos corazón
-  clap?: number;        // 👏 Aplausos
-  party?: number;       // 🎉 Fiesta
-  star_struck?: number; // 🤩 Emocionado
-  [key: string]: number | undefined;
+  [emoji: string]: number | undefined;
 }
 
 export interface CustomButton {

@@ -19,6 +19,8 @@ export default function App() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [adminContactUsername, setAdminContactUsername] = useState('Danii_Catalogo_SCZ_bot');
+  const [reactionsEnabled, setReactionsEnabled] = useState(false);
+  const [reactionsList, setReactionsList] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -278,6 +280,8 @@ export default function App() {
         if (info.channel_id) setChannelId(info.channel_id);
         if (info.pinned_message_text !== undefined) setPinnedText(info.pinned_message_text);
         if (info.pinned_message_active !== undefined) setPinnedActive(Boolean(info.pinned_message_active));
+          if (info.reactions_enabled !== undefined) setReactionsEnabled(Boolean(info.reactions_enabled));
+          if (info.reactions_list !== undefined) setReactionsList(info.reactions_list);
         if (info.model_display_name) setModelDisplayName(info.model_display_name);
         if (info.model_vip_link !== undefined) setModelVipLink(info.model_vip_link);
         if (info.welcome_media_url !== undefined) setWelcomeMediaUrl(info.welcome_media_url || '');
@@ -743,7 +747,7 @@ export default function App() {
       )}
 
       {/* Customer Availability Request Modal */}
-      <RequestModal
+        <RequestModal paymentMethods={paymentMethods}
         profile={requestProfile}
         modelName={displayName}
         tgUserContext={tgUser}

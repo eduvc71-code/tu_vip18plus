@@ -4,6 +4,8 @@ import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageS
 import { isVideoUrl } from './ProtectedMedia';
 
 interface ProfileDetailModalProps {
+  reactionsEnabled?: boolean;
+  reactionsList?: string[];
   profile: Profile | null;
   initialMediaUrl?: string;
   botUsername: string;
@@ -50,6 +52,10 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const [hasMediaError, setHasMediaError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showSlideIndicators, setShowSlideIndicators] = useState(true);
+  const [showReactions, setShowReactions] = useState(false);
+  const [isBlinking, setIsBlinking] = useState(false);
+  const [reactedEmojis, setReactedEmojis] = useState<Record<string, boolean>>({});
+  const reactionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const captionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const userInteractedWithSlideRef = useRef<boolean>(false);
   const hideIndicatorsTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -155,9 +161,16 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   };
 
   useEffect(() => {
+    if (reactionsEnabled && reactionsList.length > 0) {
+      setShowReactions(true);
+      setIsBlinking(false);
+      if (reactionTimerRef.current) clearTimeout(reactionTimerRef.current);
+      reactionTimerRef.current = setTimeout(() => setShowReactions(false), 5000);
+    }
     resetCaptionTimer();
     return () => {
       if (captionTimerRef.current) clearTimeout(captionTimerRef.current);
+      if (reactionTimerRef.current) clearTimeout(reactionTimerRef.current);
     };
   }, [activePhotoIdx, profile]);
 
@@ -166,6 +179,31 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
 
   // Helper para buscar estrellas coincidiendo rutas relativas y absolutas
+  
+  const handleReact = async (emoji: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (reactedEmojis[emoji] || !profile) return;
+    setReactedEmojis(prev => ({ ...prev, [emoji]: true }));
+    try {
+      await fetch('/api/react', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: profile.id, emoji })
+      });
+    } catch {}
+  };
+
+  const handleCloseIntercept = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (reactionsEnabled && !showReactions && Object.keys(reactedEmojis).length === 0) {
+      setShowReactions(true);
+      setIsBlinking(true);
+      setTimeout(() => onClose(), 1200);
+    } else {
+      onClose();
+    }
+  };
+
   const getStarsForUrl = (url: string): number | undefined => {
     if (!profile?.media_stars || !url) return undefined;
     if (profile.media_stars[url] !== undefined) return profile.media_stars[url];
@@ -329,7 +367,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         {/* Botón Volver */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleCloseIntercept}
           className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white transition-all backdrop-blur-md shadow-md text-xs font-bold cursor-pointer active:scale-95"
           title="Volver a la galería"
         >
@@ -352,7 +390,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         {/* Botón Cerrar (X) */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleCloseIntercept}
           aria-label="Cerrar visor"
           className="p-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95 backdrop-blur-md"
         >
@@ -502,13 +540,26 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-5 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex flex-col items-center gap-2">
           {/* Reactions */}
-          <div className="flex items-center justify-between gap-4 bg-zinc-950/60 border border-zinc-800/80 backdrop-blur-md rounded-full px-5 py-1.5 shadow-lg w-auto">
-            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
-            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
-            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
-            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
-            <button type="button" onClick={(e)=>e.stopPropagation()} className="hover:scale-125 transition-transform cursor-pointer active:scale-90 text-sm sm:text-base">??</button>
-          </div>
+          {reactionsEnabled && reactionsList.length > 0 && (
+            <div className={`flex items-center justify-center gap-3.5 sm:gap-4 bg-zinc-950/70 border border-zinc-800/80 backdrop-blur-md rounded-full px-5 py-2 shadow-lg transition-all duration-500 ease-out transform ${showReactions ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'} ${isBlinking ? 'animate-pulse border-amber-500/50 shadow-amber-500/20' : ''}`}>
+              {reactionsList.map(emoji => (
+                <button 
+                  key={emoji}
+                  type="button" 
+                  onClick={(e) => handleReact(emoji, e)} 
+                  className={`relative transition-transform cursor-pointer active:scale-90 text-base sm:text-lg ${reactedEmojis[emoji] ? 'scale-125' : 'hover:scale-125'}`}
+                >
+                  {emoji}
+                  {reactedEmojis[emoji] && (
+                    <span className="absolute -top-2 -right-2 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex items-center gap-2">
             {currentStars && currentStars > 0 ? (
               isCurrentMediaLocked ? (
@@ -536,7 +587,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onClose();
+                  handleCloseIntercept();
                   if (onOpenPaymentMethods) {
                     onOpenPaymentMethods();
                   }

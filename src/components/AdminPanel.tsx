@@ -431,6 +431,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
   const [adminContactUsername, setAdminContactUsername] = useState('');
+  const [reactionsEnabled, setReactionsEnabled] = useState(false);
+  const [reactionsList, setReactionsList] = useState<string[]>(['❤️', '🔥', '😍', '😘', '💦']);
   const [autoReplyDelay, setAutoReplyDelay] = useState('10');
   const [modelDisplayName, setModelDisplayName] = useState('');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -639,6 +641,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(infoData.auto_reply_delay_minutes));
         if (infoData.qr_image_url !== undefined) setQrImageUrl(infoData.qr_image_url);
         if (infoData.admin_contact_username !== undefined) setAdminContactUsername(infoData.admin_contact_username || '');
+        if (infoData.reactions_enabled !== undefined) setReactionsEnabled(Boolean(infoData.reactions_enabled));
+        if (infoData.reactions_list !== undefined && Array.isArray(infoData.reactions_list)) setReactionsList(infoData.reactions_list);
         if (infoData.pinned_message_text !== undefined) setPinnedMessageText(infoData.pinned_message_text);
         if (infoData.pinned_message_active !== undefined) setPinnedMessageActive(Boolean(infoData.pinned_message_active));
         if (infoData.channel_id) setChannelIdInput(infoData.channel_id);
@@ -1502,6 +1506,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({
           bot_username: newBotUsername,
           admin_contact_username: adminContactUsername,
+            reactions_enabled: reactionsEnabled,
+            reactions_list: reactionsList,
           channel_id: channelIdInput,
           telegram_only_access: true,
           auto_reply_delay_minutes: autoReplyDelay,
@@ -4408,7 +4414,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </form>
 
-                {/* AUTO REPLY DELAY */}
+                
+                {/* REACCIONES INTERACTIVAS */}
+                <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
+                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-amber-400" /> Reacciones Interactivas (Mini App & Canal)
+                  </h4>
+                  <p className="text-zinc-400">
+                    Habilita la barra flotante de 5 segundos con iconos de reacci�n al abrir fotos o videos. Al reaccionar en la Mini App, el contador se actualizar� en el Canal VIP autom�ticamente.
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer w-fit">
+                      <input 
+                        type="checkbox" 
+                        checked={reactionsEnabled} 
+                        onChange={(e) => setReactionsEnabled(e.target.checked)} 
+                        className="w-4 h-4 rounded accent-amber-500 cursor-pointer" 
+                      />
+                      <span className="text-sm font-bold text-white">Habilitar visualizaci�n de Reacciones</span>
+                    </label>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[11px] font-bold text-zinc-400">Lista de iconos (Sep�ralos por un espacio):</label>
+                      <input 
+                         type="text"
+                         value={reactionsList.join(' ')}
+                         onChange={(e) => setReactionsList(e.target.value.split(/s+/).filter(Boolean))}
+                         className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-base focus:outline-none focus:border-amber-500"
+                         placeholder="?? ?? ?? ?? ??"
+                      />
+                    </div>
+                    <div className="flex justify-end mt-1">
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0 disabled:opacity-60"
+                      >
+                        Guardar Reacciones
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                {/* AUTO REPLY DELAY */} 
+
                 <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
                   <h4 className="text-sm font-bold text-white flex items-center gap-2">
                     <Clock className="w-4 h-4 text-amber-400" /> Tiempo de Respuesta Automática del Bot

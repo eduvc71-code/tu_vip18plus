@@ -267,6 +267,33 @@ router.get('/events', (req: Request, res: Response) => {
   });
 });
 
+// POST Add Reaction to Profile
+router.post('/react', async (req: Request, res: Response) => {
+  try {
+    const { profile_id, emoji } = req.body;
+    if (!profile_id || !emoji) return res.status(400).json({ error: 'Faltan datos' });
+
+    const profile = await getProfileById(profile_id);
+    if (!profile) return res.status(404).json({ error: 'Perfil no encontrado' });
+
+    const reactions = profile.reactions || {};
+    reactions[emoji] = (reactions[emoji] || 0) + 1;
+    profile.reactions = reactions;
+
+    await saveProfile(profile);
+
+    if (profile.telegram_message_id) {
+      setTimeout(() => {
+        updateTelegramMessageReactions(profile_id).catch(console.warn);
+      }, 500);
+    }
+
+    res.json({ success: true, reactions });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar la reacción' });
+  }
+});
+
 // GET Public Info & Bot Status
 router.get('/info', (_req: Request, res: Response) => {
   const config = getBotConfig();
@@ -284,6 +311,8 @@ router.get('/info', (_req: Request, res: Response) => {
     auto_reply_delay_minutes: autoReplyDelay,
     qr_image_url: getSystemSetting('qr_image_url') || '',
     admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'Danii_Catalogo_SCZ_bot',
+      reactions_enabled: getSystemSetting('reactions_enabled') === 'true',
+      reactions_list: JSON.parse(getSystemSetting('reactions_list') || '["❤️", "🔥", "😍", "😘", "💦"]'),
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
     model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
@@ -1469,7 +1498,7 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res:
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description, reactions_enabled, reactions_list } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
