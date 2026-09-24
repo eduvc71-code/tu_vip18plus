@@ -43,6 +43,7 @@ import {
   RotateCcw,
   Save,
   HelpCircle,
+  Heart,
   Download,
   Smartphone
 } from 'lucide-react';

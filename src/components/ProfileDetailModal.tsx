@@ -17,6 +17,8 @@ interface ProfileDetailModalProps {
 }
 
 export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
+  reactionsEnabled = false,
+  reactionsList = [],
   profile,
   initialMediaUrl,
   botUsername: _botUsername,
