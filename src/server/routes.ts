@@ -458,8 +458,8 @@ export function startAutoReplyWorker(): NodeJS.Timeout {
 // POST Customer Availability Request
 router.post('/requests', async (req: Request, res: Response) => {
   try {
-    const { profile_id, client_name, client_telegram, tg_user_id, telegram_init_data } = req.body;
-    const purchaseMessage = 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
+    const { profile_id, client_name, client_telegram, tg_user_id, telegram_init_data, notes } = req.body;
+    const purchaseMessage = notes || 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
 
     const verifiedTelegram = verifyTelegramWebAppData(String(telegram_init_data || ''));
     if (tg_user_id && !verifiedTelegram.valid) {
@@ -552,7 +552,10 @@ router.post('/requests', async (req: Request, res: Response) => {
     if (safeUserId) {
       const publicName = getSystemSetting('model_display_name') || profile.name || 'IAM Danii';
       const brandTitle = `${publicName} • Espacio VIP (+18)`;
-      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}* (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs}).\n\nLa Administradora procesará tu consulta de forma confidencial y te responderá directamente a este chat en breve.`;
+      const isSpecialPlan = /SEMESTRAL|PERMANENTE/i.test(purchaseMessage);
+      const planDetail = isSpecialPlan ? "" : ` (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs})`;
+      const adminUsername = getSystemSetting('admin_contact_username') || 'Danii_Catalogo_SCZ_bot';
+      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}*${planDetail}.\n\nSu mensaje se envío a la Administradora (@${adminUsername}) y se le responderá en breve.`;
       await sendMessage(safeUserId, userConfirmText);
       await scheduleAutoReply(request.id);
     } else {
