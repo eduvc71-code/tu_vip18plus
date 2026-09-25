@@ -440,6 +440,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [vipPreviewUrl, setVipPreviewUrl] = useState<string | null>(null);
   const [vipPreviewType, setVipPreviewType] = useState<'image' | 'video' | null>(null);
   const [freePreviewType, setFreePreviewType] = useState<'image' | 'video' | null>(null);
+  const [watermarkEnabled, setWatermarkEnabled] = useState(() => {
+    return localStorage.getItem('watermarkEnabled') === 'true' || false;
+  });
+  const [watermarkText, setWatermarkText] = useState(() => {
+    return localStorage.getItem('watermarkText') || '';
+  });
+
+  // Efecto para guardar en memoria
+  useEffect(() => {
+    localStorage.setItem('watermarkEnabled', String(watermarkEnabled));
+    localStorage.setItem('watermarkText', watermarkText);
+  }, [watermarkEnabled, watermarkText]);
+
   const [autoReplyDelay, setAutoReplyDelay] = useState('10');
   const [modelDisplayName, setModelDisplayName] = useState('');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -750,6 +763,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  
+  const addWatermarkToImage = async (file: File, text: string): Promise<File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file); // Retornar videos tal cual por ahora
+        return;
+      }
+      
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0);
+        
+        // Configurar estilo de marca de agua
+        // Tamaño de fuente relativo al ancho de la imagen (ej: 5%)
+        const fontSize = Math.max(20, Math.floor(canvas.width * 0.05));
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)'; // Blanco semi transparente
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Dibujar texto en el centro (podría ser repetido en diagonal)
+        ctx.save();
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(-Math.PI / 4); // Rotar -45 grados
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+        
+        // Además, dibujar pequeño en una esquina abajo a la derecha
+        ctx.font = `bold ${Math.max(14, Math.floor(canvas.width * 0.025))}px sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.textAlign = 'right';
+        ctx.fillText(text, canvas.width - 20, canvas.height - 20);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const stampedFile = new File([blob], file.name, { type: file.type });
+            resolve(stampedFile);
+          } else {
+            resolve(file);
+          }
+        }, file.type, 0.9);
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
   };
 
   const handleUploadPhotos = async (profileId: string) => {
@@ -2269,17 +2338,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() => setUploadInitialStatus(1)}
-                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                    uploadInitialStatus === 1
-                                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
-                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  <span>🟢 Publicada (Activa)</span>
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => setUploadInitialStatus(2)}
                                   className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
                                     uploadInitialStatus === 2
@@ -2289,7 +2347,40 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 >
                                   <span>🟡 Borrador (Oculto)</span>
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadInitialStatus(1)}
+                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                    uploadInitialStatus === 1
+                                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
+                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟢 Publicada (Activa)</span>
+                                </button>
                               </div>
+                            </div>
+
+                                                        {/* MARCA DE AGUA */}
+                            <div className="p-3 bg-zinc-900/80 border border-zinc-700/80 rounded-xl space-y-2.5 mb-3">
+                              <div className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={watermarkEnabled}
+                                  onChange={(e) => setWatermarkEnabled(e.target.checked)}
+                                  className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
+                                />
+                                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                  Confirmar Marca de Agua (Requerido)
+                                </span>
+                              </div>
+                              <input
+                                type="text"
+                                value={watermarkText}
+                                onChange={(e) => setWatermarkText(e.target.value)}
+                                placeholder="Escribe el texto de tu marca de agua (ej: @TuVIPBot)"
+                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-emerald-500"
+                              />
                             </div>
 
                             {/* Selector de archivos para subir */}
@@ -2436,7 +2527,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <button
                                 type="button"
                                 onClick={() => handleUploadPhotos(editingProfile.id)}
-                                disabled={uploadingPhotos}
+                                disabled={uploadingPhotos || !watermarkEnabled || watermarkText.trim() === ''}
                                 className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
                                   uploadInitialStatus === 1
                                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
