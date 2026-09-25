@@ -11,7 +11,7 @@ import {
   deleteB2Media
 } from './b2Storage.js';
 import {
-  getPublicProfiles,
+  getPublicProfiles, getAllProfiles,
   getProfileById,
   getAllProfiles,
   saveProfile,
@@ -2023,7 +2023,7 @@ router.post('/admin/system/database-vacuum', requireAdminAuth, async (req: Reque
 // POST Migración B2 a Telegram (Una sola vez)
 router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const profiles = await getProfiles(); // from db.ts
+    const profiles = await getAllProfiles(); // from db.ts
     const config = getBotConfig();
     let migratedCount = 0;
     let skipCount = 0;
