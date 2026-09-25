@@ -1689,3 +1689,15 @@ export async function vacuumAndCompactDb(): Promise<{
 }
 
 
+
+export async function getAllSubscribers(): Promise<any[]> {
+  const database = await getDb();
+  const res = database.exec('SELECT * FROM subscribers');
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map(row => {
+    const obj: any = {};
+    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+    return obj;
+  });
+}

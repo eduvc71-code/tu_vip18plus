@@ -1431,7 +1431,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: string) => {
+  
+  const handleBroadcastMedia = async (mediaUrl: string) => {
+    if (!confirm('¿Estás seguro de que quieres enviar una difusión masiva por mensaje privado a TODOS los suscriptores del bot con este contenido? Esto puede tardar varios segundos.')) return;
+    try {
+      setMessage({ type: 'info', text: 'Iniciando difusión masiva...' });
+      const res = await fetch(`/api/admin/profiles/${editingProfile?.id}/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ media_url: mediaUrl })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: 'success', text: data.message || `Difusión iniciada a ${data.count} suscriptores.` });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al iniciar difusión' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al intentar enviar la difusión masiva.' });
+    }
+  };
+
+const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: string) => {
     if (!editingProfile) return;
     const currentDesc = { ...(editingProfile.media_descriptions || {}) };
     if (descriptionText.trim()) {
@@ -3816,7 +3840,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   </button>
                                 )}
 
-                                <button
+                                
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (enlargedMediaUrl) handleBroadcastMedia(enlargedMediaUrl);
+                                    }}
+                                    className="py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                    title="Enviar por mensaje privado a todos los suscriptores del bot"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                    Difusión a Suscriptores 📢
+                                  </button>
+
+<button
                                   type="button"
                                   onClick={() => {
                                     if (enlargedMediaUrl) handleDeleteMediaPermanently(enlargedMediaUrl);

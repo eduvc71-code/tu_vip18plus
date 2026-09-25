@@ -1330,6 +1330,87 @@ router.put('/admin/profiles/:id/content/vip', requireAdminAuth, async (req: Requ
 });
 
 // BOT MEDIA QUEUE ENDPOINTS (/admin/bot-queue)
+
+// POST Difusión Masiva a Suscriptores
+router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url } = req.body;
+    if (!media_url) {
+      res.status(400).json({ error: 'URL multimedia requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const subscribers = await getAllSubscribers();
+    if (!subscribers.length) {
+      res.status(400).json({ error: 'No hay suscriptores registrados en el bot.' });
+      return;
+    }
+
+    const isPaid = profile.media_stars && profile.media_stars[media_url] && profile.media_stars[media_url] > 0;
+    const starCount = isPaid ? profile.media_stars[media_url] : 0;
+    const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
+    
+    // Import telegram functions
+    const { sendPaidMediaToChannel, buildChannelPostMarkup, callTelegramApi } = require('./telegram');
+    const { getBotConfig } = require('./telegram');
+    const { baseUrl, username } = getBotConfig();
+
+    let successCount = 0;
+    let failCount = 0;
+
+    // Send asynchronously to avoid blocking the HTTP response for too long
+    // But we will await a few just to know if it starts correctly, or we can just run it in background.
+    // For safety and immediate feedback of starting, we'll run it async.
+    
+    res.json({ success: true, message: `Difusión iniciada para ${subscribers.length} suscriptores.`, count: subscribers.length });
+
+    (async () => {
+      const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
+      const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media_url) || media_url.includes('/video');
+      const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+      const mediaTarget = tgMatch ? tgMatch[1] : media_url;
+
+      for (const sub of subscribers) {
+        try {
+          if (isPaid) {
+            await sendPaidMediaToChannel({
+              mediaUrl: media_url,
+              starCount,
+              caption: captionText,
+              channelId: sub.telegram_user_id
+            });
+          } else {
+            const method = isVideo ? 'sendVideo' : 'sendPhoto';
+            const field = isVideo ? 'video' : 'photo';
+            await callTelegramApi(method, {
+              chat_id: sub.telegram_user_id,
+              [field]: mediaTarget,
+              caption: captionText,
+              parse_mode: 'Markdown',
+              reply_markup: replyMarkup
+            });
+          }
+          successCount++;
+        } catch (e) {
+          failCount++;
+        }
+        // Small delay to prevent hitting Telegram API limits (30 msg/sec)
+        await new Promise(r => setTimeout(r, 50));
+      }
+      console.log(`Broadcast finished. Success: ${successCount}, Failed: ${failCount}`);
+    })();
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al iniciar la difusión', details: err?.message });
+  }
+});
+
 router.get('/admin/bot-queue', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const queue = await getBotMediaQueue();
