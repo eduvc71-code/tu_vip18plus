@@ -51,7 +51,7 @@ import {
   getDatabaseStats,
   vacuumAndCompactDb
 } from './db.js';
-import {
+import { 
   processTelegramUpdate,
   syncProfileToChannel,
   verifyAdminToken,
@@ -70,7 +70,7 @@ import {
   createStarsInvoiceLink,
   getTelegramFilePath,
   uploadBufferToTelegram
-} from './telegram.js';
+, callTelegramApi, buildChannelPostMarkup } from './telegram.js';
 
 export const router = express.Router();
 
@@ -1357,9 +1357,6 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
     const starCount = isPaid ? profile.media_stars[media_url] : 0;
     const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
     
-    // Import telegram functions
-    const { sendPaidMediaToChannel, buildChannelPostMarkup, callTelegramApi } = require('./telegram');
-    const { getBotConfig } = require('./telegram');
     const { baseUrl, username } = getBotConfig();
 
     let successCount = 0;
@@ -1384,7 +1381,8 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
               mediaUrl: media_url,
               starCount,
               caption: captionText,
-              channelId: sub.telegram_user_id
+              channelId: sub.telegram_user_id,
+              profileId: profile.id
             });
           } else {
             const method = isVideo ? 'sendVideo' : 'sendPhoto';

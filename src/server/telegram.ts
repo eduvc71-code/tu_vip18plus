@@ -2660,8 +2660,9 @@ export async function sendPaidMediaToChannel(params: {
   starCount: number;
   caption?: string;
   channelId?: string;
+  profileId?: string;
 }): Promise<{ ok: boolean; messageId?: number; error?: string }> {
-  const { channelId, username } = getBotConfig();
+  const { channelId, username, baseUrl } = getBotConfig();
   const targetChannel = params.channelId || channelId;
   if (!targetChannel) {
     return { ok: false, error: 'No se ha configurado un ID o @canal en el sistema.' };
@@ -2691,6 +2692,20 @@ export async function sendPaidMediaToChannel(params: {
   
   payload.caption = finalCaption;
   payload.parse_mode = 'Markdown';
+
+  if (params.profileId) {
+    const { getProfileById } = require('./db.js');
+    const profile = await getProfileById(params.profileId, false);
+    if (profile) {
+      payload.reply_markup = await buildChannelPostMarkup(profile, baseUrl, username);
+    }
+  } else {
+    payload.reply_markup = {
+      inline_keyboard: [
+        [{ text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }]
+      ]
+    };
+  }
 
   const res = await callTelegramApi('sendPaidMedia', payload);
   if (res && res.ok && res.result) {
