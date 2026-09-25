@@ -684,6 +684,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    if (coverFile && coverFile.size > 20 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'El archivo de portada no puede pesar más de 20 MB por la política de Telegram Puro.' });
+      setLoading(false);
+      return;
+    }
     setMessage(null);
     try {
       const isEdit = Boolean(editingProfile);
@@ -740,6 +745,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleUploadPhotos = async (profileId: string) => {
     if (!selectedPhotoFiles || selectedPhotoFiles.length === 0) return;
     setUploadingPhotos(true);
+    for (let i = 0; i < selectedPhotoFiles.length; i++) {
+      if (selectedPhotoFiles[i].size > 20 * 1024 * 1024) {
+        setMessage({ type: 'error', text: 'Uno de los archivos pesa más de 20 MB. Telegram solo permite descargar hasta 20 MB a través de bots.' });
+        setUploadingPhotos(false);
+        return;
+      }
+    }
     try {
       const body = new FormData();
       for (let i = 0; i < selectedPhotoFiles.length; i++) {
@@ -785,6 +797,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleUploadVipMedia = async (profileId: string) => {
+    if (vipFile && vipFile.size > 20 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'El archivo VIP no puede pesar más de 20 MB por las restricciones de Telegram Puro.' });
+      return;
+    }
     if (!vipFile) {
       setMessage({ type: 'error', text: 'Selecciona una foto o video para el contenido VIP' });
       return;
@@ -895,6 +911,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleUploadBotMedia = async () => {
+    if (botFile && botFile.size > 20 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'El archivo no puede pesar más de 20 MB.' });
+      return;
+    }
     if (!botFile) {
       setMessage({ type: 'error', text: 'Selecciona una foto o video para la biblioteca del Bot' });
       return;
@@ -1337,6 +1357,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleUploadWelcomeMedia = async (file: File) => {
+    if (file && file.size > 20 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'El archivo de bienvenida no puede pesar más de 20 MB.' });
+      return;
+    }
     setUploadingWelcomeMedia(true);
     try {
       const fd = new FormData();

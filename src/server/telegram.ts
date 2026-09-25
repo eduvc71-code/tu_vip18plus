@@ -730,7 +730,7 @@ export async function uploadBufferToTelegram(
     return { ok: false, isVideo: false, error: 'Telegram BOT_TOKEN no configurado' };
   }
 
-  const targetChatId = chatId || adminIds[0] || channelId;
+  const targetChatId = chatId || getSystemSetting('bodega_channel_id') || adminIds[0] || channelId;
   if (!targetChatId) {
     return { ok: false, isVideo: false, error: 'No se encontró chat o canal de Telegram para almacenar el archivo' };
   }

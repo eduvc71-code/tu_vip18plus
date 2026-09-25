@@ -825,7 +825,11 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
 
     if (files && files.length > 0) {
       for (const file of files) {
-        if (isB2Configured()) {
+        const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype);
+        if (tgRes.ok && tgRes.fileId) {
+          const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+          uploadedUrls.push(`${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`);
+        } else if (isB2Configured()) {
           const objectKey = await uploadToB2(file, 'profiles');
           uploadedUrls.push(mediaUrl(config.baseUrl, objectKey));
         } else {
@@ -1668,9 +1672,18 @@ router.post('/admin/settings/welcome-media', requireAdminAuth, upload.single('we
     const config = getBotConfig();
     const isVideo = req.file.mimetype.startsWith('video/');
     const mediaType = isVideo ? 'video' : 'photo';
-    const mediaFileUrl = isB2Configured()
-      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'profiles'))
-      : saveLocalUpload(req.file, config.baseUrl);
+    
+    let mediaFileUrl = '';
+    const tgRes = await uploadBufferToTelegram(req.file.buffer, req.file.originalname, req.file.mimetype);
+    if (tgRes.ok && tgRes.fileId) {
+      const ext = tgRes.isVideo ? '.mp4' : (require('path').extname(req.file.originalname) || '.jpg');
+      mediaFileUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+    } else {
+      mediaFileUrl = isB2Configured()
+        ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'profiles'))
+        : saveLocalUpload(req.file, config.baseUrl);
+    }
+
 
     saveSystemSetting('welcome_media_url', mediaFileUrl);
     saveSystemSetting('welcome_media_type', mediaType);
