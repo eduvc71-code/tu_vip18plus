@@ -1149,6 +1149,14 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
+  if (normText.startsWith('/bodega')) {
+    if (isAdminUser(fromId)) {
+      saveSystemSetting('bodega_channel_id', String(chatId));
+      await sendMessage(chatId, '📦 *BODEGA ENLAZADA* 📦\n\nID Interno: ' + chatId);
+    }
+    return;
+  }
+
   if (normText.startsWith('/setcanal') || normText.startsWith('/canal_id')) {
     if (!isAdminUser(fromId)) {
       await sendMessage(chatId, '🔒 Solo administradoras autorizadas pueden vincular el canal. Primero envía `/admin 2024`.');
