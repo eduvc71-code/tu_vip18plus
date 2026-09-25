@@ -2018,3 +2018,89 @@ router.post('/admin/system/database-vacuum', requireAdminAuth, async (req: Reque
   }
 });
 
+
+
+// POST Migración B2 a Telegram (Una sola vez)
+router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profiles = await getProfiles(); // from db.ts
+    const config = getBotConfig();
+    let migratedCount = 0;
+    let skipCount = 0;
+    const errors: string[] = [];
+
+    for (const profile of profiles) {
+      if (!profile.photos || profile.photos.length === 0) continue;
+      
+      const newPhotos: string[] = [];
+      let changed = false;
+      const newStars = { ...(profile.media_stars || {}) };
+      const newDescs = { ...(profile.media_descriptions || {}) };
+      const newStatus = { ...(profile.media_status || {}) };
+      const newEphem = { ...(profile.ephemeral_config || {}) };
+      const tgFileIds = { ...(profile.telegram_media_file_ids || {}) };
+
+      for (const oldUrl of profile.photos) {
+        if (oldUrl.includes('/api/telegram-media/')) {
+          newPhotos.push(oldUrl);
+          skipCount++;
+          continue;
+        }
+
+        try {
+          console.log(`Migrando: ${oldUrl}`);
+          const fetchRes = await fetch(oldUrl);
+          if (!fetchRes.ok) throw new Error(`Fetch failed: ${fetchRes.statusText}`);
+          const arrayBuffer = await fetchRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          const ext = path.extname(oldUrl).toLowerCase() || '.jpg';
+          let mimeType = 'image/jpeg';
+          if (ext === '.mp4') mimeType = 'video/mp4';
+          else if (ext === '.webm') mimeType = 'video/webm';
+          else if (ext === '.png') mimeType = 'image/png';
+          else if (ext === '.gif') mimeType = 'image/gif';
+
+          const tgRes = await uploadBufferToTelegram(buffer, `mig_${Date.now()}${ext}`, mimeType);
+          
+          if (tgRes.ok && tgRes.fileId) {
+            const finalUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+            newPhotos.push(finalUrl);
+            tgFileIds[finalUrl] = tgRes.fileId;
+            
+            if (newStars[oldUrl]) { newStars[finalUrl] = newStars[oldUrl]; delete newStars[oldUrl]; }
+            if (newDescs[oldUrl]) { newDescs[finalUrl] = newDescs[oldUrl]; delete newDescs[oldUrl]; }
+            if (newStatus[oldUrl]) { newStatus[finalUrl] = newStatus[oldUrl]; delete newStatus[oldUrl]; }
+            if (newEphem[oldUrl]) { newEphem[finalUrl] = newEphem[oldUrl]; delete newEphem[oldUrl]; }
+            
+            changed = true;
+            migratedCount++;
+            console.log(`Éxito -> ${finalUrl}`);
+          } else {
+            errors.push(`Telegram rechazó ${oldUrl}: ${tgRes.error}`);
+            newPhotos.push(oldUrl);
+          }
+        } catch (err: any) {
+          errors.push(`Error descargando ${oldUrl}: ${err.message}`);
+          newPhotos.push(oldUrl);
+        }
+      }
+
+      if (changed) {
+        await saveProfile({
+          id: profile.id,
+          photos: newPhotos,
+          media_stars: newStars,
+          media_descriptions: newDescs,
+          media_status: newStatus,
+          ephemeral_config: newEphem,
+          telegram_media_file_ids: tgFileIds
+        });
+      }
+    }
+
+    res.json({ success: true, migratedCount, skipCount, errors });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error general en migración', details: err?.message });
+  }
+});
