@@ -501,7 +501,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
-  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(2);
+  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
 
   // Step 2 Sub-Tabs ('free': Subir Contenido Free, 'vip': Subir Contenido VIP, 'bot': Contenido / Bot)
   const [step2Tab, setStep2Tab] = useState<'free' | 'vip' | 'bot'>('free');
@@ -561,7 +561,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!message) return;
     const timer = setTimeout(() => {
       setMessage(null);
-    }, 3500);
+    }, 8000);
     return () => clearTimeout(timer);
   }, [message]);
   const [buttonFormData, setButtonFormData] = useState({
@@ -2350,17 +2350,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
                                 <button
                                   type="button"
-                                  onClick={() => setUploadInitialStatus(2)}
-                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                    uploadInitialStatus === 2
-                                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
-                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  <span>🟡 Borrador (Oculto)</span>
-                                </button>
-                                <button
-                                  type="button"
                                   onClick={() => setUploadInitialStatus(1)}
                                   className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
                                     uploadInitialStatus === 1
@@ -2369,6 +2358,17 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   }`}
                                 >
                                   <span>🟢 Publicada (Activa)</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setUploadInitialStatus(2)}
+                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                    uploadInitialStatus === 2
+                                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
+                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                                  }`}
+                                >
+                                  <span>🟡 Borrador (Oculto)</span>
                                 </button>
                               </div>
                             </div>
