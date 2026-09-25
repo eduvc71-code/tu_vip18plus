@@ -4044,32 +4044,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
             {/* TAB: TELEGRAM & SETTINGS */}
 
-      {/* MIGRATION BUTTON */}
-      <div className="mt-8 p-4 bg-zinc-900 border border-amber-500 rounded-xl">
-        <h3 className="text-white font-bold mb-2">🚀 Migración B2 -&gt; Telegram</h3>
-        <p className="text-zinc-400 text-xs mb-4">Usa este botón una sola vez para mudar tus fotos antiguas hacia la nueva Bodega y dejar de usar Backblaze.</p>
-        <button
-          type="button"
-          onClick={async () => {
-            const btn = document.getElementById('mig-btn');
-            if(btn) btn.innerText = 'Migrando... (Por favor espera 1 min)';
-            try {
-              const res = await fetch('/api/admin/system/migrate-b2', { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-              const data = await res.json();
-              alert('Migración Completada! ' + JSON.stringify(data, null, 2));
-              if(btn) btn.innerText = '¡Migración Finalizada!';
-            } catch(e) {
-              alert('Error: ' + e);
-              if(btn) btn.innerText = 'Error';
-            }
-          }}
-          id="mig-btn"
-          className="bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 px-4 rounded-lg text-sm transition-colors w-full"
-        >
-          Iniciar Migración Automática
-        </button>
-      </div>
-
             {activeTab === 'telegram' && (
               <div className="space-y-6 text-xs">
 
