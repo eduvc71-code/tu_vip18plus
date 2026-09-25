@@ -729,7 +729,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           try {
             const body = new FormData();
             for (let i = 0; i < selectedPhotoFiles.length; i++) {
-              body.append('photos', selectedPhotoFiles[i]);
+              const originalFile = selectedPhotoFiles[i];
+              if (watermarkEnabled && watermarkText.trim() !== '') {
+                const stampedFile = await addWatermarkToImage(originalFile, watermarkText.trim());
+                body.append('photos', stampedFile);
+              } else {
+                body.append('photos', originalFile);
+              }
             }
             await fetch(`/api/admin/profiles/${targetProfileId}/photos`, {
               method: 'POST',
@@ -833,9 +839,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
     try {
       const body = new FormData();
-      for (let i = 0; i < selectedPhotoFiles.length; i++) {
-        body.append('photos', selectedPhotoFiles[i]);
-      }
+            for (let i = 0; i < selectedPhotoFiles.length; i++) {
+              const originalFile = selectedPhotoFiles[i];
+              if (watermarkEnabled && watermarkText.trim() !== '') {
+                const stampedFile = await addWatermarkToImage(originalFile, watermarkText.trim());
+                body.append('photos', stampedFile);
+              } else {
+                body.append('photos', originalFile);
+              }
+            }
       if (uploadComment.trim()) {
         body.append('description', uploadComment.trim());
       }

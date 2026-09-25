@@ -1347,26 +1347,38 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
       return;
     }
 
-    const subscribers = await getAllSubscribers();
-    if (!subscribers.length) {
-      res.status(400).json({ error: 'No hay suscriptores registrados en el bot.' });
-      return;
+    const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+    const { baseUrl, username, channelId } = getBotConfig();
+
+    let subscribers = [];
+    if (operatingMode === 'solo_bot') {
+      subscribers = await getAllSubscribers();
+      if (!subscribers.length) {
+        res.status(400).json({ error: 'No hay suscriptores registrados para enviar difusión masiva.' });
+        return;
+      }
+    } else if (operatingMode === 'hibrido') {
+      if (!channelId) {
+        res.status(400).json({ error: 'Modo Híbrido: No hay un ID de canal configurado.' });
+        return;
+      }
     }
 
     const isPaid = profile.media_stars && profile.media_stars[media_url] && profile.media_stars[media_url] > 0;
     const starCount = isPaid ? profile.media_stars[media_url] : 0;
     const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
     
-    const { baseUrl, username } = getBotConfig();
+    // Change status to 1 (Activo)
+    const currentStatus = { ...(profile.media_status || {}) };
+    currentStatus[media_url] = 1;
+    await saveProfile({ id: profileId, media_status: currentStatus });
+    broadcastEvent('PROFILE_UPDATED', { id: profileId });
 
-    let successCount = 0;
-    let failCount = 0;
-
-    // Send asynchronously to avoid blocking the HTTP response for too long
-    // But we will await a few just to know if it starts correctly, or we can just run it in background.
-    // For safety and immediate feedback of starting, we'll run it async.
-    
-    res.json({ success: true, message: `Difusión iniciada para ${subscribers.length} suscriptores.`, count: subscribers.length });
+    if (operatingMode === 'hibrido') {
+      res.json({ success: true, message: 'Publicado exitosamente en el Canal VIP Free y Mini App.' });
+    } else {
+      res.json({ success: true, message: `Publicado en Mini App y Difusión iniciada a ${subscribers.length} suscriptores.`, count: subscribers.length });
+    }
 
     (async () => {
       const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
@@ -1374,38 +1386,66 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
       const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
       const mediaTarget = tgMatch ? tgMatch[1] : media_url;
 
-      for (const sub of subscribers) {
+      if (operatingMode === 'hibrido') {
         try {
           if (isPaid) {
             await sendPaidMediaToChannel({
               mediaUrl: media_url,
               starCount,
               caption: captionText,
-              channelId: sub.telegram_user_id,
+              channelId: channelId,
               profileId: profile.id
             });
           } else {
             const method = isVideo ? 'sendVideo' : 'sendPhoto';
             const field = isVideo ? 'video' : 'photo';
             await callTelegramApi(method, {
-              chat_id: sub.telegram_user_id,
+              chat_id: channelId,
               [field]: mediaTarget,
               caption: captionText,
               parse_mode: 'Markdown',
               reply_markup: replyMarkup
             });
           }
-          successCount++;
+          console.log(`Publicación en Canal Híbrido finalizada con éxito.`);
         } catch (e) {
-          failCount++;
+          console.error('Error publicando en canal híbrido:', e);
         }
-        // Small delay to prevent hitting Telegram API limits (30 msg/sec)
-        await new Promise(r => setTimeout(r, 50));
+      } else {
+        let successCount = 0;
+        let failCount = 0;
+        for (const sub of subscribers) {
+          try {
+            if (isPaid) {
+              await sendPaidMediaToChannel({
+                mediaUrl: media_url,
+                starCount,
+                caption: captionText,
+                channelId: sub.telegram_user_id,
+                profileId: profile.id
+              });
+            } else {
+              const method = isVideo ? 'sendVideo' : 'sendPhoto';
+              const field = isVideo ? 'video' : 'photo';
+              await callTelegramApi(method, {
+                chat_id: sub.telegram_user_id,
+                [field]: mediaTarget,
+                caption: captionText,
+                parse_mode: 'Markdown',
+                reply_markup: replyMarkup
+              });
+            }
+            successCount++;
+          } catch (e) {
+            failCount++;
+          }
+          await new Promise(r => setTimeout(r, 50));
+        }
+        console.log(`Broadcast finished. Success: ${successCount}, Failed: ${failCount}`);
       }
-      console.log(`Broadcast finished. Success: ${successCount}, Failed: ${failCount}`);
     })();
   } catch (err: any) {
-    res.status(500).json({ error: 'Error al iniciar la difusión', details: err?.message });
+    res.status(500).json({ error: 'Error al iniciar la publicación', details: err?.message });
   }
 });
 
