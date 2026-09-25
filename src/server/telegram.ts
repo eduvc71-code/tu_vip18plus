@@ -2698,10 +2698,14 @@ export async function sendPaidMediaToChannel(params: {
     media: [mediaItem]
   };
 
+  let finalCaption = '💎 *Contenido Exclusivo VIP* 💎\n\n';
   if (params.caption && params.caption.trim()) {
-    payload.caption = params.caption.trim();
-    payload.parse_mode = 'Markdown';
+    finalCaption += params.caption.trim() + '\n\n';
   }
+  finalCaption += '_(⭐ ' + starCount + ' Estrellas)_';
+  
+  payload.caption = finalCaption;
+  payload.parse_mode = 'Markdown';
 
   const res = await callTelegramApi('sendPaidMedia', payload);
   if (res && res.ok && res.result) {
