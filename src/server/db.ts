@@ -173,6 +173,7 @@ function initTables(database: Database): void {
       updated_at TEXT NOT NULL,
       telegram_message_id INTEGER,
       priority_order INTEGER DEFAULT 0,
+        active_reactions TEXT,
       ephemeral_config TEXT
     );
   `);

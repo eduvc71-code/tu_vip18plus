@@ -2661,6 +2661,7 @@ export async function sendPaidMediaToChannel(params: {
   caption?: string;
   channelId?: string;
   profileId?: string;
+  reactions?: string[];
 }): Promise<{ ok: boolean; messageId?: number; error?: string }> {
   const { channelId, username, baseUrl } = getBotConfig();
   const targetChannel = params.channelId || channelId;
@@ -2697,7 +2698,30 @@ export async function sendPaidMediaToChannel(params: {
     const { getProfileById } = require('./db.js');
     const profile = await getProfileById(params.profileId, false);
     if (profile) {
-      payload.reply_markup = await buildChannelPostMarkup(profile, baseUrl, username);
+      let markup = await buildChannelPostMarkup(profile, baseUrl, username);
+      // If specific reactions are provided for this VIP post, we override the profile ones
+      if (params.reactions && params.reactions.length > 0) {
+         let reactionButtons: any[] = [];
+         const profileReactions = profile.reactions || {};
+         for (const emoji of params.reactions) {
+           const count = profileReactions[emoji] || 0;
+           reactionButtons.push({
+             text: count > 0 ? `${emoji} ${count}` : emoji,
+             callback_data: `react_${profile.id}_${emoji}`
+           });
+         }
+         // Replace or add the reactions row
+         // buildChannelPostMarkup usually puts reactions as the last row before standard buttons, let's just prepend it.
+         // Actually, let's just rebuild the keyboard specifically for this VIP post:
+         markup = {
+           inline_keyboard: [
+             ...markup.inline_keyboard.filter(row => !row.some(btn => btn.callback_data && btn.callback_data.startsWith('react_'))),
+           ]
+         };
+         // Insert reactions row at the beginning or right above the main app button
+         markup.inline_keyboard.unshift(reactionButtons);
+      }
+      payload.reply_markup = markup;
     }
   } else {
     payload.reply_markup = {

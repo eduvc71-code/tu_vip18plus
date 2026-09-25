@@ -989,7 +989,7 @@ router.put('/admin/profiles/:id/media-status', requireAdminAuth, async (req: Req
 router.post('/admin/profiles/:id/publish-paid-media', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
-    const { media_url, star_count, caption } = req.body;
+    const { media_url, star_count, caption, reactions } = req.body;
 
     if (!media_url) {
       res.status(400).json({ error: 'URL del archivo multimedia es requerida' });

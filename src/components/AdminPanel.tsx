@@ -508,6 +508,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [paidModalStarCount, setPaidModalStarCount] = useState<number | ''>(50);
   const [paidModalCaption, setPaidModalCaption] = useState<string>('');
   const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
+  const [profileReactions, setProfileReactions] = useState<string[]>(['❤️', '🔥', '😍']);
+  const [paidModalReactions, setPaidModalReactions] = useState<string[]>(['❤️', '🔥', '😍']);
+  const availableEmojis = ['❤️', '🔥', '😍', '😘', '💦', '😈', '🍑', '🥵'];
+
 
   // Custom buttons state
   const [customButtons, setCustomButtons] = useState<CustomButton[]>([]);
