@@ -4004,10 +4004,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       if (enlargedMediaUrl) handleBroadcastMedia(enlargedMediaUrl);
                                     }}
                                     className="py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
-                                    title="Enviar por mensaje privado a todos los suscriptores del bot"
+                                    title="Publicar en el Canal y Mini App"
                                   >
                                     <Send className="w-3.5 h-3.5" />
-                                    Difusión a Suscriptores 📢
+                                    Publicar (Telegram/App) 📢
                                   </button>
 
 <button
