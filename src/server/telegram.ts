@@ -2698,11 +2698,11 @@ export async function sendPaidMediaToChannel(params: {
     media: [mediaItem]
   };
 
-  let finalCaption = '💎 *Contenido Exclusivo VIP* 💎\n\n';
+  let finalCaption = '';
   if (params.caption && params.caption.trim()) {
     finalCaption += params.caption.trim() + '\n\n';
   }
-  finalCaption += '_(⭐ ' + starCount + ' Estrellas)_';
+  finalCaption += `(⭐ ${starCount})`;
   
   payload.caption = finalCaption;
   payload.parse_mode = 'Markdown';
