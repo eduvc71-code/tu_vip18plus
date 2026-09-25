@@ -1046,6 +1046,15 @@ export async function processTelegramUpdate(update: any) {
 
   const normText = text.toLowerCase().trim();
 
+  if (text.trim().toLowerCase().startsWith('/bodega')) {
+    if (isAdminUser(message.from?.id)) {
+      saveSystemSetting('bodega_channel_id', String(message.chat.id));
+      await sendMessage(message.chat.id, '📦 *BODEGA ENLAZADA EXITOSAMENTE* 📦\n\nEl bot ha guardado este grupo como tu servidor de almacenamiento ilimitado.\nID Interno: ' + message.chat.id);
+    }
+    return;
+  }
+
+
   // 1.1.b. Acceso Rápido y Reconocimiento ID para la PWA Admin
   if (normText.startsWith('/start admin_login') || normText === '/login') {
     if (!isPrivateChat(message.chat)) {
@@ -1146,14 +1155,6 @@ export async function processTelegramUpdate(update: any) {
       msg += `\n_Para activarte como Administradora escribe en este chat:_\n👉 \`/admin 2024\``;
     }
     await sendMessage(chatId, msg);
-    return;
-  }
-
-  if (normText.startsWith('/bodega')) {
-    if (isAdminUser(fromId)) {
-      saveSystemSetting('bodega_channel_id', String(chatId));
-      await sendMessage(chatId, '📦 *BODEGA ENLAZADA* 📦\n\nID Interno: ' + chatId);
-    }
     return;
   }
 
