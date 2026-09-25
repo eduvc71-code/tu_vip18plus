@@ -4009,7 +4009,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {/* MIGRATION BUTTON */}
       <div className="mt-8 p-4 bg-zinc-900 border border-amber-500 rounded-xl">
-        <h3 className="text-white font-bold mb-2">🚀 Migración B2 -> Telegram</h3>
+        <h3 className="text-white font-bold mb-2">🚀 Migración B2 -&gt; Telegram</h3>
         <p className="text-zinc-400 text-xs mb-4">Usa este botón una sola vez para mudar tus fotos antiguas hacia la nueva Bodega y dejar de usar Backblaze.</p>
         <button
           type="button"
