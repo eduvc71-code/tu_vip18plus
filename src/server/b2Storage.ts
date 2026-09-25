@@ -224,6 +224,7 @@ export async function backupDatabaseToB2(buffer: Buffer, retries = 4): Promise<s
         Bucket: connection.bucket,
         Key: objectKey,
         Body: buffer,
+        ContentLength: buffer.length,
         ContentType: 'application/x-sqlite3',
         CacheControl: 'private, no-store'
       }));

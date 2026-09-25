@@ -134,16 +134,16 @@ export function saveDb(): void {
     fs.writeFileSync(DB_FILE, buffer);
 
     // Debounced automatic background sync to B2 (persists data across Render restarts)
-    // 30 segundos para acumular cambios y no saturar versiones en B2
     if (b2SyncTimer) clearTimeout(b2SyncTimer);
     b2SyncTimer = setTimeout(async () => {
       try {
+        console.log(`[Database] Iniciando respaldo a B2 (${buffer.length} bytes)...`);
         await backupDatabaseToB2(buffer);
         console.log('[Database] Snapshot sincronizado exitosamente con Backblaze B2');
       } catch (err: any) {
         console.warn('[Database] Advertencia al sincronizar snapshot con B2:', err?.message);
       }
-    }, 30000);
+    }, 5000);
   } catch (err) {
     console.error('Error saving database file:', err);
   }
