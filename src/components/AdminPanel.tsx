@@ -434,6 +434,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [adminContactUsername, setAdminContactUsername] = useState('');
   const [reactionsEnabled, setReactionsEnabled] = useState(false);
   const [reactionsList, setReactionsList] = useState<string[]>(['❤️', '🔥', '😍', '😘', '💦']);
+  const [freeReactionsEnabled, setFreeReactionsEnabled] = useState(false);
+  const [vipReactionsEnabled, setVipReactionsEnabled] = useState(false);
+  const [freePreviewUrl, setFreePreviewUrl] = useState<string | null>(null);
+  const [vipPreviewUrl, setVipPreviewUrl] = useState<string | null>(null);
+  const [vipPreviewType, setVipPreviewType] = useState<'image' | 'video' | null>(null);
+  const [freePreviewType, setFreePreviewType] = useState<'image' | 'video' | null>(null);
   const [autoReplyDelay, setAutoReplyDelay] = useState('10');
   const [modelDisplayName, setModelDisplayName] = useState('');
   const [modelVipLink, setModelVipLink] = useState('');
@@ -482,7 +488,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
-  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
+  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(2);
 
   // Step 2 Sub-Tabs ('free': Subir Contenido Free, 'vip': Subir Contenido VIP, 'bot': Contenido / Bot)
   const [step2Tab, setStep2Tab] = useState<'free' | 'vip' | 'bot'>('free');
@@ -2395,6 +2401,55 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             {vipPhase === 'upload' && (
                               <div className="space-y-3.5">
 
+                                {/* Selector de 1 archivo VIP */}
+                                <div className="flex flex-col gap-2.5">
+                                  <label className="w-full flex items-center justify-center gap-2 py-4 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-sm cursor-pointer transition-all active:scale-95 text-center">
+                                    <Upload className="w-5 h-5 shrink-0" />
+                                    <span>
+                                      {vipFile ? `Archivo: ${vipFile.name}` : 'Seleccionar Foto o Video VIP (uno por uno)'}
+                                    </span>
+                                    <input
+                                      type="file"
+                                      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,image/*,video/*"
+                                      onChange={(e) => {
+                                        setVipFile(e.target.files ? e.target.files[0] : null);
+                                        if (e.target.files && e.target.files[0]) {
+                                          const file = e.target.files[0];
+                                          setVipPreviewUrl(URL.createObjectURL(file));
+                                          setVipPreviewType(file.type.startsWith('video/') ? 'video' : 'image');
+                                        } else {
+                                          setVipPreviewUrl(null);
+                                          setVipPreviewType(null);
+                                        }
+                                      }}
+                                      className="hidden"
+                                    />
+                                  </label>
+
+                                  {/* Vista Previa */}
+                                  {vipPreviewUrl && (
+                                    <div className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-amber-500/50 bg-black shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+                                      {vipPreviewType === 'video' ? (
+                                        <video src={vipPreviewUrl} className="w-full h-auto max-h-48 object-contain" controls />
+                                      ) : (
+                                        <img src={vipPreviewUrl} alt="Vista Previa" className="w-full h-auto max-h-48 object-contain" />
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setVipFile(null);
+                                          setVipPreviewUrl(null);
+                                          setVipPreviewType(null);
+                                        }}
+                                        className="absolute top-1.5 right-1.5 bg-red-600 hover:bg-red-500 text-white p-1 rounded-full shadow-lg transition-colors cursor-pointer"
+                                        title="Cancelar Selección"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
                                 {/* Selector de Estrellas */}
                                 <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl space-y-2">
                                   <div className="flex items-center justify-between">
@@ -2445,33 +2500,17 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   />
                                 </div>
 
-                                {/* Selector de 1 archivo VIP */}
-                                <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
-                                  <label className="flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border-2 border-dashed border-amber-500/50 hover:border-amber-500 text-amber-400 font-bold text-xs cursor-pointer transition-all active:scale-95 text-center">
-                                    <Upload className="w-4 h-4 shrink-0" />
-                                    <span>
-                                      {vipFile ? `Archivo: ${vipFile.name}` : 'Seleccionar Foto o Video VIP (uno por uno)'}
-                                    </span>
-                                    <input
-                                      type="file"
-                                      accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,image/*,video/*"
-                                      onChange={(e) => setVipFile(e.target.files ? e.target.files[0] : null)}
-                                      className="hidden"
-                                    />
-                                  </label>
-
-                                  {editingProfile && vipFile && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleUploadVipMedia(editingProfile.id)}
-                                      disabled={uploadingVip}
-                                      className="py-3 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all"
-                                    >
-                                      <HardDrive className="w-4 h-4" />
-                                      {uploadingVip ? 'Guardando en Telegram...' : '💾 Guardar en Telegram y DB ➔'}
-                                    </button>
-                                  )}
-                                </div>
+                                {editingProfile && vipFile && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleUploadVipMedia(editingProfile.id)}
+                                    disabled={uploadingVip}
+                                    className="w-full py-3 px-5 rounded-xl font-extrabold text-sm cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all mt-2"
+                                  >
+                                    <HardDrive className="w-5 h-5" />
+                                    {uploadingVip ? 'Guardando en Telegram...' : '💾 Guardar en Telegram y DB ➔'}
+                                  </button>
+                                )}
                               </div>
                             )}
 
