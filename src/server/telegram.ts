@@ -149,7 +149,7 @@ function httpsPostJson(url: string, body: any): Promise<any> {
 }
 
 // Telegram API Helper
-async function callTelegramApi(method: string, body: any): Promise<any> {
+export async function callTelegramApi(method: string, body: any): Promise<any> {
   const { token } = getBotConfig();
   if (!token) {
     console.warn(`[Telegram API] Warning: BOT_TOKEN is not configured. Method called: ${method}`);
