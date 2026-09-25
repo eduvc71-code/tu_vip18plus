@@ -210,19 +210,37 @@ async function streamToBuffer(streamOrBody: any): Promise<Buffer> {
   });
 }
 
-export async function backupDatabaseToB2(buffer: Buffer): Promise<string> {
+export async function backupDatabaseToB2(buffer: Buffer, retries = 4): Promise<string> {
   const connection = getB2Connection();
   if (!connection) throw new Error(`Backblaze B2 no configurado: ${missingB2Variables().join(', ')}`);
 
   // Canonical SQLite database object in B2 (overwrites in place, no accumulation)
   const objectKey = 'tu-vip/db/catalogo.sqlite';
-  await connection.client.send(new PutObjectCommand({
-    Bucket: connection.bucket,
-    Key: objectKey,
-    Body: buffer,
-    ContentType: 'application/x-sqlite3',
-    CacheControl: 'private, no-store'
-  }));
+  let attempt = 0;
+  
+  while (attempt < retries) {
+    try {
+      await connection.client.send(new PutObjectCommand({
+        Bucket: connection.bucket,
+        Key: objectKey,
+        Body: buffer,
+        ContentType: 'application/x-sqlite3',
+        CacheControl: 'private, no-store'
+      }));
+      if (attempt > 0) {
+        console.log(`[B2] Respaldo de Base de Datos exitoso en el intento ${attempt + 1}`);
+      }
+      return objectKey;
+    } catch (err: any) {
+      attempt++;
+      console.warn(`[B2] Advertencia: Intento ${attempt}/${retries} fallido al respaldar base de datos:`, err?.message || err);
+      if (attempt >= retries) {
+        throw err;
+      }
+      // Esperar antes del siguiente intento (backoff exponencial: 3s, 6s, 9s...)
+      await new Promise(resolve => setTimeout(resolve, 3000 * attempt));
+    }
+  }
 
   return objectKey;
 }
