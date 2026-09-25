@@ -338,14 +338,9 @@ export async function sendChannelPoll(
 }
 
 export async function updateBotMenuButton() {
-  const { baseUrl } = getBotConfig();
   return await callTelegramApi('setChatMenuButton', {
     menu_button: {
-      type: 'web_app',
-      text: '✨ Canal VIP Free ✨',
-      web_app: {
-        url: baseUrl
-      }
+      type: 'default'
     }
   });
 }
@@ -1779,11 +1774,6 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
 
   const inlineKeyboard: any[][] = [];
-  if (channelUrl) {
-    inlineKeyboard.push([
-      { text: btnCanal, url: channelUrl }
-    ]);
-  }
   inlineKeyboard.push([
     { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
   ]);
@@ -1834,11 +1824,6 @@ export async function sendClientCanal(chatId: string | number) {
     `👉 *Abre la Mini App para ver la galería completa:*`;
 
   const inlineKeyboard: any[][] = [];
-  if (channelUrl) {
-    inlineKeyboard.push([
-      { text: btnCanal, url: channelUrl }
-    ]);
-  }
   inlineKeyboard.push([
     { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
   ]);
