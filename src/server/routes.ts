@@ -2049,7 +2049,8 @@ router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, r
 
         try {
           console.log(`Migrando: ${oldUrl}`);
-          const fetchRes = await fetch(oldUrl);
+          const fetchUrl = oldUrl.startsWith('/') ? config.baseUrl + oldUrl : oldUrl;
+          const fetchRes = await fetch(fetchUrl);
           if (!fetchRes.ok) throw new Error(`Fetch failed: ${fetchRes.statusText}`);
           const arrayBuffer = await fetchRes.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);
