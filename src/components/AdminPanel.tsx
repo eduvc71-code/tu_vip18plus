@@ -857,7 +857,7 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: '🚀 Contenido Free guardado en Telegram y publicado como ACTIVO en la Mini App y Canal.'
+          text: '🚀 Contenido Free guardado en Telegram y publicado en la Mini App y Canal.'
         });
         setSelectedPhotoFiles(null);
         setUploadComment('');
@@ -3395,7 +3395,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-[11px] text-sky-300">
                                 {operatingMode === 'solo_bot' ? (
                                   <>
-                                    🔒 <strong>Modo A: Solo Bot (100% Privado)</strong>: En este modo confidencial, no se publica en canales públicos. Todo queda activo únicamente en la Mini App para los suscriptores.
+                                    🔒 <strong>Modo A: Solo Bot (100% Privado)</strong>: En este modo confidencial, no se publica en canales públicos. Todo queda publicado únicamente en la Mini App para los suscriptores.
                                   </>
                                 ) : (
                                   <>
