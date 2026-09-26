@@ -355,7 +355,11 @@ router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
     }
     // [Seguridad V6] Validar precio desde BD para evitar falsificación de Stars
       const dbPrice = mediaUrl ? profile.media_stars?.[mediaUrl] : null;
-      const starCount = dbPrice ? dbPrice : (Number(stars) || 50);
+      if (!dbPrice || dbPrice <= 0) {
+        res.status(400).json({ error: 'Este contenido no tiene un precio válido configurado.' });
+        return;
+      }
+      const starCount = dbPrice;
     const title = `⭐ ${profile.name} VIP`;
     const invoiceLink = await createStarsInvoiceLink(
       title,
