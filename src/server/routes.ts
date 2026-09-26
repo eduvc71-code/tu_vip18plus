@@ -607,7 +607,7 @@ router.post('/telegram/webhook', async (req: Request, res: Response) => {
   const { secret } = getBotConfig();
   const incomingSecret = req.headers['x-telegram-bot-api-secret-token'];
 
-  if (secret && incomingSecret !== secret) {
+  if (!incomingSecret || incomingSecret !== secret) {
     res.status(403).json({ error: 'Secret token inválido' });
     return;
   }
@@ -643,7 +643,7 @@ router.post('/admin/auth/verify', (req: Request, res: Response) => {
 router.post('/admin/auth/login', (req: Request, res: Response) => {
   const { pin, userId } = req.body;
   const config = getBotConfig();
-  const validPin = process.env.ADMIN_PIN || 'admin_secret';
+  const validPin = process.env.ADMIN_PIN;
   const cleanPin = String(pin || '').trim();
   const cleanUser = String(userId || '').trim();
 

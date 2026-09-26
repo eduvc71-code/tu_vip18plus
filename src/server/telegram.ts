@@ -52,7 +52,7 @@ export function getBotConfig() {
     rawUsername = 'Danii_Catalogo_SCZ_bot';
   }
   let username = rawUsername.replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || require('crypto').createHash('sha256').update(token).digest('hex').substring(0, 32);
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
   if (!channelId.startsWith('@') && !channelId.startsWith('-') && /^\d+$/.test(channelId)) {
@@ -113,10 +113,7 @@ export function verifyTelegramWebAppData(initData: string): { valid: boolean; us
         }
       }
     }
-
-    if (parsedUser && parsedUser.id) {
-      return { valid: true, user: parsedUser };
-    }
+    // [Seguridad V3] Fallback eliminado. Si la firma HMAC no coincide, falla.
     return { valid: false };
   } catch {
     return { valid: false };
@@ -1188,7 +1185,7 @@ export async function processTelegramUpdate(update: any) {
   const adminParts = text.trim().split(/\s+/);
   const potentialCommand = adminParts[0]?.toLowerCase() || '';
   const potentialPin = adminParts[1]?.trim() || '';
-  const validPin = process.env.ADMIN_PIN || 'admin_secret';
+  const validPin = process.env.ADMIN_PIN;
 
   if ((potentialCommand === '/admin' || potentialCommand === '/pin' || potentialCommand === '/login') && potentialPin) {
     if (potentialPin === validPin) {
