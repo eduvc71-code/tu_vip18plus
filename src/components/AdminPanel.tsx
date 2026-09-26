@@ -1540,9 +1540,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body: JSON.stringify({ media_url: mediaUrl })
       });
       const data = await res.json();
-      if (res.ok) {
-        setMessage({ type: 'success', text: data.message || `Difusión iniciada a ${data.count} suscriptores.` });
-      } else {
+        if (res.ok) {
+          setMessage({ type: 'success', text: data.message || `Difusión iniciada a ${data.count} suscriptores.` });
+          
+          if (editingProfile) {
+            const currentStatus = { ...(editingProfile.media_status || {}) };
+            currentStatus[mediaUrl] = 1;
+            setEditingProfile({ ...editingProfile, media_status: currentStatus });
+          }
+          fetchData();
+        } else {
         setMessage({ type: 'error', text: data.error || 'Error al iniciar difusión' });
       }
     } catch {
