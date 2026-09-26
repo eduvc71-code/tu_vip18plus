@@ -1402,8 +1402,9 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
               chat_id: channelId,
               [field]: mediaTarget,
               caption: captionText,
-              parse_mode: 'Markdown',
-              reply_markup: replyMarkup
+                has_spoiler: true,
+                parse_mode: 'Markdown',
+                reply_markup: replyMarkup
             });
           }
           console.log(`Publicación en Canal Híbrido finalizada con éxito.`);
@@ -1430,6 +1431,7 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
                 chat_id: sub.telegram_user_id,
                 [field]: mediaTarget,
                 caption: captionText,
+                has_spoiler: true,
                 parse_mode: 'Markdown',
                 reply_markup: replyMarkup
               });

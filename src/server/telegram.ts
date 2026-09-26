@@ -738,9 +738,14 @@ export async function uploadBufferToTelegram(
   formData.append('chat_id', String(targetChatId));
   formData.append('disable_notification', 'true');
   if (caption) {
-    formData.append('caption', caption);
-    formData.append('parse_mode', 'Markdown');
-  }
+      formData.append('caption', caption);
+      formData.append('parse_mode', 'Markdown');
+    }
+    
+    // Si el destino es el canal público (fallback) y no es el chat privado del admin, SIEMPRE blindar con spoiler
+    if (String(targetChatId) === channelId) {
+      formData.append('has_spoiler', 'true');
+    }
 
   const blob = new Blob([buffer], { type: mimeType });
   formData.append(fieldName, blob, fileName);
