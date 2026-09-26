@@ -607,7 +607,7 @@ router.post('/telegram/webhook', async (req: Request, res: Response) => {
   const { secret } = getBotConfig();
   const incomingSecret = req.headers['x-telegram-bot-api-secret-token'];
 
-  if (secret && incomingSecret && incomingSecret !== secret) {
+  if (secret && incomingSecret !== secret) {
     res.status(403).json({ error: 'Secret token inválido' });
     return;
   }
@@ -643,13 +643,13 @@ router.post('/admin/auth/verify', (req: Request, res: Response) => {
 router.post('/admin/auth/login', (req: Request, res: Response) => {
   const { pin, userId } = req.body;
   const config = getBotConfig();
-  const validPin = process.env.ADMIN_PIN || 'admin123';
+  const validPin = process.env.ADMIN_PIN || 'admin_secret';
   const cleanPin = String(pin || '').trim();
   const cleanUser = String(userId || '').trim();
 
-  const isPinMatch = cleanPin && (cleanPin === validPin || cleanPin === '2024' || cleanPin === '450' || cleanPin === '1818');
+  const isPinMatch = cleanPin && (cleanPin === validPin);
   const isAdminIdMatch = (cleanUser && isAdminUser(cleanUser)) || (cleanPin && isAdminUser(cleanPin));
-  const isDefaultAccess = config.adminIds.length === 0 && (cleanPin === '2024' || cleanPin === validPin || cleanPin === '1818');
+  const isDefaultAccess = config.adminIds.length === 0 && (cleanPin === validPin);
 
   if (isPinMatch || isAdminIdMatch || isDefaultAccess) {
     const effectiveUserId = isAdminIdMatch ? (cleanUser || cleanPin) : (config.adminIds[0] || 'admin');

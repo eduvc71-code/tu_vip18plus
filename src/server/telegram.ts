@@ -973,7 +973,7 @@ export async function processTelegramUpdate(update: any) {
       }
       return;
     } else {
-      await sendMessage(chatId, `ℹ️ Mensaje reenviado de: *${fChat.title || 'Canal'}* (\`${fChat.id}\`).\nPara configurar el bot, primero actívate como Administradora con \`/admin 2024\`.`);
+      await sendMessage(chatId, `ℹ️ Mensaje reenviado de: *${fChat.title || 'Canal'}* (\`${fChat.id}\`).\nPara configurar el bot, primero actívate como Administradora con \`/admin TU_PIN_SECRETO\`.`);
       return;
     }
   }
@@ -1152,7 +1152,7 @@ export async function processTelegramUpdate(update: any) {
     if (isAdm) {
       msg += `👑 *Rol:* Administradora Autorizada ✅\n\n*Vincular Canal VIP:*\n👉 Reenvía cualquier post de tu canal a este chat.\n👉 O escribe: \`/setcanal @NombreDeTuCanal\``;
     } else {
-      msg += `\n_Para activarte como Administradora escribe en este chat:_\n👉 \`/admin 2024\``;
+      msg += `\n_Para activarte como Administradora escribe en este chat:_\n👉 \`/admin TU_PIN_SECRETO\``;
     }
     await sendMessage(chatId, msg);
     return;
@@ -1160,7 +1160,7 @@ export async function processTelegramUpdate(update: any) {
 
   if (normText.startsWith('/setcanal') || normText.startsWith('/canal_id')) {
     if (!isAdminUser(fromId)) {
-      await sendMessage(chatId, '🔒 Solo administradoras autorizadas pueden vincular el canal. Primero envía `/admin 2024`.');
+      await sendMessage(chatId, '🔒 Solo administradoras autorizadas pueden vincular el canal. Primero envía `/admin TU_PIN_SECRETO`.');
       return;
     }
     const parts = text.trim().split(/\s+/);
@@ -1188,10 +1188,10 @@ export async function processTelegramUpdate(update: any) {
   const adminParts = text.trim().split(/\s+/);
   const potentialCommand = adminParts[0]?.toLowerCase() || '';
   const potentialPin = adminParts[1]?.trim() || '';
-  const validPin = process.env.ADMIN_PIN || 'admin123';
+  const validPin = process.env.ADMIN_PIN || 'admin_secret';
 
   if ((potentialCommand === '/admin' || potentialCommand === '/pin' || potentialCommand === '/login') && potentialPin) {
-    if (potentialPin === validPin || potentialPin === '2024' || potentialPin === '450') {
+    if (potentialPin === validPin) {
       addAdminTelegramId(fromId);
       const { baseUrl, brandName } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
@@ -1207,7 +1207,7 @@ export async function processTelegramUpdate(update: any) {
       });
       return;
     } else {
-      await sendMessage(chatId, '❌ PIN incorrecto. Intenta nuevamente con `/admin 2024`');
+      await sendMessage(chatId, '❌ PIN incorrecto. Intenta nuevamente con `/admin TU_PIN_SECRETO`');
       return;
     }
   }
@@ -1215,7 +1215,7 @@ export async function processTelegramUpdate(update: any) {
   // 2. Guard for Administrative Commands
   if (!isAdminUser(fromId)) {
     if (normText === '/admin' || normText === '/panel' || normText === 'admin') {
-      await sendMessage(chatId, `🔒 *Acceso Administrativo*\n\nTu Telegram ID es: \`${fromId}\`\n\nEste ID aún no está activado como Administradora.\n\n👉 *Para activarte de inmediato, envía en este chat:*\n\`/admin 2024\`  o  \`/admin admin123\``);
+      await sendMessage(chatId, `🔒 *Acceso Administrativo*\n\nTu Telegram ID es: \`${fromId}\`\n\nEste ID aún no está activado como Administradora.\n\n👉 *Para activarte de inmediato, envía en este chat:*\n\`/admin TU_PIN_SECRETO\`  o  \`/admin TU_PIN_SECRETO\``);
       return;
     }
     if (fromId) {

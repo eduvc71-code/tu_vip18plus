@@ -746,8 +746,14 @@ function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
   }
 
   // Para clientes públicos (Mini App), filtrar para mostrar solo fotos con Status = 1 ("Activa")
+  // EXCLUYENDO contenido VIP/Pago y Efímero (Solo visibles en Admin Panel)
   if (filterPublic && Array.isArray(obj.photos)) {
-    obj.photos = obj.photos.filter((url: string) => obj.media_status[url] === 1);
+    obj.photos = obj.photos.filter((url: string) => {
+      const isActive = obj.media_status[url] === 1;
+      const isPaid = (obj.media_stars && obj.media_stars[url] > 0);
+      const isEphemeral = (obj.ephemeral_config && obj.ephemeral_config[url] && obj.ephemeral_config[url].enabled === true);
+      return isActive && !isPaid && !isEphemeral;
+    });
   }
 
   obj.reactions = parseReactions(obj.reactions);
