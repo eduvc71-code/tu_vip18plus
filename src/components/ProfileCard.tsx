@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock } from 'lucide-react';
+import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock , ZoomIn } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -24,6 +24,12 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   onRequestAvailability,
   onOpenPaymentMethods
 }) => {
+  const [showEnlargeIcon, setShowEnlargeIcon] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setShowEnlargeIcon(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const [seenEphemeralUrls, setSeenEphemeralUrls] = useState<Set<string>>(() => {
     const seen = new Set<string>();
     if (typeof window !== 'undefined' && profile.ephemeral_config) {
@@ -288,7 +294,15 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
                   <Video className="h-3 w-3 text-amber-400" />
                   <span>Videos</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})
+              {showEnlargeIcon && !isImageStarsLocked && images.length > 0 && (
+                <div className="absolute top-2.5 right-2.5 z-30 pointer-events-none animate-bounce">
+                  <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-full border border-white/20 shadow-xl">
+                    <ZoomIn className="w-4 h-4 text-white drop-shadow-md" />
+                  </div>
+                </div>
+              )}
+</span>
                 </span>
 
                 {videos.length > 1 && (
