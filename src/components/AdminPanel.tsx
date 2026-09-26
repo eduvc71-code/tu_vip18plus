@@ -2275,11 +2275,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           <div className="flex items-center gap-1.5 font-bold">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[11px] font-semibold">
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                              <span>{activePhotos.length} Publicadas</span>
+                              <span>{photos.length} Publicadas</span>
                             </span>
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-[11px] font-semibold">
                               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                              <span>{pendingPhotos.length} Sin Publicar</span>
+                              <span>0 Sin Publicar</span>
                             </span>
                           </div>
                         </div>
@@ -2881,33 +2881,33 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
                                 <button
                                   type="button"
-                                  onClick={() => setMediaStatusFilter('active')}
+                                  onClick={() => (() => {})('active')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    mediaStatusFilter === 'active'
+                                    'all' === 'active'
                                       ? 'bg-emerald-600 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
                                 >
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                                  <span>Publicadas ({activePhotos.length})</span>
+                                  <span>Publicadas ({photos.length})</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setMediaStatusFilter('pending')}
+                                  onClick={() => (() => {})('pending')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    mediaStatusFilter === 'pending'
+                                    'all' === 'pending'
                                       ? 'bg-amber-500 text-zinc-950 shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
                                 >
                                   <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                                  <span>Sin Publicar ({pendingPhotos.length})</span>
+                                  <span>Sin Publicar (0)</span>
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => setMediaStatusFilter('all')}
+                                  onClick={() => (() => {})('all')}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    mediaStatusFilter === 'all'
+                                    'all' === 'all'
                                       ? 'bg-zinc-700 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
@@ -3035,14 +3035,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 {/* ── PASO 3: VER PARA PUBLICAR (DETALLES Y GESTIÓN DE STATUS) ── */}
                 {profileStep === 3 && (() => {
                   const photos = editingProfile?.photos || [];
-                  const pendingPhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 2);
-                  const activePhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 1);
-
-                  const displayedPhotos = mediaStatusFilter === 'pending'
-                    ? pendingPhotos
-                    : mediaStatusFilter === 'active'
-                    ? activePhotos
-                    : photos;
+                  const displayedPhotos = photos;
 
                   return (
                     <div className="space-y-4 text-xs">
