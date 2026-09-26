@@ -1322,11 +1322,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setEditingProfile({ ...editingProfile, media_status: currentStatus });
     try {
       const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media-status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ photo_url: photoUrl, status: targetStatus })
-      });
-      if (res.ok) {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ photo_url: photoUrl, status: targetStatus })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          if (data.profile) setEditingProfile(data.profile);
         setMessage({
           type: 'success',
           text: targetStatus === 1
@@ -1351,11 +1353,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setEditingProfile({ ...editingProfile, media_status: currentStatus });
     try {
       const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media-status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ all: true, status: targetStatus })
-      });
-      if (res.ok) {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ all: true, status: targetStatus })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          if (data.profile) setEditingProfile(data.profile);
         setMessage({
           type: 'success',
           text: targetStatus === 1
