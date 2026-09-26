@@ -353,7 +353,9 @@ router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
       res.status(404).json({ error: 'Perfil no encontrado' });
       return;
     }
-    const starCount = Number(stars) || (mediaUrl && profile.media_stars?.[mediaUrl]) || 50;
+    // [Seguridad V6] Validar precio desde BD para evitar falsificación de Stars
+      const dbPrice = mediaUrl ? profile.media_stars?.[mediaUrl] : null;
+      const starCount = dbPrice ? dbPrice : (Number(stars) || 50);
     const title = `⭐ ${profile.name} VIP`;
     const invoiceLink = await createStarsInvoiceLink(
       title,

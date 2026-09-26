@@ -666,7 +666,7 @@ export function generateAdminMagicToken(telegramUserId: string | number): string
   return jwt.sign(
     { sub: String(telegramUserId), role: 'admin', isPinAuth: true, iat: Math.floor(Date.now() / 1000) },
     signingSecret,
-    { expiresIn: '30d' }
+    { expiresIn: '24h' } // [Seguridad V6] Expiración acortada
   );
 }
 
