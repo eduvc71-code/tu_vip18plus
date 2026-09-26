@@ -411,7 +411,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Edit / New Form State
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<any>({
     name: '',
     age: 18,
     zone: 'Contenido +18 VIP',
@@ -419,7 +419,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     rate_bs: '' as number | '',
     commission_bs: 0,
     status: 'disponible' as Profile['status'],
-    priority_order: 0
+    priority_order: 0,
+    
   });
 
   const [publishing, setPublishing] = useState(false);
@@ -498,8 +499,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
-  const [uploadInitialStatus, setUploadInitialStatus] = useState<1 | 2>(1);
-
   // Step 2 Sub-Tabs ('free': Subir Contenido Free, 'vip': Subir Contenido VIP, 'bot': Contenido / Bot)
   const [step2Tab, setStep2Tab] = useState<'free' | 'vip' | 'bot'>('free');
 
@@ -702,11 +701,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    if (coverFile && coverFile.size > 20 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'El archivo de portada no puede pesar más de 20 MB por la política de Telegram Puro.' });
-      setLoading(false);
-      return;
-    }
+    
     setMessage(null);
     try {
       const isEdit = Boolean(editingProfile);
@@ -850,10 +845,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body.append('is_ephemeral', 'true');
         body.append('ephemeral_duration', String(uploadDuration || 10));
       }
-      body.append('initial_status', String(uploadInitialStatus));
-      if (uploadInitialStatus === 1) {
-        body.append('publish_to_channel', 'true');
-      }
+      body.append('initial_status', '1');
+body.append('publish_to_channel', 'true');
+
       const res = await fetch(`/api/admin/profiles/${profileId}/content/free`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -863,9 +857,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: uploadInitialStatus === 1
-            ? '🚀 Contenido Free guardado en Telegram y publicado como ACTIVO en la Mini App y Canal.'
-            : '✅ Contenido Free guardado en Telegram como BORRADOR (Para Publicar).'
+          text: '🚀 Contenido Free guardado en Telegram y publicado como ACTIVO en la Mini App y Canal.'
         });
         setSelectedPhotoFiles(null);
         setUploadComment('');
@@ -1310,66 +1302,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleToggleMediaStatus = async (photoUrl: string, targetStatus: 1 | 2) => {
-    if (!editingProfile) return;
-    const currentStatus: Record<string, 1 | 2> = { ...(editingProfile.media_status || {}) };
-    currentStatus[photoUrl] = targetStatus;
-    setEditingProfile({ ...editingProfile, media_status: currentStatus });
-    try {
-      const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media-status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ photo_url: photoUrl, status: targetStatus })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          if (data.profile) setEditingProfile(data.profile);
-        setMessage({
-          type: 'success',
-          text: targetStatus === 1
-            ? '🟢 Archivo activado (Status 1: Visible en Mini App y Canal)'
-            : '🟡 Archivo movido a Para Publicar (Status 2: Oculto al cliente)'
-        });
-        fetchData();
-      } else {
-        setMessage({ type: 'error', text: 'Error al actualizar status multimedia' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de conexión al actualizar status' });
-    }
-  };
-
-  const handleToggleAllMediaStatus = async (targetStatus: 1 | 2) => {
-    if (!editingProfile || !editingProfile.photos || editingProfile.photos.length === 0) return;
-    const currentStatus: Record<string, 1 | 2> = { ...(editingProfile.media_status || {}) };
-    editingProfile.photos.forEach(u => {
-      currentStatus[u] = targetStatus;
-    });
-    setEditingProfile({ ...editingProfile, media_status: currentStatus });
-    try {
-      const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media-status`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ all: true, status: targetStatus })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          if (data.profile) setEditingProfile(data.profile);
-        setMessage({
-          type: 'success',
-          text: targetStatus === 1
-            ? '🟢 Todos los archivos fueron activados (Status 1: Visibles)'
-            : '🟡 Todos los archivos pasaron a Para Publicar (Status 2: Ocultos)'
-        });
-        fetchData();
-      } else {
-        setMessage({ type: 'error', text: 'Error al actualizar status masivo' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de conexión al actualizar status masivo' });
-    }
-  };
-
   const handleOpenPublishPaidModal = (photoUrl: string) => {
     setPaidModalMediaUrl(photoUrl);
     setPaidModalStarCount(editingProfile?.media_stars?.[photoUrl] || 50);
@@ -1525,7 +1457,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleBroadcastMedia = async (mediaUrl: string) => {
     if (!confirm('¿Estás seguro de que quieres enviar una difusión masiva por mensaje privado a TODOS los suscriptores del bot con este contenido? Esto puede tardar varios segundos.')) return;
     try {
-      setMessage({ type: 'info', text: 'Iniciando difusión masiva...' });
+      setMessage({ type: 'success', text: 'Iniciando difusión masiva...' });
       const res = await fetch(`/api/admin/profiles/${editingProfile?.id}/broadcast`, {
         method: 'POST',
         headers: {
@@ -2168,7 +2100,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     }`}
                   >
                     <Upload className="w-3.5 h-3.5" />
-                    <span>2. Cargar (Status 2)</span>
+                    <span>2. Cargar Archivos</span>
                   </button>
                   <button
                     type="button"
@@ -2515,17 +2447,13 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 onClick={() => handleUploadPhotos(editingProfile.id)}
                                 disabled={uploadingPhotos || !watermarkEnabled || watermarkText.trim() === ''}
                                 className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
-                                  uploadInitialStatus === 1
-                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                                    : 'bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-amber-500/20'
+                                  'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
                                 }`}
                               >
                                 <HardDrive className="w-4 h-4" />
                                 {uploadingPhotos
                                   ? 'Subiendo a Telegram...'
-                                  : uploadInitialStatus === 1
-                                  ? '🚀 Subir y Publicar'
-                                  : '💾 Guardar en Telegram'}
+                                  : '🚀 Subir y Publicar'}
                               </button>
                             )}
                           </div>
@@ -2730,7 +2658,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   {editingProfile && (
                                     <button
                                       type="button"
-                                      onClick={() => handlePublishPaidMediaDirect(editingProfile.id)}
+                                      onClick={() => handlePublishVipMedia(editingProfile.id)}
                                       disabled={publishingVip}
                                       className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all"
                                     >
@@ -2881,9 +2809,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
                                 <button
                                   type="button"
-                                  onClick={() => (() => {})('active')}
+                                  onClick={() => {}}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    'all' === 'active'
+                                    false
                                       ? 'bg-emerald-600 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
@@ -2893,9 +2821,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => (() => {})('pending')}
+                                  onClick={() => {}}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    'all' === 'pending'
+                                    false
                                       ? 'bg-amber-500 text-zinc-950 shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
@@ -2905,9 +2833,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => (() => {})('all')}
+                                  onClick={() => {}}
                                   className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-                                    'all' === 'all'
+                                    true
                                       ? 'bg-zinc-700 text-white shadow'
                                       : 'text-zinc-400 hover:text-white'
                                   }`}
@@ -2925,7 +2853,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             ) : (
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                                 {displayedPhotos.map((photoUrl, idx) => {
-                                  const mediaStatus = editingProfile?.media_status?.[photoUrl] || 2;
                                   const isEphemeral = Boolean(editingProfile?.ephemeral_config?.[photoUrl]?.enabled);
                                   const duration = editingProfile?.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
                                   const hasDescription = Boolean(editingProfile?.media_descriptions?.[photoUrl]);
@@ -2949,15 +2876,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                                         {/* Status Badge Superior Izquierdo */}
                                         <div className="absolute top-2 left-2 z-10">
-                                          {mediaStatus === 1 ? (
-                                            <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
-                                              🟢 Activa
-                                            </span>
-                                          ) : (
-                                            <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow flex items-center gap-1">
-                                              🟡 Para Publicar
-                                            </span>
-                                          )}
+                                          
                                         </div>
 
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-center p-2">
@@ -3271,7 +3190,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 : '🚀 Activar Todo y Publicar en Telegram y Canal VIP Free'}
                           </button>
                           <p className="text-center text-[10px] text-zinc-500">
-                            Al pulsar este botón, todo el contenido pendiente pasará automáticamente a Status = 1 (Activa) y se sincronizará con Telegram y la Mini App.
+                            Al pulsar este botón, todo el contenido se publicará y sincronizará con Telegram y la Mini App.
                           </p>
                         </div>
                       </div>
@@ -3305,9 +3224,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 {/* MODAL SIMULADOR PREVISUALIZADOR DE PANTALLAS (MINI APP & TELEGRAM) */}
                 {previewModeModal && (() => {
                   const pPhotos = editingProfile?.photos || [];
-                  const pActivePhotos = pPhotos.filter(u => (editingProfile?.media_status?.[u] || 2) === 1);
-                  const displayList = previewIncludeDrafts ? pPhotos : pActivePhotos;
-                  const coverMedia = pPhotos[0] || null;
+                  const displayList = pPhotos;const coverMedia = pPhotos[0] || null;
 
                   return (
                     <div
@@ -3458,7 +3375,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         ))}
                                       </div>
                                     ) : (
-                                      <p className="text-zinc-500 italic text-[10px]">No hay archivos en Status 1 para mostrar al cliente.</p>
+                                      <p className="text-zinc-500 italic text-[10px]">No hay archivos para mostrar al cliente.</p>
                                     )}
                                   </div>
 

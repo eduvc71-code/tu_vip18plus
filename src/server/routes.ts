@@ -11,9 +11,8 @@ import {
   deleteB2Media
 } from './b2Storage.js';
 import {
-  getPublicProfiles, getAllProfiles,
+  getPublicProfiles, getAllProfiles, getAllSubscribers,
   getProfileById,
-  getAllProfiles,
   saveProfile,
   deleteProfile,
   removeMediaFromProfile,
