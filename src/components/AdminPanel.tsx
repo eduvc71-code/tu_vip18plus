@@ -3871,9 +3871,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       }`}
                                     >
                                       {isActive ? (
-                                        <>⏸️ Ocultar / Mover a Para Publicar (Status 2)</>
+                                        <>⏸️ OCULTAR FOTO (Pasar a Status 2)</>
                                       ) : (
-                                        <>🚀 Activar / Publicar (Status 1)</>
+                                        <>🚀 ACTIVAR FOTO (Pasar a Status 1)</>
                                       )}
                                     </button>
                                   </div>
