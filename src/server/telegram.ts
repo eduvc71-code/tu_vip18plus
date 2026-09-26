@@ -453,7 +453,7 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   }
 
   // Check Operating Mode (Modo A: Solo Bot / Modo B: Híbrido Bot + Canal)
-  const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+  const operatingMode = \'solo_bot\'; // Forced per user request
   if (operatingMode === 'solo_bot') {
     await addAuditLog('SYNC_PROFILE', performer, `Perfil ${profile.name} publicado en Mini App (Modo Solo Bot)`, profileId);
     return { success: true, message: 'Publicado exitosamente en el Canal VIP Free (Modo Solo Bot: guardado sin publicar en canal público).' };
