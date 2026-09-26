@@ -617,7 +617,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     try {
       const headers = { Authorization: `Bearer ${tok}` };
       const [resP, resR, resL, resI, resB, resPolls, resPay, resBot] = await Promise.all([
-        fetch('/api/admin/profiles', { headers }),
+        fetch('/api/admin/profiles?t=' + Date.now(), { headers }),
         fetch('/api/admin/requests', { headers }),
         fetch('/api/admin/logs', { headers }),
         fetch('/api/info'),

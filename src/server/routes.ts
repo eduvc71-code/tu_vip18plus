@@ -1357,7 +1357,7 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
         res.status(400).json({ error: 'No hay suscriptores registrados para enviar difusión masiva.' });
         return;
       }
-    } else if (operatingMode === 'hibrido') {
+    } else if (operatingMode === 'bot_and_channel') {
       if (!channelId) {
         res.status(400).json({ error: 'Modo Híbrido: No hay un ID de canal configurado.' });
         return;
@@ -1374,7 +1374,7 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
     await saveProfile({ id: profileId, media_status: currentStatus });
     broadcastEvent('PROFILE_UPDATED', { id: profileId });
 
-    if (operatingMode === 'hibrido') {
+    if (operatingMode === 'bot_and_channel') {
       res.json({ success: true, message: 'Publicado exitosamente en el Canal VIP Free y Mini App.' });
     } else {
       res.json({ success: true, message: `Publicado en Mini App y Difusión iniciada a ${subscribers.length} suscriptores.`, count: subscribers.length });
@@ -1386,7 +1386,7 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
       const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
       const mediaTarget = tgMatch ? tgMatch[1] : media_url;
 
-      if (operatingMode === 'hibrido') {
+      if (operatingMode === 'bot_and_channel') {
         try {
           if (isPaid) {
             await sendPaidMediaToChannel({
