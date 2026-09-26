@@ -866,7 +866,7 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
     }
 
     // Determinar estatus inicial: 1 (Publicada) o 2 (Para Publicar / Borrador) según elección del admin
-    const chosenStatus: 1 | 2 = Number(req.body.initial_status) === 1 ? 1 : 2;
+    const chosenStatus: 1 | 2 = 1;
     let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
     for (const url of uploadedUrls) {
       mediaStatus[url] = chosenStatus;
@@ -1149,7 +1149,7 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     }
 
     // Initial status (1: Activa/Publicada, 2: Borrador/Para Publicar)
-    const chosenStatus: 1 | 2 = Number(req.body.initial_status) === 1 ? 1 : 2;
+    const chosenStatus: 1 | 2 = 1;
     let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
     for (const url of uploadedUrls) {
       mediaStatus[url] = chosenStatus;

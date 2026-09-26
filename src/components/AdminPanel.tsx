@@ -139,10 +139,7 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
               • <strong>¿Dónde se guarda?</strong> Se almacena directamente en el <strong>Servidor Telegram</strong>.
             </p>
             <p className="leading-relaxed">
-              • <strong>Publicada (Activa):</strong> Queda visible de inmediato para todos tus clientes en la Mini App.
-            </p>
-            <p className="leading-relaxed">
-              • <strong>Borrador (Oculto):</strong> Se guarda en el <strong>Servidor Telegram</strong> de forma privada, oculta para tus clientes hasta que decidas activarla.
+              • <strong>Publicada:</strong> Queda visible de inmediato para todos tus clientes en la Mini App.
             </p>
           </div>
 
@@ -538,8 +535,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Wizard step for profile configuration (Mobile-friendly)
   const [profileStep, setProfileStep] = useState<1 | 2 | 3>(1);
-  const [mediaStatusFilter, setMediaStatusFilter] = useState<'pending' | 'active' | 'all'>('pending');
-
   // Bot Welcome & Splash Media state
   const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
   const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video' | null>('photo');
@@ -2268,12 +2263,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 {profileStep === 2 && (() => {
                   const photos = editingProfile?.photos || [];
                   const activePhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 1);
-                  const pendingPhotos = photos.filter(u => (editingProfile?.media_status?.[u] || 2) === 2);
-                  const displayedPhotos = mediaStatusFilter === 'pending'
-                    ? pendingPhotos
-                    : mediaStatusFilter === 'active'
-                    ? activePhotos
-                    : photos;
+                  const displayedPhotos = photos;
 
                   return (
                     <div className="space-y-3 text-xs">
@@ -2354,34 +2344,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                             {/* Selector de Estado al Subir Contenido */}
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-zinc-900/90 rounded-xl border border-zinc-800">
-                              <span className="text-xs font-bold text-zinc-200 flex items-center gap-1.5">
-                                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                                Al subir, guardar como:
-                              </span>
-                              <div className="flex items-center gap-1.5 w-full sm:w-auto shrink-0">
-                                <button
-                                  type="button"
-                                  onClick={() => setUploadInitialStatus(1)}
-                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                    uploadInitialStatus === 1
-                                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20 ring-1 ring-emerald-400'
-                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  <span>🟢 Publicada (Activa)</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setUploadInitialStatus(2)}
-                                  className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                                    uploadInitialStatus === 2
-                                      ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-300'
-                                      : 'bg-zinc-800 text-zinc-400 hover:text-white'
-                                  }`}
-                                >
-                                  <span>🟡 Borrador (Oculto)</span>
-                                </button>
-                              </div>
+                              
                             </div>
 
                                                         {/* MARCA DE AGUA */}
@@ -3090,12 +3053,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             <Eye className="w-4 h-4 text-amber-400" /> Paso 3: Ver para Publicar
                           </h4>
                           <div className="flex items-center gap-1.5">
-                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">
-                              🟡 {pendingPhotos.length} Para Publicar
-                            </span>
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                              🟢 {activePhotos.length} Activas
-                            </span>
+                            
                           </div>
                         </div>
 
@@ -3152,65 +3110,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         {/* Pestañas de Filtrado de Estado */}
                         <div className="space-y-3">
                           <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-                            <div className="flex items-center gap-1.5 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-                              <button
-                                type="button"
-                                onClick={() => setMediaStatusFilter('pending')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
-                                  mediaStatusFilter === 'pending'
-                                    ? 'bg-amber-500 text-zinc-950 shadow'
-                                    : 'text-zinc-400 hover:text-white'
-                                }`}
-                              >
-                                <span>🟡 Para Publicar ({pendingPhotos.length})</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMediaStatusFilter('active')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
-                                  mediaStatusFilter === 'active'
-                                    ? 'bg-emerald-600 text-white shadow'
-                                    : 'text-zinc-400 hover:text-white'
-                                }`}
-                              >
-                                <span>🟢 Activas ({activePhotos.length})</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setMediaStatusFilter('all')}
-                                className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1.5 ${
-                                  mediaStatusFilter === 'all'
-                                    ? 'bg-zinc-700 text-white shadow'
-                                    : 'text-zinc-400 hover:text-white'
-                                }`}
-                              >
-                                <span>Todos ({photos.length})</span>
-                              </button>
-                            </div>
-
                             {/* Acciones Masivas */}
                             {photos.length > 0 && (
                               <div className="flex items-center gap-2">
-                                {pendingPhotos.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleAllMediaStatus(1)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                                    title="Activar todos los archivos multimedia a Status 1"
-                                  >
-                                    <CheckCircle2 className="w-3 h-3" /> Activar Todos ({pendingPhotos.length})
-                                  </button>
-                                )}
-                                {activePhotos.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleAllMediaStatus(2)}
-                                    className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-750 text-amber-400/90 border border-zinc-700 text-[10px] font-bold cursor-pointer transition-all flex items-center gap-1"
-                                    title="Pasar todos los archivos multimedia a Status 2"
-                                  >
-                                    ⏸️ Mover Todos a Status 2
-                                  </button>
-                                )}
+                                
                               </div>
                             )}
                           </div>
@@ -3219,8 +3122,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           {displayedPhotos.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
                               {displayedPhotos.map((photoUrl, idx) => {
-                                const currentStatus = editingProfile?.media_status?.[photoUrl] || 2;
-                                const isActive = currentStatus === 1;
+                                
                                 const isCover = editingProfile?.photos?.[0] === photoUrl;
                                 const isEphemeral = Boolean(editingProfile?.ephemeral_config?.[photoUrl]?.enabled);
                                 const duration = editingProfile?.ephemeral_config?.[photoUrl]?.duration_seconds || 5;
@@ -3229,9 +3131,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 return (
                                   <div
                                     key={photoUrl}
-                                    className={`relative bg-zinc-900 border rounded-2xl overflow-hidden flex flex-col transition-all shadow-md ${
-                                      isActive ? 'border-emerald-500/50 hover:border-emerald-400' : 'border-amber-500/40 hover:border-amber-400'
-                                    }`}
+                                    className={`relative bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col transition-all shadow-md hover:border-emerald-500/50`}
                                   >
                                     {/* Thumbnail Visual */}
                                     <div
@@ -3253,18 +3153,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         </span>
                                       </div>
 
-                                      {/* Estado Superior */}
-                                      <div className="absolute top-2 left-2 flex items-center gap-1 z-10">
-                                        {isActive ? (
-                                          <span className="px-2 py-0.5 rounded-md bg-emerald-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
-                                            🟢 Status 1 (Activa)
-                                          </span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
-                                            🟡 Status 2 (Para Publicar)
-                                          </span>
-                                        )}
-                                      </div>
+                                      
 
                                       {/* Tags Inferiores */}
                                       <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1 z-10">
@@ -3323,17 +3212,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                                       {/* Botones de Acción Individuales */}
                                       <div className="flex items-center gap-1.5 pt-2 border-t border-zinc-800">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleToggleMediaStatus(photoUrl, isActive ? 2 : 1)}
-                                          className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow ${
-                                            isActive
-                                              ? 'bg-zinc-800 hover:bg-zinc-750 text-amber-400 border border-zinc-700'
-                                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                                          }`}
-                                        >
-                                          {isActive ? '⏸️ Ocultar' : '🚀 Activar'}
-                                        </button>
+                                        
 
                                         <button
                                           type="button"
@@ -3374,16 +3253,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           ) : (
                             <div className="p-8 bg-zinc-900/50 border border-dashed border-zinc-800 rounded-xl text-center space-y-2">
                               <p className="text-zinc-400 font-semibold">
-                                {mediaStatusFilter === 'pending'
-                                  ? '🎉 ¡No hay archivos pendientes en Status 2!'
-                                  : mediaStatusFilter === 'active'
-                                  ? 'No hay archivos activos en Status 1 todavía.'
-                                  : 'No hay archivos cargados.'}
+                                No hay archivos cargados.
                               </p>
                               <p className="text-zinc-500 text-[10px]">
-                                {mediaStatusFilter === 'pending'
-                                  ? 'Todo el contenido de este perfil ya está activo en la Mini App o no has subido nuevos archivos.'
-                                  : 'Usa la pestaña "Para Publicar" para activar las fotos o videos que deseas que vean los clientes.'}
+                                Usa el paso anterior para subir contenido a tu perfil.
                               </p>
                             </div>
                           )}
@@ -3839,54 +3712,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                           {/* Controles: Sugestiva & Descripción visibles aquí */}
                           <div className="p-4 sm:p-5 bg-zinc-950 border-t border-zinc-800 space-y-3.5 overflow-y-auto max-h-[40vh]">
-                            {/* Sección Estado de Publicación (Status 1 vs Status 2) */}
-                            {(() => {
-                              const currentStatus = editingProfile.media_status?.[enlargedMediaUrl] || 2;
-                              const isActive = currentStatus === 1;
-
-                              return (
-                                <div className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 space-y-2">
-                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                    <div>
-                                      <h5 className="text-xs font-bold text-white flex items-center gap-1.5">
-                                        <Activity className="w-4 h-4 text-amber-400" />
-                                        Estado de Publicación:
-                                        {isActive ? (
-                                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
-                                            🟢 Status 1: Activa (Visible en Mini App)
-                                          </span>
-                                        ) : (
-                                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold">
-                                            🟡 Status 2: Para Publicar (Oculta)
-                                          </span>
-                                        )}
-                                      </h5>
-                                      <p className="text-[11px] text-zinc-400 mt-0.5">
-                                        {isActive
-                                          ? 'Este archivo está visible para clientes en la Mini App y Canal VIP.'
-                                          : 'Este archivo está guardado en el servidor pero oculto a clientes hasta que lo actives.'}
-                                      </p>
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={() => handleToggleMediaStatus(enlargedMediaUrl, isActive ? 2 : 1)}
-                                      className={`py-2 px-3.5 rounded-xl text-xs font-extrabold transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer shadow-md ${
-                                        isActive
-                                          ? 'bg-zinc-800 hover:bg-zinc-750 text-amber-400 border border-zinc-700'
-                                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/25'
-                                      }`}
-                                    >
-                                      {isActive ? (
-                                        <>⏸️ OCULTAR FOTO (Pasar a Status 2)</>
-                                      ) : (
-                                        <>🚀 ACTIVAR FOTO (Pasar a Status 1)</>
-                                      )}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })()}
+                            
 
                             {/* Sección Sugestiva / Efímera */}
                             {(() => {
