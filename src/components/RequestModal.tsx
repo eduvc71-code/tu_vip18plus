@@ -19,7 +19,7 @@ interface RequestModalProps {
   onClose: () => void;
 }
 
-type Step = 'menu' | 'mensual' | 'country';
+type Step = 'menu' | 'mensual' | 'country' | 'confirm';
 type PlanType = 'mensual' | 'semestral' | 'permanente' | null;
 
 
@@ -83,8 +83,17 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleCountryNext = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalCountry = country === 'Otro' ? customCountry : country;
+    if (!finalCountry) {
+      setError('Por favor selecciona o ingresa tu país.');
+      return;
+    }
+    setStep('confirm');
+  };
+
+  const handleSubmit = async () => {
     const finalCountry = country === 'Otro' ? customCountry : country;
     if (!finalCountry) {
       setError('Por favor selecciona o ingresa tu país.');
@@ -150,6 +159,47 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
             </p>
             <p className="text-xs text-zinc-500 mt-2">Cerrando ventana...</p>
           </div>
+        
+        ) : step === 'confirm' ? (
+          <div className="flex flex-col h-full justify-center space-y-6 pt-4 text-center">
+            <div>
+              <div className="w-16 h-16 mx-auto rounded-full bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center mb-4">
+                <Send className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-white tracking-tight uppercase">Envío Directo</h3>
+              <p className="text-sm text-zinc-300 mt-4 leading-relaxed px-2">
+                ¿Aceptas enviar un mensaje directo y privado a <strong>IAM DANII VIP</strong>?
+                <br /><br />
+                Toda la información de los planes y formas de pago para <strong>{country === 'Otro' ? customCountry : country}</strong> te será enviada de manera 100% privada y confidencial a tu chat de Telegram.
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20 text-center">
+                {error}
+              </p>
+            )}
+
+            <div className="space-y-3 mt-4">
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full py-4 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {submitting ? 'Enviando Mensaje...' : 'Sí, Enviar Mensaje Privado'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep('country')}
+                disabled={submitting}
+                className="w-full py-3 text-xs text-zinc-500 hover:text-white uppercase font-bold cursor-pointer"
+              >
+                Cancelar y volver atrás
+              </button>
+            </div>
+          </div>
+
         ) : step === 'menu' ? (
           <div className="space-y-4 flex flex-col justify-center h-full">
             <h3 className="text-xl font-black text-white text-center mb-4 tracking-tight uppercase">
@@ -214,7 +264,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
             <button onClick={() => setStep('menu')} className="text-xs text-zinc-500 hover:text-white uppercase font-bold mt-2 cursor-pointer">Volver al menú</button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col h-full space-y-5 pt-2 text-left">
+          <form onSubmit={handleCountryNext} className="flex flex-col h-full space-y-5 pt-2 text-left">
             <div className="text-center mb-2">
               <span className="text-4xl block mb-2">{selectedPlan === 'semestral' ? '💎' : '💙'}</span>
               <h3 className="text-lg font-black text-white tracking-tight uppercase">¡Bienvenido a la zona exclusiva!</h3>
