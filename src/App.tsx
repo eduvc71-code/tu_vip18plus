@@ -248,7 +248,7 @@ export default function App() {
           const tgApp = (window as any).Telegram?.WebApp;
           const urlParams = new URLSearchParams(window.location.search);
           const sp = String(tgApp?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || '').trim();
-          if (sp === 'pagos' || sp === 'metodos') {
+          if (sp === 'pagos' || sp === 'métodos') {
             setShowPaymentModal(true);
           } else if (sp.startsWith('ver_')) {
             const targetId = sp.replace('ver_', '').trim();

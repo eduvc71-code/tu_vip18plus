@@ -1029,7 +1029,7 @@ export async function processTelegramUpdate(update: any) {
   }
 
   // Deep Link Pagos / Métodos de Pago
-  if (text.startsWith('/start pagos') || text.startsWith('/start metodos')) {
+  if (text.startsWith('/start pagos') || text.startsWith('/start métodos')) {
     if (!isPrivateChat(message.chat)) {
       await sendMessage(chatId, '🔒 Abre el chat privado para ver los métodos de pago.');
       return;
@@ -1117,18 +1117,18 @@ export async function processTelegramUpdate(update: any) {
   if (
     normText === '/pagos' ||
     normText === '/pago' ||
-    normText === '/metodos' ||
+    normText === '/métodos' ||
     normText === '/metodosdepago' ||
     normText === '/metodos_pago' ||
     normText === '💳 métodos de pago' ||
-    normText === '💳 metodos de pago' ||
-    normText === 'metodos de pago'
+    normText === '💳 métodos de pago' ||
+    normText === 'métodos de pago'
   ) {
     await sendClientPagos(chatId);
     return;
   }
 
-  if (normText === '/info' || normText === '/informacion' || normText === '/información') {
+  if (normText === '/info' || normText === '/información' || normText === '/información') {
     await sendClientInfo(chatId);
     return;
   }
