@@ -69,33 +69,33 @@ export function getPaymentMethodFlag(method: PaymentMethod | string): string {
     return flagMatch[0];
   }
 
-  if (lower.includes('bolivia') || /\bbo\b/i.test(lower)) return 'ðŸ‡§ðŸ‡´';
-  if (lower.includes('peru') || lower.includes('perú') || /\bpe\b/i.test(lower)) return 'ðŸ‡µðŸ‡ª';
-  if (lower.includes('chile') || /\bcl\b/i.test(lower)) return 'ðŸ‡¨ðŸ‡±';
-  if (lower.includes('argentina') || /\bar\b/i.test(lower)) return 'ðŸ‡¦ðŸ‡·';
-  if (lower.includes('espana') || lower.includes('españa') || lower.includes('spain') || /\bes\b/i.test(lower)) return 'ðŸ‡ªðŸ‡¸';
-  if (lower.includes('mexico') || lower.includes('méxico') || /\bmx\b/i.test(lower)) return 'ðŸ‡²ðŸ‡½';
-  if (lower.includes('paraguay') || /\bpy\b/i.test(lower)) return 'ðŸ‡µðŸ‡¾';
-  if (lower.includes('brasil') || lower.includes('brazil') || /\bbr\b/i.test(lower)) return 'ðŸ‡§ðŸ‡·';
-  if (lower.includes('uruguay') || /\buy\b/i.test(lower)) return 'ðŸ‡ºðŸ‡¾';
-  if (lower.includes('colombia') || /\bco\b/i.test(lower)) return 'ðŸ‡¨ðŸ‡´';
-  if (lower.includes('rusia') || lower.includes('russia') || /\bru\b/i.test(lower)) return 'ðŸ‡·ðŸ‡º';
-  if (lower.includes('ecuador') || /\bec\b/i.test(lower)) return 'ðŸ‡ªðŸ‡¨';
-  if (lower.includes('venezuela') || /\bve\b/i.test(lower)) return 'ðŸ‡»ðŸ‡ª';
-  if (lower.includes('zelle') || lower.includes('estados unidos') || lower.includes('usa') || /\bus\b/i.test(lower)) return 'ðŸ‡ºðŸ‡¸';
-  if (lower.includes('cripto') || lower.includes('usdt') || lower.includes('bitcoin') || lower.includes('binance')) return 'ðŸª™';
-  if (lower.includes('paypal')) return 'ðŸ’¸';
+  if (lower.includes('bolivia') || /\bbo\b/i.test(lower)) return '🇧🇴';
+  if (lower.includes('peru') || lower.includes('perú') || /\bpe\b/i.test(lower)) return '🇵🇪';
+  if (lower.includes('chile') || /\bcl\b/i.test(lower)) return '🇨🇱';
+  if (lower.includes('argentina') || /\bar\b/i.test(lower)) return '🇦🇷';
+  if (lower.includes('espana') || lower.includes('españa') || lower.includes('spain') || /\bes\b/i.test(lower)) return '🇪🇸';
+  if (lower.includes('mexico') || lower.includes('méxico') || /\bmx\b/i.test(lower)) return '🇲🇽';
+  if (lower.includes('paraguay') || /\bpy\b/i.test(lower)) return '🇵🇾';
+  if (lower.includes('brasil') || lower.includes('brazil') || /\bbr\b/i.test(lower)) return '🇧🇷';
+  if (lower.includes('uruguay') || /\buy\b/i.test(lower)) return '🇺🇾';
+  if (lower.includes('colombia') || /\bco\b/i.test(lower)) return '🇨🇴';
+  if (lower.includes('rusia') || lower.includes('russia') || /\bru\b/i.test(lower)) return '🇷🇺';
+  if (lower.includes('ecuador') || /\bec\b/i.test(lower)) return '🇪🇨';
+  if (lower.includes('venezuela') || /\bve\b/i.test(lower)) return '🇻🇪';
+  if (lower.includes('zelle') || lower.includes('estados unidos') || lower.includes('usa') || /\bus\b/i.test(lower)) return '🇺🇸';
+  if (lower.includes('cripto') || lower.includes('usdt') || lower.includes('bitcoin') || lower.includes('binance')) return '🪙';
+  if (lower.includes('paypal')) return '💸';
   if (lower.includes('estrella') || lower.includes('stars')) return 'â­';
   if (lower.includes('tigo')) return 'â˜Žï¸';
   if (lower.includes('western') || lower.includes('remitly') || lower.includes('moneygram')) return 'ðŸŒ';
 
-  return 'ðŸ’³';
+  return '💳';
 }
 
 export function getCleanPaymentTitle(method: PaymentMethod): string {
   const rawTitle = method.title || '';
   return rawTitle
-    .replace(/^([A-Z]{2}\s*[-â€“:]\s*)/i, '')
+    .replace(/^([A-Z]{2}\s*[-–:]\s*)/i, '')
     .replace(/^(\p{Regional_Indicator}{2}|\p{Emoji})\s*/u, '')
     .trim();
 }
@@ -138,10 +138,10 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
               <span>🟢</span> 1. Contenido Free (Fotos y Videos Gratuitos)
             </h4>
             <p className="leading-relaxed">
-              â€¢ <strong>¿Dónde se guarda?</strong> Se almacena directamente en el <strong>Servidor Telegram</strong>.
+              • <strong>¿Dónde se guarda?</strong> Se almacena directamente en el <strong>Servidor Telegram</strong>.
             </p>
             <p className="leading-relaxed">
-              â€¢ <strong>Publicada:</strong> Queda visible de inmediato para todos tus clientes en la Mini App.
+              • <strong>Publicada:</strong> Queda visible de inmediato para todos tus clientes en la Mini App.
             </p>
           </div>
 
@@ -151,13 +151,13 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
               <Star className="w-3.5 h-3.5 fill-current" /> 2. Contenido VIP (Telegram Stars)
             </h4>
             <p className="leading-relaxed">
-              â€¢ <strong>Paso 1 (Guardar):</strong> Seleccionas el archivo y le asignas su precio en Estrellas (â­ 10, 25, 50, etc.). Se registra en el <strong>Servidor Telegram</strong> y en el <strong>Servidor DB</strong>.
+              • <strong>Paso 1 (Guardar):</strong> Seleccionas el archivo y le asignas su precio en Estrellas (â­ 10, 25, 50, etc.). Se registra en el <strong>Servidor Telegram</strong> y en el <strong>Servidor DB</strong>.
             </p>
             <p className="leading-relaxed">
-              â€¢ <strong>Paso 2 (Previsualizar):</strong> Ves cómo se mostrará el candado con efecto borroso en el canal de tus clientes.
+              • <strong>Paso 2 (Previsualizar):</strong> Ves cómo se mostrará el candado con efecto borroso en el canal de tus clientes.
             </p>
             <p className="leading-relaxed">
-              â€¢ <strong>Paso 3 (Publicar):</strong> Se publica en tu Canal VIP con botón de cobro oficial de Telegram. Cuando el cliente paga con Telegram Stars, el bot le entrega el contenido desbloqueado al instante.
+              • <strong>Paso 3 (Publicar):</strong> Se publica en tu Canal VIP con botón de cobro oficial de Telegram. Cuando el cliente paga con Telegram Stars, el bot le entrega el contenido desbloqueado al instante.
             </p>
           </div>
 
@@ -167,7 +167,7 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
               <Bot className="w-3.5 h-3.5" /> 3. Biblioteca del Bot (Privada)
             </h4>
             <p className="leading-relaxed">
-              â€¢ Almacena multimedia exclusivo en el <strong>Servidor Telegram</strong> para que el bot responda por chat privado o para envíos especiales, sin publicarse en el canal ni mostrarse en la Mini App.
+              • Almacena multimedia exclusivo en el <strong>Servidor Telegram</strong> para que el bot responda por chat privado o para envíos especiales, sin publicarse en el canal ni mostrarse en la Mini App.
             </p>
           </div>
 
@@ -177,7 +177,7 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose }) => {
               <HardDrive className="w-3.5 h-3.5 text-amber-400" /> 4. Respaldo Seguro (Servidor DB)
             </h4>
             <p className="leading-relaxed">
-              â€¢ Al pulsar el botón <strong>"Servidor DB"</strong> en la barra superior, se crea un respaldo completo de tu catálogo, perfiles, encuestas y métodos de pago en el <strong>Servidor DB</strong> para asegurar que tus datos nunca se pierdan ante reinicios.
+              • Al pulsar el botón <strong>"Servidor DB"</strong> en la barra superior, se crea un respaldo completo de tu catálogo, perfiles, encuestas y métodos de pago en el <strong>Servidor DB</strong> para asegurar que tus datos nunca se pierdan ante reinicios.
             </p>
           </div>
         </div>
@@ -376,7 +376,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (isIos && !document.documentElement.requestFullscreen) {
         setMessage({
           type: 'success',
-          text: '📱 En iPhone: Toca Compartir [â†‘] en Safari y selecciona "Añadir a pantalla de inicio" para usar en pantalla completa sin barra de direcciones.'
+          text: '📱 En iPhone: Toca Compartir [↑] en Safari y selecciona "Añadir a pantalla de inicio" para usar en pantalla completa sin barra de direcciones.'
         });
         setIsFullScreen(prev => !prev);
         return;
@@ -434,7 +434,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
   const [adminContactUsername, setAdminContactUsername] = useState('');
   const [reactionsEnabled, setReactionsEnabled] = useState(false);
-  const [reactionsList, setReactionsList] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜', 'ðŸ˜˜', 'ðŸ’¦']);
+  const [reactionsList, setReactionsList] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜', '😘', '💦']);
   const [freeReactionsEnabled, setFreeReactionsEnabled] = useState(false);
   const [vipReactionsEnabled, setVipReactionsEnabled] = useState(false);
   const [freePreviewUrl, setFreePreviewUrl] = useState<string | null>(null);
@@ -528,7 +528,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
   const [profileReactions, setProfileReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
   const [paidModalReactions, setPaidModalReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
-  const availableEmojis = ['â¤ï¸', '🔥', 'ðŸ˜', 'ðŸ˜˜', 'ðŸ’¦', 'ðŸ˜ˆ', 'ðŸ‘', 'ðŸ¥µ'];
+  const availableEmojis = ['â¤ï¸', '🔥', 'ðŸ˜', '😘', '💦', '😈', 'ðŸ‘', '🥵'];
 
 
   // Custom buttons state
@@ -834,7 +834,7 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: 'ðŸš€ Contenido Free guardado en Telegram y publicado en la Mini App y Canal.'
+          text: '🚀 Contenido Free guardado en Telegram y publicado en la Mini App y Canal.'
         });
         setSelectedPhotoFiles(null);
         setUploadComment('');
@@ -947,7 +947,7 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: `ðŸŽ‰ ¡Contenido VIP publicado con éxito en el Canal por â­ ${vipStarCount} Estrellas!`
+          text: `🎉 ¡Contenido VIP publicado con éxito en el Canal por â­ ${vipStarCount} Estrellas!`
         });
         setVipDraftMediaUrl(null);
         setVipFile(null);
@@ -991,7 +991,7 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: 'ðŸ¤– Archivo guardado con éxito en la biblioteca del Bot (sin publicar al canal ni a clientes).'
+          text: '🤖 Archivo guardado con éxito en la biblioteca del Bot (sin publicar al canal ni a clientes).'
         });
         setBotFile(null);
         setBotCaption('');
@@ -1103,8 +1103,8 @@ body.append('publish_to_channel', 'true');
         setMessage({
           type: 'success',
           text: data.telegram_published
-            ? 'ðŸŽ‰ ¡Encuesta creada y enviada al Canal VIP de Telegram y a la Mini App!'
-            : 'âœ… Encuesta guardada para la Mini App exitosamente.'
+            ? '🎉 ¡Encuesta creada y enviada al Canal VIP de Telegram y a la Mini App!'
+            : '✅ Encuesta guardada para la Mini App exitosamente.'
         });
         setEditingPoll(null);
         setPollFormData({ question: '', options: ['', ''], visible_channel: true, visible_miniapp: true, publish_telegram: true });
@@ -1147,7 +1147,7 @@ body.append('publish_to_channel', 'true');
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'ðŸ’¾ Base de datos respaldada en Servidor DB exitosamente.' });
+        setMessage({ type: 'success', text: '💾 Base de datos respaldada en Servidor DB exitosamente.' });
       } else {
         setMessage({ type: 'error', text: data.error || 'Error al respaldar en Servidor DB' });
       }
@@ -1349,7 +1349,7 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: `ðŸš€ ¡Publicado con éxito en Telegram y en la Mini App!`
+          text: `🚀 ¡Publicado con éxito en Telegram y en la Mini App!`
         });
         fetchData();
       } else {
@@ -1425,7 +1425,7 @@ body.append('publish_to_channel', 'true');
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'âœ… Descripción de la Pantalla de Inicio / Splash guardada con éxito' });
+        setMessage({ type: 'success', text: '✅ Descripción de la Pantalla de Inicio / Splash guardada con éxito' });
         fetchData();
       } else {
         setMessage({ type: 'error', text: data.error || 'Error al guardar descripción del Splash' });
@@ -1541,7 +1541,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
         setChannelIdInput(data.channel_id);
         setMessage({
           type: 'success',
-          text: `ðŸŽ‰ ¡Canal "${data.channel_title || data.channel_id}" verificado y vinculado exitosamente! Ahora el bot puede publicar fotos y novedades en él.`
+          text: `🎉 ¡Canal "${data.channel_title || data.channel_id}" verificado y vinculado exitosamente! Ahora el bot puede publicar fotos y novedades en él.`
         });
         fetchData();
       } else {
@@ -1609,7 +1609,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage({ type: 'success', text: `âœ… Método "${data.payment_method.title}" guardado con éxito.` });
+        setMessage({ type: 'success', text: `✅ Método "${data.payment_method.title}" guardado con éxito.` });
         setEditingPaymentMethod(data.payment_method);
         setSelectedPaymentMethodId(data.payment_method.id);
         setPaymentImageFile(null);
@@ -1642,7 +1642,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
       });
       if (res.ok) {
         const data = await res.json();
-        setMessage({ type: 'success', text: 'ðŸŽ‰ Imagen/QR subido y guardado exitosamente.' });
+        setMessage({ type: 'success', text: '🎉 Imagen/QR subido y guardado exitosamente.' });
         setPaymentImageFile(null);
         setPaymentImagePreview(null);
         if (editingPaymentMethod && editingPaymentMethod.id === methodId) {
@@ -1788,7 +1788,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 className="w-full py-2.5 px-3 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer active:scale-95"
               >
                 <Download className="w-4 h-4 text-amber-400" />
-                <span>ðŸ“² Instalar Panel Admin en mi Teléfono</span>
+                <span>📲 Instalar Panel Admin en mi Teléfono</span>
               </button>
               <p className="text-[10px] text-zinc-500">
                 Se guardará con su propio icono en tu pantalla de inicio.
@@ -1821,7 +1821,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
               <div className="space-y-2.5 text-left text-xs bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
                 <div className="flex items-start gap-2.5">
                   <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">1</span>
-                  <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>â‹®</strong>).</p>
+                  <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>⋮</strong>).</p>
                 </div>
                 <div className="flex items-start gap-2.5">
                   <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">2</span>
@@ -1876,7 +1876,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
             <div className="min-w-0 flex-1">
               <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight truncate flex items-center gap-1.5">
                 <span>Panel Admin</span>
-                <span className="text-zinc-600 font-normal hidden xs:inline">â€¢</span>
+                <span className="text-zinc-600 font-normal hidden xs:inline">•</span>
                 <span className="text-amber-400/90 font-medium text-xs truncate hidden xs:inline">{modelDisplayName || formData.name || 'Danii'}</span>
               </h2>
               <p className="text-[10px] text-zinc-400 truncate">Gestión de contenido</p>
@@ -2054,7 +2054,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       title="Carga directa de contenido al servidor"
                     >
                       <Upload className="w-3.5 h-3.5" />
-                      <span>âš¡ Carga Directa de Contenido</span>
+                      <span>⚡ Carga Directa de Contenido</span>
                     </button>
                   </div>
                 </div>
@@ -2160,7 +2160,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         <textarea
                           rows={3}
                           value={formData.description}
-                          placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda... ðŸ’« 15 fotos + 2 videos HD. Esta descripción se publica en Telegram y se muestra en la Mini App."
+                          placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda... 💫 15 fotos + 2 videos HD. Esta descripción se publica en Telegram y se muestra en la Mini App."
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                           className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 resize-none transition-colors text-xs leading-relaxed"
                         />
@@ -2174,7 +2174,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
-                        Guardar y Continuar a Galería (Paso 2) âž”
+                        Guardar y Continuar a Galería (Paso 2) ➔
                       </button>
                     </div>
                   </form>
@@ -2442,7 +2442,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 <HardDrive className="w-4 h-4" />
                                 {uploadingPhotos
                                   ? 'Subiendo a Telegram...'
-                                  : 'ðŸš€ Subir y Publicar'}
+                                  : '🚀 Subir y Publicar'}
                               </button>
                             )}
                           </div>
@@ -2561,7 +2561,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     rows={2}
                                     value={vipCaption}
                                     onChange={(e) => setVipCaption(e.target.value)}
-                                    placeholder="Ej: ðŸ’Ž Video VIP sin censura en ultra alta definición... Desbloquea ahora con Telegram Stars."
+                                    placeholder="Ej: 💎 Video VIP sin censura en ultra alta definición... Desbloquea ahora con Telegram Stars."
                                     className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500 resize-none"
                                   />
                                 </div>
@@ -2574,7 +2574,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     className="w-full py-3 px-5 rounded-xl font-extrabold text-sm cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all mt-3"
                                   >
                                     <HardDrive className="w-5 h-5" />
-                                    {uploadingVip ? 'Guardando en Telegram...' : 'ðŸ’¾ Guardar en Telegram y DB âž”'}
+                                    {uploadingVip ? 'Guardando en Telegram...' : '💾 Guardar en Telegram y DB ➔'}
                                   </button>
                                 )}
                               </div>
@@ -2652,7 +2652,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all"
                                     >
                                       <Send className="w-4 h-4" />
-                                      {publishingVip ? 'Publicando...' : 'Publicar Ahora âž”'}
+                                      {publishingVip ? 'Publicando...' : 'Publicar Ahora ➔'}
                                     </button>
                                   )}
                                 </div>
@@ -2684,9 +2684,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     onChange={(e) => setBotCategory(e.target.value as BotMediaCategory)}
                                     className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-xs focus:outline-none focus:border-indigo-500"
                                   >
-                                    <option value="bienvenida">ðŸŽ‰ Mensaje de Bienvenida (/start)</option>
-                                    <option value="auto_reply">ðŸ’¬ Respuesta Automática a Consultas</option>
-                                    <option value="vip_privado">ðŸ”’ Contenido Privado VIP (Chat Privado)</option>
+                                    <option value="bienvenida">🎉 Mensaje de Bienvenida (/start)</option>
+                                    <option value="auto_reply">💬 Respuesta Automática a Consultas</option>
+                                    <option value="vip_privado">🔒 Contenido Privado VIP (Chat Privado)</option>
                                     <option value="drip">â³ Drip / Campaña Programada</option>
                                     <option value="general">ðŸ“ General / Soporte</option>
                                   </select>
@@ -2727,7 +2727,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     className="py-3 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all"
                                   >
                                     <HardDrive className="w-4 h-4" />
-                                    {uploadingBotMedia ? 'Subiendo a Telegram...' : 'ðŸ“¥ Guardar en Biblioteca del Bot'}
+                                    {uploadingBotMedia ? 'Subiendo a Telegram...' : '📥 Guardar en Biblioteca del Bot'}
                                   </button>
                                 )}
                               </div>
@@ -2737,7 +2737,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             <div className="space-y-2 pt-2">
                               <div className="flex items-center justify-between pb-1 border-b border-zinc-800">
                                 <span className="font-bold text-white text-xs flex items-center gap-1.5">
-                                  <span>ðŸ“¦</span> Archivos Guardados en Biblioteca del Bot ({botQueue.length})
+                                  <span>📦</span> Archivos Guardados en Biblioteca del Bot ({botQueue.length})
                                 </span>
                                 <span className="text-[10px] text-zinc-500">Listos para despachar por el bot</span>
                               </div>
@@ -2933,7 +2933,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           onClick={() => setProfileStep(3)}
                           className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                         >
-                          Continuar a Ver para Publicar (Paso 3) âž”
+                          Continuar a Ver para Publicar (Paso 3) ➔
                         </button>
                       </div>
                     </div>
@@ -3175,8 +3175,8 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             {publishing
                               ? 'Publicando y sincronizando...'
                               : operatingMode === 'solo_bot'
-                                ? 'ðŸš€ Activar Todo y Publicar en Canal VIP Free (Mini App)'
-                                : 'ðŸš€ Activar Todo y Publicar en Telegram y Canal VIP Free'}
+                                ? '🚀 Activar Todo y Publicar en Canal VIP Free (Mini App)'
+                                : '🚀 Activar Todo y Publicar en Telegram y Canal VIP Free'}
                           </button>
                           <p className="text-center text-[10px] text-zinc-500">
                             Al pulsar este botón, todo el contenido se publicará y sincronizará con Telegram y la Mini App.
@@ -3309,7 +3309,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         {formData.name || 'Perfil VIP'}
                                         <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">VIP</span>
                                       </h3>
-                                      <p className="text-[10px] text-zinc-400">Contenido Exclusivo â€¢ Acceso Total</p>
+                                      <p className="text-[10px] text-zinc-400">Contenido Exclusivo • Acceso Total</p>
                                     </div>
                                     <div className="text-right">
                                       <span className="text-sm font-black text-amber-400">Bs. {formData.rate_bs || 0}</span>
@@ -3373,7 +3373,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     type="button"
                                     className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 pointer-events-none"
                                   >
-                                    ðŸ’Ž Suscribirse a {formData.name || 'Perfil VIP'}
+                                    💎 Suscribirse a {formData.name || 'Perfil VIP'}
                                   </button>
                                 </div>
                               </div>
@@ -3384,7 +3384,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <div className="p-2.5 bg-sky-500/10 border border-sky-500/20 rounded-xl text-[11px] text-sky-300">
                                 {operatingMode === 'solo_bot' ? (
                                   <>
-                                    ðŸ”’ <strong>Modo A: Solo Bot (100% Privado)</strong>: En este modo confidencial, no se publica en canales públicos. Todo queda publicado únicamente en la Mini App para los suscriptores.
+                                    🔒 <strong>Modo A: Solo Bot (100% Privado)</strong>: En este modo confidencial, no se publica en canales públicos. Todo queda publicado únicamente en la Mini App para los suscriptores.
                                   </>
                                 ) : (
                                   <>
@@ -3424,7 +3424,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 {/* Caption Post */}
                                 <div className="p-3.5 space-y-2 text-xs">
                                   <p className="font-bold text-amber-300">
-                                    âœ¨ {formData.name || 'IAM Danii VIP'} â€¢ Contenido Exclusivo âœ¨
+                                    ✨ {formData.name || 'IAM Danii VIP'} • Contenido Exclusivo ✨
                                   </p>
                                   <p className="text-zinc-200 text-[11px] whitespace-pre-line leading-relaxed">
                                     {coverMedia && editingProfile?.media_descriptions?.[coverMedia]
@@ -3447,7 +3447,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       type="button"
                                       className="w-full py-2 px-3 rounded-lg bg-[#243447] text-[#64b5f6] font-semibold text-[10px] flex items-center justify-center gap-1.5 pointer-events-none"
                                     >
-                                      ðŸ’Ž Solicitar Suscripción (Bs. {formData.rate_bs || 0})
+                                      💎 Solicitar Suscripción (Bs. {formData.rate_bs || 0})
                                     </button>
                                   </div>
                                 </div>
@@ -3476,7 +3476,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             className="py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs cursor-pointer transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
                           >
                             <Send className="w-3.5 h-3.5" />
-                            {publishing ? 'Publicando...' : 'ðŸš€ Todo Listo: Publicar Ahora'}
+                            {publishing ? 'Publicando...' : '🚀 Todo Listo: Publicar Ahora'}
                           </button>
                         </div>
                       </div>
@@ -3498,7 +3498,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-zinc-800 bg-zinc-950/80">
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-zinc-300">
-                                {isVideoUrl(enlargedMediaUrl) ? 'ðŸŽ¥ Video' : 'ðŸ“¸ Fotografía'}
+                                {isVideoUrl(enlargedMediaUrl) ? '🎥 Video' : '📸 Fotografía'}
                               </span>
                               {editingProfile.photos && (
                                 <span className="text-xs font-mono text-amber-400 font-bold">
@@ -3643,7 +3643,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       }`}
                                     >
                                       <Flame className="w-3.5 h-3.5" />
-                                      {isEphemeral ? '🔥 Sugestiva Activa' : 'âš¡ Hacer Sugestiva'}
+                                      {isEphemeral ? '🔥 Sugestiva Activa' : '⚡ Hacer Sugestiva'}
                                     </button>
                                   </div>
 
@@ -3838,7 +3838,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               </div>
                               <div className="flex-1 min-w-0">
                                 <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider">
-                                  {isVideoUrl(paidModalMediaUrl) ? 'ðŸŽ¥ Video de Pago' : 'ðŸ“¸ Fotografía de Pago'}
+                                  {isVideoUrl(paidModalMediaUrl) ? '🎥 Video de Pago' : '📸 Fotografía de Pago'}
                                 </span>
                                 <p className="text-xs text-zinc-300 mt-0.5">
                                   Telegram mostrará este contenido <strong>desenfocado</strong> en el Canal VIP hasta que el suscriptor pague las estrellas.
@@ -3952,7 +3952,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       </p>
                     </div>
                     <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 w-fit">
-                      {operatingMode === 'solo_bot' ? 'ðŸ¤– Modo A Activo' : '📢 Modo B Activo'}
+                      {operatingMode === 'solo_bot' ? '🤖 Modo A Activo' : '📢 Modo B Activo'}
                     </span>
                   </div>
 
@@ -3970,7 +3970,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-extrabold text-sm text-white flex items-center gap-2">
-                          ðŸ¤– Modo A: "Solo Bot"
+                          🤖 Modo A: "Solo Bot"
                         </span>
                         {operatingMode === 'solo_bot' && (
                           <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />
@@ -3979,13 +3979,13 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       <p className="text-amber-300/90 text-[11px] font-bold mt-1">100% Privado y Confidencial</p>
                       <ul className="mt-2.5 space-y-1.5 text-[11px] text-zinc-400">
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Publica directamente a la Mini App.
+                          <span className="text-emerald-400 font-bold">✓</span> Publica directamente a la Mini App.
                         </li>
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Todo visitante se registra automáticamente como suscriptor.
+                          <span className="text-emerald-400 font-bold">✓</span> Todo visitante se registra automáticamente como suscriptor.
                         </li>
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Cero publicaciones ni reportes en canales públicos.
+                          <span className="text-emerald-400 font-bold">✓</span> Cero publicaciones ni reportes en canales públicos.
                         </li>
                       </ul>
                     </button>
@@ -4012,13 +4012,13 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       <p className="text-amber-300/90 text-[11px] font-bold mt-1">Bot + Canal Free (Vitrina)</p>
                       <ul className="mt-2.5 space-y-1.5 text-[11px] text-zinc-400">
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Publica en la Mini App y envía preview al Canal Free.
+                          <span className="text-emerald-400 font-bold">✓</span> Publica en la Mini App y envía preview al Canal Free.
                         </li>
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Los botones del Canal abren la Mini App directamente en Telegram.
+                          <span className="text-emerald-400 font-bold">✓</span> Los botones del Canal abren la Mini App directamente en Telegram.
                         </li>
                         <li className="flex items-start gap-1.5">
-                          <span className="text-emerald-400 font-bold">âœ“</span> Permite difusión masiva y viralidad en Telegram.
+                          <span className="text-emerald-400 font-bold">✓</span> Permite difusión masiva y viralidad en Telegram.
                         </li>
                       </ul>
                     </button>
@@ -4287,7 +4287,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       type="text"
                       value={modelDisplayName}
                       onChange={(e) => setModelDisplayName(e.target.value)}
-                      placeholder="Ej: IAM Danii ðŸ§¸ðŸ©·"
+                      placeholder="Ej: IAM Danii 🧚‍♀️"
                       className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
                     />
                   </div>
@@ -4377,7 +4377,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     <Heart className="w-4 h-4 text-amber-400" /> Reacciones Interactivas (Mini App & Canal)
                   </h4>
                   <p className="text-zinc-400">
-                    Habilita la barra flotante de 5 segundos con iconos de reacciï¿½n al abrir fotos o videos. Al reaccionar en la Mini App, el contador se actualizarï¿½ en el Canal VIP automï¿½ticamente.
+                    Habilita la barra flotante de 5 segundos con iconos de reacción al abrir fotos o videos. Al reaccionar en la Mini App, el contador se actualizará en el Canal VIP automáticamente.
                   </p>
                   <div className="flex flex-col gap-3">
                     <label className="flex items-center gap-2 cursor-pointer w-fit">
@@ -4387,10 +4387,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         onChange={(e) => setReactionsEnabled(e.target.checked)} 
                         className="w-4 h-4 rounded accent-amber-500 cursor-pointer" 
                       />
-                      <span className="text-sm font-bold text-white">Habilitar visualizaciï¿½n de Reacciones</span>
+                      <span className="text-sm font-bold text-white">Habilitar visualización de Reacciones</span>
                     </label>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold text-zinc-400">Lista de iconos (Sepï¿½ralos por un espacio):</label>
+                      <label className="text-[11px] font-bold text-zinc-400">Lista de iconos (Sepáralos por un espacio):</label>
                       <input 
                          type="text"
                          value={reactionsList.join(' ')}
@@ -4810,7 +4810,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           <p className="text-[11px] text-zinc-400 mt-0.5">
                             Categoría:{' '}
                             <strong className="text-zinc-300">
-                              {editingPaymentMethod.category === 'national' ? 'ðŸ‡§ðŸ‡´ Pago Nacional' : editingPaymentMethod.category === 'international' ? '🌍 Transferencia Internacional' : 'âš¡ Cripto / Servicio Digital'}
+                              {editingPaymentMethod.category === 'national' ? '🇧🇴 Pago Nacional' : editingPaymentMethod.category === 'international' ? '🌍 Transferencia Internacional' : '⚡ Cripto / Servicio Digital'}
                             </strong>
                           </p>
                         </div>
@@ -4933,9 +4933,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, category: e.target.value as any })}
                               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 cursor-pointer"
                             >
-                              <option value="national">ðŸ‡§ðŸ‡´ Pago Nacional (Bolivia)</option>
+                              <option value="national">🇧🇴 Pago Nacional (Bolivia)</option>
                               <option value="international">🌍 Transferencia Internacional (Por País)</option>
-                              <option value="service">âš¡ Criptomonedas & Servicios Digitales</option>
+                              <option value="service">⚡ Criptomonedas & Servicios Digitales</option>
                             </select>
                           </div>
 
@@ -4980,7 +4980,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             className="flex-1 sm:flex-initial px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
                           >
                             <Save className="w-3.5 h-3.5" />
-                            <span>{loading ? 'Guardando...' : 'ðŸ’¾ Guardar'}</span>
+                            <span>{loading ? 'Guardando...' : '💾 Guardar'}</span>
                           </button>
 
                           <button
@@ -4991,7 +4991,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             title="Guarda los cambios y publica el menú interactivo en el canal oficial"
                           >
                             <Send className="w-3.5 h-3.5" />
-                            <span>{publishingPaymentsToChannel ? 'Publicando...' : 'ðŸš€ Guardar y Publicar'}</span>
+                            <span>{publishingPaymentsToChannel ? 'Publicando...' : '🚀 Guardar y Publicar'}</span>
                           </button>
                         </div>
                       </div>
@@ -5296,7 +5296,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    {savingPoll ? 'Creando Encuesta...' : 'ðŸš€ Lanzar Encuesta'}
+                    {savingPoll ? 'Creando Encuesta...' : '🚀 Lanzar Encuesta'}
                   </button>
                 </form>
 
@@ -5318,11 +5318,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 <h5 className="font-bold text-white text-xs sm:text-sm">{poll.question}</h5>
                                 <div className="flex items-center gap-2 text-[10px] text-zinc-400 mt-1">
                                   <span>{totalVotes} votos registrados</span>
-                                  <span>â€¢</span>
+                                  <span>•</span>
                                   <span>{new Date(poll.created_at).toLocaleDateString('es-BO')}</span>
                                   {poll.telegram_poll_id && (
                                     <>
-                                      <span>â€¢</span>
+                                      <span>•</span>
                                       <span className="text-sky-400 font-semibold">En Telegram Poll</span>
                                     </>
                                   )}
@@ -5462,7 +5462,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
             <div className="space-y-2.5 text-left text-xs bg-zinc-950 p-3.5 rounded-2xl border border-zinc-800">
               <div className="flex items-start gap-2.5">
                 <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">1</span>
-                <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>â‹®</strong>).</p>
+                <p className="text-zinc-300">En tu navegador (Safari en iPhone o Chrome en Android), pulsa el botón <strong>Compartir</strong> (⎋) o el menú (<strong>⋮</strong>).</p>
               </div>
               <div className="flex items-start gap-2.5">
                 <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 font-bold flex items-center justify-center text-[11px] shrink-0 mt-0.5">2</span>

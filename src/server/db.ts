@@ -122,7 +122,7 @@ export async function getDb(): Promise<any> {
         fs.writeFileSync(DB_FILE, b2Buf);
         db = new SqlJsCompatibleDatabase(b2Buf);
         loadedFromB2 = true;
-        console.log('[Database] âœ… Base de datos de producción restaurada exitosamente desde Backblaze B2');
+        console.log('[Database] ✅ Base de datos de producción restaurada exitosamente desde Backblaze B2');
       } else {
         console.log('[Database] No se encontró base previa en B2.');
       }
@@ -540,7 +540,7 @@ function seedPaymentMethods(database: any): void {
     }> = [
       {
         id: 'qr_bolivia',
-        title: 'ðŸ‡§ðŸ‡´ PAGO QR BOLIVIA',
+        title: '🇧🇴 PAGO QR BOLIVIA',
         category: 'national',
         image_url: existingQr,
         description: 'Escanea el código QR desde cualquier banco boliviano o app de pagos para realizar tu transferencia inmediata en Bs. Envía el comprobante para habilitar tu acceso.',
@@ -596,15 +596,15 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'brasil',
-        title: 'ðŸ‡§ðŸ‡· BRASIL',
+        title: '🇧🇷 BRASIL',
         category: 'international',
         image_url: null,
-        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferÃªncia bancária local.',
+        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferência bancária local.',
         priority_order: 8
       },
       {
         id: 'uruguay',
-        title: 'ðŸ‡ºðŸ‡¾ URUGUAY',
+        title: '🇺🇾 URUGUAY',
         category: 'international',
         image_url: null,
         description: 'Pagos en Uruguay mediante Prex, Brou o transferencia local en pesos uruguayos o dólares.',
@@ -620,7 +620,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'rusia',
-        title: 'ðŸ‡·ðŸ‡º RUSIA',
+        title: '🇷🇺 RUSIA',
         category: 'international',
         image_url: null,
         description: 'Pagos y transferencias internacionales / criptomonedas (USDT) para Rusia.',
@@ -628,7 +628,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'ecuador',
-        title: 'ðŸ‡ªðŸ‡¨ ECUADOR',
+        title: '🇪🇨 ECUADOR',
         category: 'international',
         image_url: null,
         description: 'Transferencias directas en Ecuador (USD) mediante Banco Pichincha, Banco Guayaquil o app DeUna.',
@@ -636,7 +636,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'venezuela',
-        title: 'ðŸ‡»ðŸ‡ª VENEZUELA',
+        title: '🇻🇪 VENEZUELA',
         category: 'international',
         image_url: null,
         description: 'Pagos en Venezuela mediante Pago Móvil (Bs), Zinli o Binance Pay USDT.',
@@ -644,7 +644,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'cripto',
-        title: 'ðŸª™ CRIPTOMONEDA',
+        title: '🪙 CRIPTOMONEDA',
         category: 'service',
         image_url: null,
         description: 'Aceptamos USDT (TRC-20, BEP-20, TON, Polygon), Bitcoin (BTC), Ethereum (ETH) o Binance Pay ID sin comisiones.',
@@ -660,7 +660,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'paypal',
-        title: 'ðŸ’¸ PAYPAL',
+        title: '💸 PAYPAL',
         category: 'service',
         image_url: null,
         description: 'Pagos internacionales seguros mediante PayPal (saldo o tarjeta de débito/crédito internacional).',
@@ -684,7 +684,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'zelle',
-        title: 'ðŸ’³ ZELLE',
+        title: '💳 ZELLE',
         category: 'service',
         image_url: null,
         description: 'Transferencia instantánea en USD mediante Zelle desde cualquier cuenta bancaria de Estados Unidos.',
