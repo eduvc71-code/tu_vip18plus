@@ -892,6 +892,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const removeTelegramMediaReference = async () => {
+    if (!selectedAuditedMedia || selectedAuditedMedia.source !== 'telegram' || adminId !== '6461788392') return;
+    const mediaUrl = selectedAuditedMedia.url;
+    if (!window.confirm(`Quitar este medio de la galería y guardar la base actualizada en B2?\n\n${mediaUrl}\n\nEl archivo original en Telegram y las copias ya publicadas en el canal no se borran con esta acción.`)) return;
+    setAuditB2Deleting(true);
+    setAuditB2Error(null);
+    try {
+      const res = await fetch('/api/admin/audit/b2-profile-media', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url: mediaUrl })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || data.details || 'No se pudo actualizar la galería.');
+      setSelectedAuditedMedia(null);
+      setMessage({ type: 'success', text: `Referencia retirada de la galería y snapshot guardado en ${data.snapshotKey}.` });
+      await Promise.all([fetchAuditedB2Media(), fetchData()]);
+    } catch (err: any) {
+      setAuditB2Error(err.message || 'Falló la actualización de la galería.');
+    } finally {
+      setAuditB2Deleting(false);
+    }
+  };
+
   const copyAuditedMediaInfo = async () => {
     if (!selectedAuditedMedia) return;
     const info = [
@@ -5653,6 +5677,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-zinc-800">
                           <button type="button" onClick={() => void copyAuditedMediaInfo()} className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold">Copiar información</button>
                           {selectedAuditedMedia.b2ObjectDeletable && <button type="button" onClick={() => void deleteAuditedB2Media()} disabled={auditB2Deleting} className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold disabled:opacity-50">{auditB2Deleting ? 'Eliminando…' : 'Eliminar objeto B2 y sincronizar'}</button>}
+                          {selectedAuditedMedia.source === 'telegram' && <button type="button" onClick={() => void removeTelegramMediaReference()} disabled={auditB2Deleting} className="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold disabled:opacity-50">{auditB2Deleting ? 'Actualizando…' : 'Quitar de galería y sincronizar B2'}</button>}
                         </div>
                       </div>
                     </div>

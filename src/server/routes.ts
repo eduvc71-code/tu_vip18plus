@@ -2251,9 +2251,30 @@ router.get('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Reques
 
 router.delete('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { key } = req.body;
+    const { key, url } = req.body;
     const adminId = (req as any).adminUserId || '';
     if (adminId !== '6461788392') return res.status(403).json({ error: 'Acción reservada al administrador principal.' });
+
+    if (typeof url === 'string') {
+      if (!url.includes('/api/telegram-media/')) return res.status(400).json({ error: 'La URL no corresponde a un medio de Telegram.' });
+      const profiles = await getAllProfiles();
+      const matches = profiles.flatMap(profile => (profile.photos || [])
+        .filter(photoUrl => photoUrl === url)
+        .map(photoUrl => ({ profile, url: photoUrl })));
+      if (matches.length === 0) return res.status(404).json({ error: 'La referencia ya no está en la galería.' });
+
+      for (const match of matches) {
+        const updated = await removeMediaFromProfile(match.profile.id, match.url);
+        if (!updated) throw new Error(`No se pudo quitar la referencia del perfil ${match.profile.name}`);
+      }
+      await addAuditLog('AUDIT_REMOVE_TELEGRAM_MEDIA_REF', adminId,
+        `Referencia de medio Telegram retirada de ${matches.length} perfil(es); archivo Telegram conservado; sincronizando snapshot.`,
+        matches[0]?.profile.id);
+      const dbKey = await syncDbToB2Now();
+      for (const match of matches) broadcastEvent('PROFILE_UPDATED', { id: match.profile.id });
+      return res.json({ success: true, source: 'telegram', removedReferences: matches.length, snapshotKey: dbKey });
+    }
+
     if (typeof key !== 'string' || !key.startsWith('tu-vip/') || key.includes('..') || key.startsWith('tu-vip/db/') || key.startsWith('tu-vip/backups/')) {
       return res.status(400).json({ error: 'Clave de medio B2 inválida.' });
     }
