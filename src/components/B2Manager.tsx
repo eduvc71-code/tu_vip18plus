@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search } from 'lucide-react';
+import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search, SearchCode, ShieldAlert } from 'lucide-react';
 import { B2File } from '../types';
 
 interface B2ManagerProps {
@@ -12,6 +12,86 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [filter, setFilter] = useState('');
+
+  
+  const [scanResults, setScanResults] = useState<{ orphans: B2File[], size: number } | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+
+  const handleScanOrphans = async () => {
+    setScanning(true);
+    setScanResults(null);
+    try {
+      const res = await fetch('/api/admin/b2/scan-orphans', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setScanResults({ orphans: data.orphans, size: data.orphanSize });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch(err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleCleanOrphans = async () => {
+    if (!scanResults || scanResults.orphans.length === 0) return;
+    if (!window.confirm(`¿Seguro que deseas eliminar definitivamente ${scanResults.orphans.length} archivos fantasmas para ahorrar ${formatSize(scanResults.size)}?`)) return;
+    
+    setCleaning(true);
+    try {
+      const keys = scanResults.orphans.map(o => o.key);
+      const res = await fetch('/api/admin/b2/clean-orphans', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ keys })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: `Limpieza completada: ${data.deletedCount} archivos eliminados de B2.` });
+        setScanResults(null);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch(err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const handleDeleteBackup = async (key: string) => {
+    if (!window.confirm('¿Seguro que deseas ELIMINAR PERMANENTEMENTE este archivo de copia de seguridad?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/b2/files', {
+        method: 'DELETE',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Backup eliminado correctamente.' });
+        fetchFiles();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch(err: any) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchFiles = async () => {
     setLoading(true);
