@@ -790,13 +790,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Dibujar texto en el centro (podría ser repetido en diagonal)
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(-Math.PI / 4); // Rotar -45 grados
-        ctx.fillText(text, 0, 0);
-        ctx.restore();
-        
         // Además, dibujar pequeño en una esquina abajo a la derecha
         ctx.font = `bold ${Math.max(14, Math.floor(canvas.width * 0.025))}px sans-serif`;
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
