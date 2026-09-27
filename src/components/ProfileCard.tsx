@@ -165,6 +165,15 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 />
               )}
 
+              {showEnlargeIcon && images.length > 0 && (
+                <div className="absolute top-2.5 right-2.5 z-30 pointer-events-none animate-bounce">
+                  <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-full border border-white/20 shadow-xl">
+                    <ZoomIn className="w-4 h-4 text-white drop-shadow-md" />
+                  </div>
+                </div>
+              )}
+
+
               {selectedImage && profile.media_stars?.[selectedImage] && (
                 <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
@@ -215,15 +224,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400">
                   <Video className="h-3 w-3 text-amber-400" />
                   <span>Videos</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})
-              {showEnlargeIcon && images.length > 0 && (
-                <div className="absolute top-2.5 right-2.5 z-30 pointer-events-none animate-bounce">
-                  <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-full border border-white/20 shadow-xl">
-                    <ZoomIn className="w-4 h-4 text-white drop-shadow-md" />
-                  </div>
-                </div>
-              )}
-</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">({videos.length})</span>
                 </span>
 
                 {videos.length > 1 && (
