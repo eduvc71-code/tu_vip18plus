@@ -67,7 +67,7 @@ export function getBotConfig() {
     .map(id => id.trim())
     .filter(Boolean);
   const adminIds = Array.from(new Set([...envAdminIds, ...dbAdminIds]));
-  const signingSecret = process.env.ADMIN_SIGNING_SECRET || 'secret_jwt_key_danii_vip';
+  const signingSecret = process.env.ADMIN_SIGNING_SECRET || require('crypto').createHash('sha256').update(token + 'jwt').digest('hex').substring(0, 32);
   const brandName = process.env.VIP_BRAND_NAME || 'IAM DANII VIP';
   const baseUrl = (
     process.env.RENDER_EXTERNAL_URL ||
