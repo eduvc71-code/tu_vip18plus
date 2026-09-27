@@ -4,6 +4,8 @@ import path from 'path';
 import fs from 'fs';
 import { Readable } from 'stream';
 import {
+  listAllB2Files,
+  restoreDatabaseFromB2,
   isB2Configured,
   mediaUrl,
   streamB2Object,

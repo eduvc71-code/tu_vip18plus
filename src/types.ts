@@ -152,3 +152,10 @@ export interface PaymentMethod {
   priority_order: number;
   updated_at?: string;
 }
+
+export interface B2File {
+  key: string;
+  size: number;
+  lastModified: string;
+  name: string;
+}
