@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  ListObjectVersionsCommand,
   GetObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
@@ -110,10 +111,7 @@ export async function deleteB2Backup(key: string) {
   if (!key.startsWith('tu-vip/backups/') || key.includes('..')) {
     throw new Error('Clave de archivo de respaldo inválida');
   }
-  await connection.client.send(new DeleteObjectCommand({
-    Bucket: connection.bucket,
-    Key: key
-  }));
+  await obliterateB2Object(connection, key);
   return true;
 }
 
@@ -128,10 +126,7 @@ export async function deleteB2Media(objectKeyOrUrl: string): Promise<boolean> {
     return false;
   }
   try {
-    await connection.client.send(new DeleteObjectCommand({
-      Bucket: connection.bucket,
-      Key: key
-    }));
+    await obliterateB2Object(connection, key);
     return true;
   } catch (err) {
     console.error('[B2 Delete Media Error]:', err);
@@ -336,5 +331,58 @@ export async function restoreDatabaseFromB2(key: string): Promise<Buffer | null>
   } catch (err) {
     console.error('[B2 Restore Backup Error]:', err);
     return null;
+  }
+}
+
+
+async function obliterateB2Object(connection: any, key: string) {
+  try {
+    const versions = await connection.client.send(new ListObjectVersionsCommand({
+      Bucket: connection.bucket,
+      Prefix: key
+    }));
+    
+    let deletedAny = false;
+    
+    if (versions.Versions) {
+      for (const v of versions.Versions) {
+        if (v.Key === key) {
+          await connection.client.send(new DeleteObjectCommand({
+            Bucket: connection.bucket,
+            Key: key,
+            VersionId: v.VersionId
+          }));
+          deletedAny = true;
+        }
+      }
+    }
+    
+    if (versions.DeleteMarkers) {
+      for (const dm of versions.DeleteMarkers) {
+        if (dm.Key === key) {
+          await connection.client.send(new DeleteObjectCommand({
+            Bucket: connection.bucket,
+            Key: key,
+            VersionId: dm.VersionId
+          }));
+          deletedAny = true;
+        }
+      }
+    }
+    
+    if (!deletedAny) {
+      // Fallback
+      await connection.client.send(new DeleteObjectCommand({
+        Bucket: connection.bucket,
+        Key: key
+      }));
+    }
+  } catch (err) {
+    console.error('[Obliterate Error]:', err);
+    // Fallback if ListObjectVersions is not supported or fails
+    await connection.client.send(new DeleteObjectCommand({
+      Bucket: connection.bucket,
+      Key: key
+    }));
   }
 }
