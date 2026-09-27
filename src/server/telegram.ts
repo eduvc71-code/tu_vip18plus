@@ -1052,7 +1052,7 @@ export async function processTelegramUpdate(update: any) {
   }
 
 
-  // 1.1.b. Acceso Rápido y Reconocimiento ID para la PWA Admin
+  // 1.1.b. Acceso Rápido y Reconocimiento ID para la Admin
   if (normText.startsWith('/start admin_login') || normText === '/login') {
     if (!isPrivateChat(message.chat)) {
       await sendMessage(chatId, '🔒 Por seguridad, abre el chat privado para acceder al Panel Administrativo.');
@@ -1062,11 +1062,11 @@ export async function processTelegramUpdate(update: any) {
       const { baseUrl } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
       const adminLink = buildAdminWebLink(baseUrl, adminToken);
-      await sendMessage(chatId, `👑 *¡Identidad Confirmada, ${message.from?.first_name || 'Administradora'}!* 👑\n\nTu Telegram ID (\`${fromId}\`) está autorizado.\n\n👇 *Toca el botón para ingresar directo a tu Panel PWA sin contraseñas:*`, {
+      await sendMessage(chatId, `👑 *¡Identidad Confirmada, ${message.from?.first_name || 'Administradora'}!* 👑\n\nTu Telegram ID (\`${fromId}\`) está autorizado.\n\n👇 *Toca el botón para ingresar directo a tu Panel sin contraseñas:*`, {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🚀 Entrar a mi Panel Admin PWA', url: adminLink }
+              { text: '🚀 Entrar a mi Panel Admin', web_app: { url: adminLink } }
             ]
           ]
         }
@@ -1197,7 +1197,7 @@ export async function processTelegramUpdate(update: any) {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '🌐 Abrir Panel Web (Navegador)', url: adminLink }
+              { text: '🌐 Abrir Panel Web', web_app: { url: adminLink } }
             ]
           ]
         }
@@ -1242,11 +1242,11 @@ export async function processTelegramUpdate(update: any) {
     const { baseUrl } = getBotConfig();
     const adminToken = generateAdminMagicToken(String(fromId));
     const adminLink = buildAdminWebLink(baseUrl, adminToken);
-    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente como página web en tu navegador (*Google Chrome*, *Safari iOS*, etc.):\n\n👉 [Ingresar al Panel Web (Chrome / Safari)](${adminLink})\n\n*(Nota: Al abrirse en el navegador web dispones de pantalla completa sin la barra superior ni botones de Telegram)*`, {
+    await sendMessage(chatId, `🔐 *Panel Web Administrativo*\n\nPulsa el botón de abajo para abrir el panel directamente de forma nativa e integrada en Telegram:\n\n👉 [Enlace Web Alternativo](${adminLink})\n\n*(Nota: La nueva tecnología Web App Mini te permite gestionar todo el catálogo sin salir de Telegram, y sin mostrar encabezados).*`, {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🌐 Abrir Panel Web (Chrome / Safari)', url: adminLink }
+            { text: '🌐 Abrir Panel Web', web_app: { url: adminLink } }
           ],
           [
             { text: '➕ Nuevo Perfil', callback_data: 'admin_btn_new' },
@@ -1284,7 +1284,7 @@ export async function processTelegramUpdate(update: any) {
     await sendMessage(chatId, msg, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🌐 Gestionar Botones en Panel Web', url: adminLink }]
+          [{ text: '🌐 Gestionar Botones en Panel Web', web_app: { url: adminLink } }]
         ]
       }
     });
@@ -1304,7 +1304,7 @@ export async function processTelegramUpdate(update: any) {
     await sendMessage(chatId, msg, {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '🌐 Crear Dinámica en Panel Web', url: adminLink }]
+          [{ text: '🌐 Crear Dinámica en Panel Web', web_app: { url: adminLink } }]
         ]
       }
     });
@@ -1745,7 +1745,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '🌐 Ver en Panel Web (Navegador)', url: adminLink },
+            { text: '🌐 Ver en Panel Web', web_app: { url: adminLink } },
             { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
           ]
         ]
@@ -2364,7 +2364,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🌐 Abrir Panel Admin (Chrome / Safari)', url: adminLink }
+          { text: '🌐 Abrir Panel Admin', web_app: { url: adminLink } }
         ],
         [
           { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
@@ -2409,7 +2409,7 @@ async function sendAdminHelp(chatId: string | number) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '🔐 Abrir Panel Web', url: adminLink }
+          { text: '🔐 Abrir Panel Web', web_app: { url: adminLink } }
         ],
         [
           { text: btnNuevo, callback_data: 'admin_btn_new' },
