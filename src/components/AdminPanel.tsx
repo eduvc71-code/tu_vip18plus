@@ -3727,7 +3727,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         setMessage({ type: 'error', text: 'Error al cambiar foto de portada' });
                                       }
                                     }}
-                                    className="w-full sm:w-auto justify-center py-3 sm:py-2 px-3 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                    className="py-3 sm:py-2 px-3 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                                   >
                                     â­ Poner como Portada
                                   </button>
@@ -3739,7 +3739,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     onClick={() => {
                                       if (enlargedMediaUrl) handleBroadcastMedia(enlargedMediaUrl);
                                     }}
-                                    className="w-full sm:w-auto justify-center py-3 sm:py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                    className="py-3 sm:py-2 px-3 rounded-xl bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                                     title="Publicar en el Canal y Mini App"
                                   >
                                     <Send className="w-3.5 h-3.5" />
@@ -3751,7 +3751,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   onClick={() => {
                                     if (enlargedMediaUrl) handleDeleteMediaPermanently(enlargedMediaUrl);
                                   }}
-                                  className="w-full sm:w-auto justify-center py-3 sm:py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  className="py-3 sm:py-2 px-3 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                                   title="Borrar definitivamente del Servidor Telegram y Servidor DB"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -3766,7 +3766,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       setEnlargedMediaUrl(null);
                                     }
                                   }}
-                                  className="w-full sm:w-auto justify-center py-3 sm:py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
+                                  className="py-3 sm:py-2 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                                   title="Publicar de Pago en Canal con Cobro de Telegram Stars"
                                 >
                                   <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
