@@ -591,10 +591,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [vipPreviewType, setVipPreviewType] = useState<'image' | 'video' | null>(null);
   const [freePreviewType, setFreePreviewType] = useState<'image' | 'video' | null>(null);
   const [watermarkEnabled, setWatermarkEnabled] = useState(() => {
-    return localStorage.getItem('watermarkEnabled') === 'true' || false;
+    return localStorage.getItem('watermarkEnabled') !== 'false';
   });
   const [watermarkText, setWatermarkText] = useState(() => {
-    return localStorage.getItem('watermarkText') || '';
+    return localStorage.getItem('watermarkText')?.trim() || 'Iam Danii VIP';
   });
 
   // Efecto para guardar en memoria
@@ -1057,9 +1057,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body.append('is_ephemeral', 'true');
         body.append('ephemeral_duration', String(uploadDuration || 10));
       }
-      body.append('initial_status', '1');
-body.append('publish_to_channel', 'true');
-
       const res = await fetch(`/api/admin/profiles/${profileId}/content/free`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -1069,15 +1066,26 @@ body.append('publish_to_channel', 'true');
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: '🚀 Contenido Free guardado en Telegram y publicado en la Mini App y Canal.'
+          text: `🚀 ${data.publishedCount || selectedPhotoFiles.length} archivo(s) publicados en Canal Free. La URL quedó guardada en la base de B2.`
         });
         setSelectedPhotoFiles(null);
+        setFreePreviewUrl(null);
+        setFreePreviewType(null);
         setUploadComment('');
         setUploadSugestiva(false);
         if (editingProfile && data.profile) setEditingProfile(data.profile);
         fetchData();
       } else {
-        setMessage({ type: 'error', text: data.error || 'Error al subir fotos a Telegram' });
+        if (data.saved && data.profile) {
+          setSelectedPhotoFiles(null);
+          setFreePreviewUrl(null);
+          setFreePreviewType(null);
+          if (editingProfile) setEditingProfile(data.profile);
+          setMessage({ type: 'error', text: data.error || `El contenido quedó guardado, pero solo ${data.publishedCount || 0} archivo(s) se publicaron. Revisa Auditoría antes de volver a subirlos.` });
+          fetchData();
+        } else {
+          setMessage({ type: 'error', text: data.error || 'No se subió ni publicó el contenido.' });
+        }
       }
     } catch {
       setMessage({ type: 'error', text: 'Error de red al subir imágenes a Telegram' });
@@ -2495,13 +2503,17 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1.5">
                                 <span>🟢</span> Contenido Free
                               </span>
-                              <span className="text-[10px] text-zinc-400 font-medium">Servidor Telegram</span>
+                              <span className="text-[10px] text-zinc-400 font-medium">Publicación directa en Canal Free</span>
                             </div>
 
-                            {/* Selector de Estado al Subir Contenido */}
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-zinc-900/90 rounded-xl border border-zinc-800">
-                              
-                            </div>
+                            <p className="text-[11px] text-zinc-300 rounded-lg bg-emerald-950/40 border border-emerald-500/20 px-3 py-2">
+                              Elige el archivo y pulsa una sola vez para aplicar la marca, guardar su URL en B2 y publicarlo en Canal Free.
+                            </p>
+                            {(operatingMode !== 'bot_and_channel' || !channelIdInput) && (
+                              <p className="text-[11px] text-amber-200 rounded-lg bg-amber-950/40 border border-amber-500/30 px-3 py-2">
+                                Para publicar en Canal Free, activa <strong>Híbrido (Bot + Canal)</strong> y configura el canal en la pestaña Telegram. No se subirá nada hasta que esté listo.
+                              </p>
+                            )}
 
                                                         {/* MARCA DE AGUA */}
                             <div className="p-3 bg-zinc-900/80 border border-zinc-700/80 rounded-xl space-y-2.5 mb-3">
@@ -2512,17 +2524,18 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   onChange={(e) => setWatermarkEnabled(e.target.checked)}
                                   className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 focus:ring-emerald-500 cursor-pointer"
                                 />
-                                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                                  Confirmar Marca de Agua (Requerido)
+                              <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
+                                  Marca de agua para fotos
                                 </span>
                               </div>
                               <input
                                 type="text"
                                 value={watermarkText}
                                 onChange={(e) => setWatermarkText(e.target.value)}
-                                placeholder="Escribe el texto de tu marca de agua (ej: @TuVIPBot)"
+                                placeholder="Iam Danii VIP"
                                 className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-emerald-500"
                               />
+                              <p className="text-[10px] text-zinc-500">Predeterminada: “Iam Danii VIP”. Los videos se publican sin modificar.</p>
                             </div>
 
                             {/* Selector de archivos para subir */}
@@ -2555,7 +2568,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                               {/* Vista Previa */}
                               {freePreviewUrl && (
-                                <div className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-zinc-700 bg-black">
+                              <div className="relative w-full max-w-xs mx-auto rounded-lg overflow-hidden border border-zinc-700 bg-black">
                                   {freePreviewType === 'video' ? (
                                     <video src={freePreviewUrl} className="w-full h-auto max-h-48 object-contain" controls />
                                   ) : (
@@ -2677,7 +2690,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 <HardDrive className="w-4 h-4" />
                                 {uploadingPhotos
                                   ? 'Subiendo a Telegram...'
-                                  : '🚀 Subir y Publicar'}
+                                  : '🚀 Publicar en Canal Free'}
                               </button>
                             )}
                           </div>
@@ -3398,24 +3411,8 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           )}
                         </div>
 
-                        {/* Botón Principal Unificado de Publicación */}
-                        <div className="pt-2 space-y-2">
-                          <button
-                            type="button"
-                            onClick={() => handlePublishToChannel(editingProfile?.id)}
-                            disabled={publishing || loading}
-                            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 active:scale-[0.99]"
-                          >
-                            <Send className="w-5 h-5" />
-                            {publishing
-                              ? 'Publicando y sincronizando...'
-                              : operatingMode === 'solo_bot'
-                                ? '🚀 Activar Todo y Publicar en Canal VIP Free (Mini App)'
-                                : '🚀 Activar Todo y Publicar en Telegram y Canal VIP Free'}
-                          </button>
-                          <p className="text-center text-[10px] text-zinc-500">
-                            Al pulsar este botón, todo el contenido se publicará y sincronizará con Telegram y la Mini App.
-                          </p>
+                        <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 px-3 py-2 text-center text-[11px] text-emerald-200">
+                          El contenido Free se publica en el canal en el mismo paso en que lo subes. No necesitas volver a publicarlo aquí.
                         </div>
                       </div>
 

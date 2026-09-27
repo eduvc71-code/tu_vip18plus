@@ -1122,35 +1122,51 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     }
 
     const config = getBotConfig();
+    const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+    if (operatingMode !== 'bot_and_channel' || !config.channelId) {
+      return res.status(409).json({ error: 'Activa Híbrido (Bot + Canal) y configura el Canal Free antes de publicar.' });
+    }
+    if (!isB2Configured()) {
+      return res.status(503).json({ error: 'B2 no está configurado; no se publicó para evitar perder la URL del medio al desplegar.' });
+    }
+    if (profile.age && profile.age < 18) {
+      return res.status(400).json({ error: 'No se permite publicar en el canal un perfil menor de 18 años.' });
+    }
+
     const files = req.files as Express.Multer.File[];
+    if (!files?.length) return res.status(400).json({ error: 'Selecciona al menos una foto o video Free.' });
     const uploadedUrls: string[] = [];
     const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
+    const mediaToPublish: Array<{ url: string; fileId: string | null; isVideo: boolean }> = [];
 
     const comment = req.body.description || req.body.comment || '';
+    const bodegaChatId = getSystemSetting('bodega_channel_id');
+    const privateAdminChatId = config.adminIds?.[0];
+    const telegramStorageChatId = bodegaChatId || privateAdminChatId;
+    if (!telegramStorageChatId || String(telegramStorageChatId) === String(config.channelId)) {
+      return res.status(409).json({ error: 'Configura un chat privado de almacenamiento para Telegram. El archivo no se enviará al Canal Free como paso de guardado.' });
+    }
 
-    if (files && files.length > 0) {
-      for (const file of files) {
-        let finalUrl = '';
-        let fileId = '';
-
-        // Intentar subir directamente a los servidores de Telegram
-        const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, comment);
-        if (tgRes.ok && tgRes.fileId) {
-          fileId = tgRes.fileId;
-          const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
-          finalUrl = `${config.baseUrl}/api/telegram-media/${fileId}${ext}`;
-          tgFileIds[finalUrl] = fileId;
-        } else {
-          // Fallback a B2 o almacenamiento local
-          if (isB2Configured()) {
-            const objectKey = await uploadToB2(file, 'profiles');
-            finalUrl = mediaUrl(config.baseUrl, objectKey);
-          } else {
-            finalUrl = saveLocalUpload(file, config.baseUrl);
-          }
-        }
-        uploadedUrls.push(finalUrl);
+    for (const file of files) {
+      let tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, telegramStorageChatId, comment);
+      let finalUrl: string;
+      let fileId: string | null = null;
+      const isVideo = file.mimetype.startsWith('video/') || /\.(mp4|webm|mov|m4v|mkv)$/i.test(file.originalname);
+      if (!tgRes.ok && bodegaChatId && privateAdminChatId && String(bodegaChatId) !== String(privateAdminChatId)) {
+        tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, privateAdminChatId, comment);
       }
+      if (tgRes.ok && tgRes.fileId) {
+        fileId = tgRes.fileId;
+        const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+        finalUrl = `${config.baseUrl}/api/telegram-media/${fileId}${ext}`;
+        tgFileIds[finalUrl] = fileId;
+      } else {
+        return res.status(502).json({
+          error: `No se pudo guardar “${file.originalname}” en el chat privado de Telegram: ${tgRes.error || 'error de Telegram'}. No se guardó ni publicó el contenido.`
+        });
+      }
+      uploadedUrls.push(finalUrl);
+      mediaToPublish.push({ url: finalUrl, fileId, isVideo });
     }
 
     const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
@@ -1182,6 +1198,7 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     const updated = await saveProfile({
       id: profileId,
       photos: updatedPhotos,
+      status: 'disponible',
       media_descriptions: mediaDescriptions,
       ephemeral_config: ephemeralConfig,
       media_status: mediaStatus,
@@ -1196,12 +1213,79 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
       profileId
     );
 
-    if (req.body.publish_to_channel === 'true' || req.body.publish_to_channel === true || chosenStatus === 1) {
-      await syncProfileToChannel(profileId, adminId);
+    let snapshotKey: string;
+    try {
+      snapshotKey = await syncDbToB2Now();
+    } catch (snapshotError: any) {
+      return res.status(503).json({
+        success: false,
+        saved: true,
+        profile: updated,
+        publishedCount: 0,
+        error: `El contenido quedó guardado, pero B2 no confirmó la base de datos; no se publicó. ${snapshotError?.message || ''}`.trim()
+      });
     }
 
+    const replyMarkup = await buildChannelPostMarkup(updated, config.baseUrl, config.username);
+    if (replyMarkup.inline_keyboard?.length) {
+      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.map((row: any[]) => row.filter((button: any) => !button.callback_data));
+      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.filter((row: any[]) => row.length > 0);
+    }
+    const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];
+    for (const media of mediaToPublish) {
+      const caption = mediaDescriptions[media.url] || comment || updated.description || '';
+      const method = media.isVideo ? 'sendVideo' : 'sendPhoto';
+      const field = media.isVideo ? 'video' : 'photo';
+      const mediaTarget = media.fileId || media.url;
+      const sendResult = await callTelegramApi(method, {
+        chat_id: config.channelId,
+        [field]: mediaTarget,
+        caption,
+        has_spoiler: true,
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup
+      });
+      if (sendResult.ok && sendResult.result?.message_id) {
+        const messageId = Number(sendResult.result.message_id);
+        publishResults.push({ url: media.url, messageId });
+        await addAuditLog('PUBLISH_FREE_MEDIA', adminId,
+          `Medio Free ${media.url} publicado en Canal Free (mensaje #${messageId}).`, profileId);
+      } else {
+        const error = sendResult.description || 'Telegram no confirmó la publicación.';
+        publishResults.push({ url: media.url, error });
+        await addAuditLog('PUBLISH_FREE_MEDIA_FAILED', adminId,
+          `Falló la publicación de ${media.url} en Canal Free: ${error}`, profileId);
+      }
+    }
+
+    try {
+      snapshotKey = await syncDbToB2Now();
+      await addAuditLog('PUBLISH_FREE_MEDIA', adminId,
+        `${publishResults.filter(result => result.messageId).length} de ${files.length} medios Free publicados en Canal Free para ${profile.name}.`, profileId);
+    } catch (snapshotError: any) {
+      console.error('[Free Publish] No se pudo respaldar la auditoría posterior a publicación:', snapshotError);
+    }
     broadcastEvent('PROFILE_UPDATED', updated);
-    res.json({ success: true, profile: updated, new_media: uploadedUrls });
+    const publishedCount = publishResults.filter(result => result.messageId).length;
+    const failed = publishResults.filter(result => result.error);
+    if (failed.length > 0) {
+      return res.status(502).json({
+        success: false,
+        saved: true,
+        profile: updated,
+        new_media: uploadedUrls,
+        publishedCount,
+        publishErrors: failed,
+        error: `${publishedCount} de ${files.length} archivo(s) se publicaron. ${failed.length} fallaron; revisa Auditoría antes de reintentar.`
+      });
+    }
+    res.json({
+      success: true,
+      profile: updated,
+      new_media: uploadedUrls,
+      publishedCount,
+      snapshotKey
+    });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al subir contenido Free a Telegram', details: err?.message });
   }
