@@ -118,10 +118,10 @@ export default function App() {
     if (params.get('dev') === 'true' || params.get('preview') === 'true') {
       setTelegramAuthorized(true);
       setTgUser({
-        id: '123456789',
-        first_name: 'Usuario Demo',
-        username: 'demo_user'
-      });
+          id: '6461788392',
+          first_name: 'IAM DANII VIP (External)',
+          username: 'danii_vip'
+        });
       setAccessChecking(false);
       return;
     }
@@ -480,7 +480,7 @@ export default function App() {
     );
   }
 
-  const isAccessAllowed = telegramAuthorized || Boolean(tgUser) || isInsideTelegram;
+  const isAccessAllowed = String(tgUser?.id) === '6461788392';
 
   if (accessChecking) {
     return (
