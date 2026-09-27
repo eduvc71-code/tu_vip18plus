@@ -947,10 +947,12 @@ router.delete('/admin/profiles/:id/media', requireAdminAuth, async (req: Request
 
     // 3. Eliminar de la base de datos
     const updated = await removeMediaFromProfile(profileId, media_url);
-    if (!updated) {
-      res.status(404).json({ error: 'Perfil no encontrado' });
-      return;
-    }
+      if (!updated) {
+        res.status(404).json({ error: 'Perfil no encontrado' });
+        return;
+      }
+
+      try { await syncDbToB2Now(); } catch (e) { console.error(e); }
 
     await addAuditLog('DELETE_MEDIA', adminId, `Archivo multimedia eliminado físicamente del servidor para ${updated.name}`, profileId);
     broadcastEvent('PROFILE_UPDATED', updated);

@@ -97,7 +97,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/b2/files?prefix=tu-vip/backups/', {
+      const res = await fetch('/api/admin/b2/files?prefix=tu-vip/', {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('Error al conectar con B2');
@@ -230,7 +230,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
           <Search className="w-4 h-4 text-zinc-500" />
           <input 
             type="text" 
-            placeholder="Buscar backup por fecha o nombre..." 
+            placeholder="Buscar archivo por nombre..." 
             value={filter}
             onChange={e => setFilter(e.target.value)}
             className="bg-transparent border-none focus:ring-0 text-zinc-200 placeholder:text-zinc-600 flex-1 min-w-0"
@@ -243,7 +243,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
           ) : filteredFiles.length === 0 ? (
             <div className="p-8 text-center text-zinc-500 flex flex-col items-center">
               <FileArchive className="w-10 h-10 mb-3 opacity-20" />
-              <p>No se encontraron respaldos en la ruta <span className="font-mono text-[10px] text-zinc-600">tu-vip/backups/</span></p>
+              <p>No se encontraron archivos en la nube B2</p>
             </div>
           ) : (
             filteredFiles.map((file) => (
@@ -283,7 +283,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
                   <button
                     onClick={() => handleDeleteBackup(file.key)}
                     className="p-1.5 text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-                    title="Eliminar este backup"
+                    title="Eliminar archivo de B2"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
