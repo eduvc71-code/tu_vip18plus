@@ -1,4 +1,4 @@
-﻿import initSqlJs, { Database } from 'sql.js';
+﻿import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
@@ -7,17 +7,110 @@ import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'catalogo.sqlite');
 
-let db: Database | null = null;
+class SqlJsCompatibleDatabase {
+  db: any;
+  constructor(bufferOrFile?: any) {
+    if (typeof bufferOrFile === 'string') {
+      this.db = new Database(bufferOrFile);
+    } else if (bufferOrFile && typeof bufferOrFile === 'object') {
+      fs.writeFileSync(DB_FILE, bufferOrFile);
+      this.db = new Database(DB_FILE);
+    } else {
+      this.db = new Database(DB_FILE);
+    }
+    this.db.pragma('journal_mode = WAL');
+  }
+
+  exec(sql: string, params?: any[]) {
+    try {
+      if (sql.trim().toUpperCase().startsWith('SELECT') || sql.trim().toUpperCase().startsWith('PRAGMA')) {
+        const stmt = this.db.prepare(sql);
+        const rows = params ? stmt.all(...params) : stmt.all();
+        if (rows.length === 0) return [];
+        const columns = Object.keys(rows[0] as object);
+        const values = rows.map((r: any) => columns.map(c => r[c]));
+        return [{ columns, values }];
+      } else {
+        if (params) {
+          this.db.prepare(sql).run(...params);
+        } else {
+          this.db.exec(sql);
+        }
+        return [];
+      }
+    } catch(e) {
+      if (sql.includes('sqlite_master')) {
+         const rows = this.db.prepare(sql).all();
+         if (rows.length === 0) return [];
+         const columns = Object.keys(rows[0] as object);
+         const values = rows.map((r: any) => columns.map(c => r[c]));
+         return [{ columns, values }];
+      }
+      return [];
+    }
+  }
+
+  run(sql: string, params?: any[]) {
+    if (params && params.length > 0) {
+      this.db.prepare(sql).run(...params);
+    } else {
+      if (sql.includes(';') && sql.trim().split(';').length > 2) {
+         this.db.exec(sql);
+      } else {
+         try {
+           this.db.prepare(sql).run();
+         } catch(e) {
+           this.db.exec(sql);
+         }
+      }
+    }
+  }
+
+  prepare(sql: string) {
+    const stmt = this.db.prepare(sql);
+    let boundParams: any[] = [];
+    let iterator: any = null;
+    let currentRow: any = null;
+    return {
+      bind: (params: any[]) => { boundParams = params; },
+      step: () => {
+        if (!iterator) {
+           try {
+             iterator = stmt.iterate(...boundParams);
+           } catch(e) {
+             const rows = stmt.all(...boundParams);
+             iterator = rows[Symbol.iterator]();
+           }
+        }
+        const res = iterator.next();
+        if (res.done) return false;
+        currentRow = res.value;
+        return true;
+      },
+      getAsObject: () => currentRow,
+      free: () => {
+        if (iterator && iterator.return) iterator.return();
+      }
+    };
+  }
+
+  export() {
+    return fs.readFileSync(DB_FILE);
+  }
+}
+
+
+let db: any | null = null;
 let b2SyncTimer: NodeJS.Timeout | null = null;
 
-export async function getDb(): Promise<Database> {
+export async function getDb(): Promise<any> {
   if (db) return db;
 
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
 
-  const SQL = await initSqlJs();
+  
 
   let loadedFromB2 = false;
   // If B2 is configured, ALWAYS check B2 first on startup so fresh deploys on Render retain production data!
@@ -27,7 +120,7 @@ export async function getDb(): Promise<Database> {
       const b2Buf = await downloadDatabaseFromB2();
       if (b2Buf && b2Buf.length > 0) {
         fs.writeFileSync(DB_FILE, b2Buf);
-        db = new SQL.Database(b2Buf);
+        db = new SqlJsCompatibleDatabase(b2Buf);
         loadedFromB2 = true;
         console.log('[Database] âœ… Base de datos de producción restaurada exitosamente desde Backblaze B2');
       } else {
@@ -41,10 +134,10 @@ export async function getDb(): Promise<Database> {
   if (!db) {
     if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
       const filebuffer = fs.readFileSync(DB_FILE);
-      db = new SQL.Database(filebuffer);
+      db = new SqlJsCompatibleDatabase(filebuffer);
       console.log('[Database] Cargada base local existente.');
     } else {
-      db = new SQL.Database();
+      db = new SqlJsCompatibleDatabase();
       console.log('[Database] Inicializando base vacía.');
     }
   }
@@ -59,7 +152,7 @@ export async function getDb(): Promise<Database> {
   return db;
 }
 
-function ensureDefaultSettings(database: Database): void {
+function ensureDefaultSettings(database: any): void {
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_only_access', 'true')`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
   const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
@@ -81,7 +174,7 @@ function ensureDefaultSettings(database: Database): void {
   seedPaymentMethods(database);
 }
 
-function consolidateToSingleVipProfile(database: Database): void {
+function consolidateToSingleVipProfile(database: any): void {
   const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
   if (!res || res.length === 0 || !res[0].values || res[0].values.length <= 1) return;
 
@@ -157,7 +250,7 @@ export async function syncDbToB2Now(): Promise<string> {
   return await backupDatabaseToB2(buffer);
 }
 
-function initTables(database: Database): void {
+function initTables(database: any): void {
   database.run(`
     CREATE TABLE IF NOT EXISTS profiles (
       id TEXT PRIMARY KEY,
@@ -361,7 +454,7 @@ function initTables(database: Database): void {
   `);
 }
 
-function seedInitialData(database: Database): void {
+function seedInitialData(database: any): void {
   const check = database.exec("SELECT COUNT(*) as count FROM profiles");
   const count = check[0]?.values[0]?.[0] as number;
 
@@ -425,7 +518,7 @@ function seedInitialData(database: Database): void {
   }
 }
 
-function seedPaymentMethods(database: Database): void {
+function seedPaymentMethods(database: any): void {
   const check = database.exec("SELECT COUNT(*) as count FROM payment_methods");
   const count = (check[0]?.values[0]?.[0] as number) || 0;
 

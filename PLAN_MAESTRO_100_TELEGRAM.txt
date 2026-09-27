@@ -1,0 +1,49 @@
+PLAN MAESTRO: ARQUITECTURA 100% TELEGRAM (Zero Cost Storage)
+============================================================
+
+OBJETIVO PRINCIPAL:
+Usar Backblaze EXCLUSIVAMENTE para la base de datos (1 MB) y transferir toda la responsabilidad de almacenamiento de fotos y videos a los servidores de Telegram.
+
+VENTAJAS:
+- Almacenamiento infinito y gratuito.
+- Bases de datos ultraligeras y rápidas.
+- Ahorro drástico en transferencias de nube a nube.
+
+ADVERTENCIA TÉCNICA (MUY IMPORTANTE):
+-------------------------------------
+La API pública gratuita de los Bots de Telegram tiene una restricción de seguridad: 
+- El Bot puede DESCARGAR/REPRODUCIR archivos de máximo 20 MB.
+- Si un video pesa más de 20 MB (videos muy largos o en 4K), Telegram bloqueará la reproducción en la Mini App.
+- Solución: Los videos VIP deben comprimirse para pesar menos de 20 MB (clips de 1 a 2 minutos en calidad 720p optimizada).
+
+============================================================
+FASES DE IMPLEMENTACIÓN (Paso a Paso)
+============================================================
+
+FASE 1: CREACIÓN DE LA "BODEGA" (Completada ✅)
+- Has creado el grupo privado y el código /bodega ya está inyectado para guardar el ID.
+
+FASE 2: REESCRIBIR LA SUBIDA DEL PANEL WEB (Código)
+- Modificar las rutas del backend en `routes.ts`.
+- En lugar de enviar los archivos a Backblaze (uploadBufferToB2), el servidor tomará la foto/video que subas en el panel web y lo enviará secretamente al "Grupo Bodega" de Telegram.
+- Telegram devolverá un 'file_id', y ese código es el único que se guardará en la base de datos.
+- Añadir un control de peso en el Panel Web para evitar que se intenten subir videos mayores a 20 MB.
+
+FASE 3: REFACCIONAMIENTO DE LA BASE DE DATOS (Migración)
+- Crear un "Script de Migración" (una función temporal).
+- Esta función buscará todas las fotos y videos antiguos que actualmente están en Backblaze.
+- Los enviará uno por uno a la Bodega de Telegram.
+- Reemplazará las URLs de Backblaze en tu base de datos por los nuevos URLs de Telegram.
+
+FASE 4: ELIMINACIÓN DE CÓDIGO MUERTO (Limpieza del Sistema)
+- Borrar del código todas las funciones de "streamB2Object" y subidas de imágenes a Backblaze.
+- Backblaze quedará bloqueado exclusivamente para guardar `catalogo.sqlite`.
+- Borrar los archivos multimedia directamente en la página web de Backblaze para liberar espacio definitivo.
+
+FASE 5: AÑADIR ESCUDO CLOUDFLARE (Recomendado)
+- Comprar dominio propio ($3/año).
+- Enlazar a Cloudflare para que este absorba todo el tráfico que proviene de la Mini App, evitando que la cuenta de Render supere sus 100 GB mensuales gratuitos.
+
+------------------------------------------------------------
+PRÓXIMOS PASOS:
+Cuando decidas iniciar, arrancaremos directamente con la FASE 2. Modificaré el Panel de Administración para que empiece a disparar los archivos hacia la Bodega en vez de a Backblaze.
