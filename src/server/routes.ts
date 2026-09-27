@@ -3,7 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { listAllB2Files, deleteB2Backup,
+import { listAllB2Files, listB2ObjectsForAudit, deleteB2Backup, obliterateB2MediaObject,
   restoreDatabaseFromB2,
   isB2Configured,
   mediaUrl,
@@ -2203,6 +2203,84 @@ router.get('/admin/b2/files', requireAdminAuth, async (req: Request, res: Respon
     res.json({ success: true, files });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al listar archivos B2', details: err?.message });
+  }
+});
+
+// Auditing and targeted deletion of profile media from B2.
+router.get('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    if ((req as any).adminUserId !== '6461788392') return res.status(403).json({ error: 'Acceso reservado al administrador principal.' });
+    const [files, profiles] = await Promise.all([
+      listB2ObjectsForAudit(),
+      getAllProfiles()
+    ]);
+    const media = files.map(file => {
+      const references = profiles.flatMap(profile =>
+        (profile.photos || []).filter(url => {
+          if (!url.includes('key=')) return false;
+          try { return decodeURIComponent(url.split('key=')[1].split('&')[0]) === file.key; } catch { return false; }
+        }).map(url => ({ profileId: profile.id, profileName: profile.name, url, status: profile.media_status?.[url] ?? null }))
+      );
+      return { ...file, references };
+    });
+    const gallery = profiles.flatMap(profile => (profile.photos || []).map(url => {
+      let b2Key: string | null = null;
+      if (url.includes('key=')) {
+        try { b2Key = decodeURIComponent(url.split('key=')[1].split('&')[0]); } catch { b2Key = null; }
+      }
+      const source = b2Key ? 'b2'
+        : url.includes('/api/telegram-media/') ? 'telegram'
+          : url.includes('/uploads/') ? 'local' : 'external';
+      return {
+        profileId: profile.id,
+        profileName: profile.name,
+        url,
+        source,
+        b2Key,
+        b2ObjectExists: Boolean(b2Key && files.some(file => file.key === b2Key)),
+        b2ObjectDeletable: Boolean(b2Key && files.some(file => file.key === b2Key) && b2Key.startsWith('tu-vip/') && !b2Key.startsWith('tu-vip/db/') && !b2Key.startsWith('tu-vip/backups/')),
+        status: profile.media_status?.[url] ?? null,
+        description: profile.media_descriptions?.[url] || ''
+      };
+    }));
+    res.json({ success: true, files: media, gallery });
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo auditar los medios en B2', details: err?.message });
+  }
+});
+
+router.delete('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { key } = req.body;
+    const adminId = (req as any).adminUserId || '';
+    if (adminId !== '6461788392') return res.status(403).json({ error: 'Acción reservada al administrador principal.' });
+    if (typeof key !== 'string' || !key.startsWith('tu-vip/') || key.includes('..') || key.startsWith('tu-vip/db/') || key.startsWith('tu-vip/backups/')) {
+      return res.status(400).json({ error: 'Clave de medio B2 inválida.' });
+    }
+
+    const profiles = await getAllProfiles();
+    const matches = profiles.flatMap(profile =>
+      (profile.photos || []).filter(url => {
+        if (!url.includes('key=')) return false;
+        try { return decodeURIComponent(url.split('key=')[1].split('&')[0]) === key; } catch { return false; }
+      }).map(url => ({ profile, url }))
+    );
+    if (matches.length === 0) return res.status(404).json({ error: 'Ese objeto B2 no está vinculado a ningún medio de la galería; no se eliminó.' });
+
+    // Remove the object first; preserve DB references if B2 deletion fails.
+    await obliterateB2MediaObject(key);
+    for (const match of matches) {
+      const updated = await removeMediaFromProfile(match.profile.id, match.url);
+      if (!updated) throw new Error(`No se pudo quitar la referencia del perfil ${match.profile.name}`);
+    }
+    await addAuditLog('AUDIT_DELETE_B2_MEDIA', adminId,
+      `Objeto ${key} eliminado de B2; referencias removidas: ${matches.length}; sincronización de snapshot solicitada.`,
+      matches[0]?.profile.id);
+    const dbKey = await syncDbToB2Now();
+    if (matches.length) broadcastEvent('PROFILE_UPDATED', { id: matches[0].profile.id });
+    res.json({ success: true, key, removedReferences: matches.length, snapshotKey: dbKey });
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo completar la eliminación y persistencia en B2', details: err?.message });
   }
 });
 

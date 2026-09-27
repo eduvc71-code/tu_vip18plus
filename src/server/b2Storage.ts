@@ -314,6 +314,38 @@ export async function listAllB2Files(prefix: string = 'tu-vip/', limit = 1000) {
   }
 }
 
+export async function listB2ObjectsForAudit() {
+  const connection = getB2Connection();
+  if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
+  const contents: any[] = [];
+  let ContinuationToken: string | undefined;
+  do {
+    const res = await connection.client.send(new ListObjectsV2Command({
+      Bucket: connection.bucket,
+      Prefix: 'tu-vip/',
+      MaxKeys: 1000,
+      ContinuationToken
+    }));
+    contents.push(...(res.Contents || []));
+    ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (ContinuationToken);
+  return contents.map(item => ({
+    key: item.Key || '',
+    size: item.Size || 0,
+    lastModified: item.LastModified ? item.LastModified.toISOString() : new Date().toISOString(),
+    name: (item.Key || '').split('/').pop() || ''
+  })).filter(item => item.key);
+}
+
+export async function obliterateB2MediaObject(key: string): Promise<void> {
+  const connection = getB2Connection();
+  if (!connection) throw new Error(`Backblaze B2 no está configurado: ${missingB2Variables().join(', ')}`);
+  if (!key.startsWith('tu-vip/') || key.includes('..') || key.startsWith('tu-vip/db/') || key.startsWith('tu-vip/backups/')) {
+    throw new Error('Clave de archivo B2 no válida para medios de perfiles');
+  }
+  await obliterateB2ObjectStrict(connection, key);
+}
+
 export async function restoreDatabaseFromB2(key: string): Promise<Buffer | null> {
   const connection = getB2Connection();
   if (!connection) return null;
@@ -337,13 +369,11 @@ export async function restoreDatabaseFromB2(key: string): Promise<Buffer | null>
 
 async function obliterateB2Object(connection: any, key: string) {
   try {
+    let deletedAny = false;
     const versions = await connection.client.send(new ListObjectVersionsCommand({
       Bucket: connection.bucket,
       Prefix: key
     }));
-    
-    let deletedAny = false;
-    
     if (versions.Versions) {
       for (const v of versions.Versions) {
         if (v.Key === key) {
@@ -356,7 +386,6 @@ async function obliterateB2Object(connection: any, key: string) {
         }
       }
     }
-    
     if (versions.DeleteMarkers) {
       for (const dm of versions.DeleteMarkers) {
         if (dm.Key === key) {
@@ -369,9 +398,7 @@ async function obliterateB2Object(connection: any, key: string) {
         }
       }
     }
-    
     if (!deletedAny) {
-      // Fallback
       await connection.client.send(new DeleteObjectCommand({
         Bucket: connection.bucket,
         Key: key
@@ -379,10 +406,48 @@ async function obliterateB2Object(connection: any, key: string) {
     }
   } catch (err) {
     console.error('[Obliterate Error]:', err);
-    // Fallback if ListObjectVersions is not supported or fails
+    // Fallback if ListObjectVersions is not supported or fails.
     await connection.client.send(new DeleteObjectCommand({
       Bucket: connection.bucket,
       Key: key
     }));
+  }
+}
+
+async function obliterateB2ObjectStrict(connection: any, key: string) {
+  let KeyMarker: string | undefined;
+  let VersionIdMarker: string | undefined;
+  const versionsToDelete: any[] = [];
+  do {
+    const versions = await connection.client.send(new ListObjectVersionsCommand({
+      Bucket: connection.bucket,
+      Prefix: key,
+      KeyMarker,
+      VersionIdMarker
+    }));
+    const entries = [ ...(versions.Versions || []), ...(versions.DeleteMarkers || []) ]
+      .filter(item => item.Key === key);
+    versionsToDelete.push(...entries);
+    KeyMarker = versions.IsTruncated ? versions.NextKeyMarker : undefined;
+    VersionIdMarker = versions.IsTruncated ? versions.NextVersionIdMarker : undefined;
+  } while (KeyMarker || VersionIdMarker);
+
+  if (versionsToDelete.length === 0) {
+    throw new Error('B2 no devolvió versiones del objeto. Actualiza la auditoría; no se confirmó el borrado.');
+  }
+  for (const item of versionsToDelete) {
+    await connection.client.send(new DeleteObjectCommand({
+      Bucket: connection.bucket,
+      Key: key,
+      VersionId: item.VersionId
+    }));
+  }
+
+  const remaining = await connection.client.send(new ListObjectVersionsCommand({
+    Bucket: connection.bucket,
+    Prefix: key
+  }));
+  if ([ ...(remaining.Versions || []), ...(remaining.DeleteMarkers || []) ].some(item => item.Key === key)) {
+    throw new Error('B2 aún devuelve versiones de este objeto después del borrado.');
   }
 }

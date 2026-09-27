@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { B2Manager } from './B2Manager';
 import { Cloud } from 'lucide-react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
 import { SplashScreen } from './SplashScreen';
@@ -552,6 +552,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [requests, setRequests] = useState<CustomerRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [syncErrors, setSyncErrors] = useState<SyncErrorLog[]>([]);
+  const [auditedB2Media, setAuditedB2Media] = useState<AuditedB2Media[]>([]);
+  const [auditedGalleryMedia, setAuditedGalleryMedia] = useState<AuditedGalleryMedia[]>([]);
+  const [auditB2Loading, setAuditB2Loading] = useState(false);
+  const [auditB2Error, setAuditB2Error] = useState<string | null>(null);
+  const [selectedAuditedMedia, setSelectedAuditedMedia] = useState<AuditedGalleryMedia | null>(null);
+  const [auditB2Deleting, setAuditB2Deleting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -841,6 +847,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     } catch {
       // ignore
+    }
+  };
+
+  const fetchAuditedB2Media = async () => {
+    setAuditB2Loading(true);
+    setAuditB2Error(null);
+    try {
+      const res = await fetch('/api/admin/audit/b2-profile-media', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo consultar B2.');
+      setAuditedB2Media(data.files || []);
+      setAuditedGalleryMedia(data.gallery || []);
+    } catch (err: any) {
+      setAuditB2Error(err.message || 'No se pudo consultar B2.');
+    } finally {
+      setAuditB2Loading(false);
+    }
+  };
+
+  const deleteAuditedB2Media = async () => {
+    if (!selectedAuditedMedia?.b2Key || !selectedAuditedMedia.b2ObjectDeletable || adminId !== '6461788392') return;
+    const key = selectedAuditedMedia.b2Key;
+    if (!window.confirm(`Eliminar permanentemente este objeto y sus versiones de B2?\n\n${key}\n\nTambién se quitarán sus referencias del perfil y se guardará una copia actualizada de la base en B2.`)) return;
+    setAuditB2Deleting(true);
+    setAuditB2Error(null);
+    try {
+      const res = await fetch('/api/admin/audit/b2-profile-media', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ key })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || data.details || 'No se pudo completar el borrado.');
+      setSelectedAuditedMedia(null);
+      setMessage({ type: 'success', text: `Objeto borrado de B2 y base sincronizada. Referencias quitadas: ${data.removedReferences}.` });
+      await Promise.all([fetchAuditedB2Media(), fetchData()]);
+    } catch (err: any) {
+      setAuditB2Error(err.message || 'Falló el borrado.');
+    } finally {
+      setAuditB2Deleting(false);
+    }
+  };
+
+  const copyAuditedMediaInfo = async () => {
+    if (!selectedAuditedMedia) return;
+    const info = [
+      `Perfil: ${selectedAuditedMedia.profileName} (${selectedAuditedMedia.profileId})`,
+      `Origen: ${selectedAuditedMedia.source}`,
+      `Archivo: ${selectedAuditedMedia.b2Key?.split('/').pop() || selectedAuditedMedia.url.split('/').pop() || selectedAuditedMedia.url}`,
+      `Clave B2: ${selectedAuditedMedia.b2Key || 'No aplica'}`,
+      `Objeto presente en B2: ${selectedAuditedMedia.b2ObjectExists ? 'Sí' : 'No'}`,
+      `URL: ${selectedAuditedMedia.url}`,
+      `Estado: ${selectedAuditedMedia.status === 1 ? 'Publicado' : selectedAuditedMedia.status === 2 ? 'Borrador' : 'Sin estado'}`,
+      `Descripción: ${selectedAuditedMedia.description || 'Sin descripción'}`
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(info);
+      setMessage({ type: 'success', text: 'Información del medio copiada.' });
+    } catch {
+      setAuditB2Error('No se pudo copiar automáticamente. Selecciona y copia los datos de la ficha.');
     }
   };
 
@@ -5521,12 +5589,75 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     <Activity className="w-4 h-4 text-amber-400" /> Registro de Auditoría
                   </h3>
                   <button
-                    onClick={() => fetchData()}
+                    onClick={() => { void fetchData(); void fetchAuditedB2Media(); }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Actualizar
                   </button>
                 </div>
+
+                <section className="rounded-2xl border border-sky-500/25 bg-zinc-950 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h4 className="font-bold text-sky-300">Auditoría de medios y objetos B2</h4>
+                      <p className="text-[10px] text-zinc-400 mt-1">Doble clic en un medio para ver su origen, URL y clave. Solo los objetos que realmente están en B2 se pueden borrar aquí.</p>
+                    </div>
+                    <button type="button" onClick={() => void fetchAuditedB2Media()} disabled={auditB2Loading} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 font-bold disabled:opacity-50">
+                      <RefreshCw className={`w-3.5 h-3.5 ${auditB2Loading ? 'animate-spin' : ''}`} />
+                      {auditB2Loading ? 'Consultando B2…' : 'Consultar medios'}
+                    </button>
+                  </div>
+                  {auditB2Error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-rose-300">{auditB2Error}</p>}
+                  {auditedB2Media.length > 0 && (
+                    <div className="rounded-lg bg-zinc-900/70 p-2">
+                      <p className="text-[10px] font-bold text-zinc-300 mb-1">Objetos reales bajo `tu-vip/` en B2 ({auditedB2Media.length})</p>
+                      <div className="max-h-24 overflow-y-auto space-y-1">
+                        {auditedB2Media.slice(0, 20).map(file => <p key={file.key} className="truncate text-[9px] text-zinc-500 font-mono">{file.key}</p>)}
+                        {auditedB2Media.length > 20 && <p className="text-[9px] text-zinc-500">…y {auditedB2Media.length - 20} objetos más</p>}
+                      </div>
+                    </div>
+                  )}
+                  {!auditB2Loading && auditedGalleryMedia.length === 0 ? (
+                    <p className="text-zinc-500 text-center py-4">Pulsa “Consultar medios” para cruzar la galería del perfil con los objetos de B2.</p>
+                  ) : (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-zinc-800">
+                      {auditedGalleryMedia.map((item, index) => (
+                        <button key={`${item.profileId}:${item.url}`} type="button" onDoubleClick={() => setSelectedAuditedMedia(item)} className="w-full text-left p-2.5 hover:bg-zinc-900/70 rounded-lg grid grid-cols-[1fr_auto] gap-2 items-center" title="Doble clic para abrir ficha de auditoría">
+                          <span className="min-w-0">
+                            <span className="block text-zinc-200 truncate font-semibold">{item.b2Key?.split('/').pop() || item.url.split('/').pop() || `Medio ${index + 1}`}</span>
+                            <span className="block text-[10px] text-zinc-500 truncate">{item.profileName} · {item.url}</span>
+                          </span>
+                          <span className={`text-[9px] font-bold px-2 py-1 rounded-md ${item.source === 'b2' ? (item.b2ObjectExists ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300') : 'bg-violet-500/15 text-violet-300'}`}>
+                            {item.source === 'b2' ? (item.b2ObjectExists ? 'B2 PRESENTE' : 'CLAVE B2 NO LISTADA') : item.source.toUpperCase()}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedAuditedMedia && (
+                    <div className="fixed inset-0 z-[145] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedAuditedMedia(null)}>
+                      <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 p-4 space-y-3 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-sm font-bold text-white">Ficha de auditoría del medio</h4>
+                          <button type="button" onClick={() => setSelectedAuditedMedia(null)} className="p-1.5 rounded-lg bg-zinc-800 text-zinc-300" aria-label="Cerrar"><X className="w-4 h-4" /></button>
+                        </div>
+                        <dl className="space-y-2 text-[11px]">
+                          <div><dt className="text-zinc-500">Perfil</dt><dd className="text-zinc-200">{selectedAuditedMedia.profileName} · {selectedAuditedMedia.profileId}</dd></div>
+                          <div><dt className="text-zinc-500">Almacenamiento detectado</dt><dd className="text-sky-300 font-bold">{selectedAuditedMedia.source.toUpperCase()} · {selectedAuditedMedia.b2ObjectExists ? 'objeto localizado en B2' : 'sin objeto B2 coincidente'}</dd></div>
+                          <div><dt className="text-zinc-500">Nombre / archivo</dt><dd className="text-zinc-200 break-all">{selectedAuditedMedia.b2Key?.split('/').pop() || selectedAuditedMedia.url.split('/').pop() || 'No disponible'}</dd></div>
+                          <div><dt className="text-zinc-500">Clave B2</dt><dd className="text-zinc-200 break-all font-mono">{selectedAuditedMedia.b2Key || 'No corresponde a un objeto B2'}</dd></div>
+                          <div><dt className="text-zinc-500">URL</dt><dd className="text-zinc-200 break-all font-mono">{selectedAuditedMedia.url}</dd></div>
+                          <div><dt className="text-zinc-500">Estado de publicación / base</dt><dd className="text-zinc-200">{selectedAuditedMedia.status === 1 ? 'Publicado' : selectedAuditedMedia.status === 2 ? 'Borrador' : 'Sin estado guardado'}</dd></div>
+                          <div><dt className="text-zinc-500">Descripción</dt><dd className="text-zinc-200">{selectedAuditedMedia.description || 'Sin descripción'}</dd></div>
+                        </dl>
+                        <div className="flex flex-wrap justify-end gap-2 pt-2 border-t border-zinc-800">
+                          <button type="button" onClick={() => void copyAuditedMediaInfo()} className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold">Copiar información</button>
+                          {selectedAuditedMedia.b2ObjectDeletable && <button type="button" onClick={() => void deleteAuditedB2Media()} disabled={auditB2Deleting} className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold disabled:opacity-50">{auditB2Deleting ? 'Eliminando…' : 'Eliminar objeto B2 y sincronizar'}</button>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
 
                 {auditLogs.length === 0 ? (
                   <div className="p-8 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl space-y-2">

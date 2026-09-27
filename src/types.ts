@@ -159,3 +159,24 @@ export interface B2File {
   lastModified: string;
   name: string;
 }
+
+export interface AuditedB2Media extends B2File {
+  references: Array<{
+    profileId: string;
+    profileName: string;
+    url: string;
+    status: number | null;
+  }>;
+}
+
+export interface AuditedGalleryMedia {
+  profileId: string;
+  profileName: string;
+  url: string;
+  source: 'b2' | 'telegram' | 'local' | 'external';
+  b2Key: string | null;
+  b2ObjectExists: boolean;
+  b2ObjectDeletable: boolean;
+  status: number | null;
+  description: string;
+}
