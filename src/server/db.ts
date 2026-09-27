@@ -548,7 +548,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'peru',
-        title: 'ðŸ‡µðŸ‡ª PERU',
+        title: '🇵🇪 PERU',
         category: 'international',
         image_url: null,
         description: 'Pagos en Perú disponibles mediante Yape, Plin o transferencia bancaria local (BCP, BBVA, Interbank). Envía tu comprobante a la administradora.',
@@ -556,7 +556,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'chile',
-        title: 'ðŸ‡¨ðŸ‡± CHILE',
+        title: '🇨🇱 CHILE',
         category: 'international',
         image_url: null,
         description: 'Pagos en Chile disponibles mediante CuentaRUT (BancoEstado) o transferencia electrónica bancaria en pesos chilenos.',
@@ -564,7 +564,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'argentina',
-        title: 'ðŸ‡¦ðŸ‡· ARGENTINA',
+        title: '🇦🇷 ARGENTINA',
         category: 'international',
         image_url: null,
         description: 'Transferencias disponibles en Argentina mediante Mercado Pago (alias/CVU), Ualá o transferencia bancaria en pesos argentinos.',
@@ -572,15 +572,15 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'espana',
-        title: 'ðŸ‡ªðŸ‡¸ ESPAÑA',
+        title: '🇪🇸 ESPAÑA',
         category: 'international',
         image_url: null,
-        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (â‚¬).',
+        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (€).',
         priority_order: 5
       },
       {
         id: 'mexico',
-        title: 'ðŸ‡²ðŸ‡½ MEXICO',
+        title: '🇲🇽 MEXICO',
         category: 'international',
         image_url: null,
         description: 'Pagos en México mediante transferencia interbancaria SPEI (CLABE), OXXO Pay o Spin by OXXO.',
@@ -588,7 +588,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'paraguay',
-        title: 'ðŸ‡µðŸ‡¾ PARAGUAY',
+        title: '🇵🇾 PARAGUAY',
         category: 'international',
         image_url: null,
         description: 'Transferencias locales en Paraguay mediante SIPAP, Tigo Money o bancos en Guaraníes (PYG).',
@@ -612,7 +612,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'colombia',
-        title: 'ðŸ‡¨ðŸ‡´ COLOMBIA',
+        title: '🇨🇴 COLOMBIA',
         category: 'international',
         image_url: null,
         description: 'Pagos en Colombia disponibles mediante Nequi, Daviplata, Bancolombia o PSE.',
