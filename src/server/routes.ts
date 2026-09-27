@@ -2247,7 +2247,12 @@ router.delete('/admin/b2/files', requireAdminAuth, async (req: Request, res: Res
 
 router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const b2MediaFiles = await listAllB2Files('tu-vip/media/');
+    
+      const profilesFiles = await listAllB2Files('tu-vip/profiles/');
+      const qrFiles = await listAllB2Files('tu-vip/qr/');
+      const botFiles = await listAllB2Files('tu-vip/bot/');
+      const b2MediaFiles = [...profilesFiles, ...qrFiles, ...botFiles];
+
     
     // Recopilar urls de BD
     const allProfiles = await getAllProfiles();
@@ -2260,7 +2265,7 @@ router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res:
         p.photos.forEach(u => {
           if (u.includes('key=')) {
               const key = decodeURIComponent(u.split('key=')[1].split('&')[0]);
-              if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+              if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
             }
         });
       }
@@ -2268,13 +2273,13 @@ router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res:
     for (const p of allPayments) {
       if (p.image_url && p.image_url.includes('key=')) {
           const key = decodeURIComponent(p.image_url.split('key=')[1].split('&')[0]);
-          if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+          if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
         }
     }
     for (const q of allQueue) {
       if (q.media_url && q.media_url.includes('key=')) {
           const key = decodeURIComponent(q.media_url.split('key=')[1].split('&')[0]);
-          if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+          if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
         }
     }
     
