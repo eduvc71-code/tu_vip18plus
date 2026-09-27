@@ -2258,24 +2258,24 @@ router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res:
     for (const p of allProfiles) {
       if (Array.isArray(p.photos)) {
         p.photos.forEach(u => {
-          if (u.includes('tu-vip/media/')) {
-            const key = u.split('/').slice(-3).join('/');
-            dbUrls.add(key);
-          }
+          if (u.includes('key=')) {
+              const key = decodeURIComponent(u.split('key=')[1].split('&')[0]);
+              if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+            }
         });
       }
     }
     for (const p of allPayments) {
-      if (p.image_url && p.image_url.includes('tu-vip/media/')) {
-        const key = p.image_url.split('/').slice(-3).join('/');
-        dbUrls.add(key);
-      }
+      if (p.image_url && p.image_url.includes('key=')) {
+          const key = decodeURIComponent(p.image_url.split('key=')[1].split('&')[0]);
+          if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+        }
     }
     for (const q of allQueue) {
-      if (q.media_url && q.media_url.includes('tu-vip/media/')) {
-         const key = q.media_url.split('/').slice(-3).join('/');
-         dbUrls.add(key);
-      }
+      if (q.media_url && q.media_url.includes('key=')) {
+          const key = decodeURIComponent(q.media_url.split('key=')[1].split('&')[0]);
+          if (key.startsWith('tu-vip/media/')) dbUrls.add(key);
+        }
     }
     
     const orphans = [];
