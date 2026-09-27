@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface UseAdminAuthReturn {
   token: string;
+  adminId: string;
   isAuthenticated: boolean;
   authChecked: boolean;
   pinInput: string;
@@ -23,6 +24,7 @@ export const useAdminAuth = ({
   onLoginSuccess
 }: UseAdminAuthOptions): UseAdminAuthReturn => {
   const [token, setToken] = useState('');
+  const [adminId, setAdminId] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -56,7 +58,17 @@ export const useAdminAuth = ({
       const data = await res.json();
       if (res.ok && data.valid) {
         setToken(tok);
+      try { const payload = JSON.parse(atob(tok.split('.')[1])); if (payload.id) setAdminId(String(payload.id)); } catch(e){}
+        
         setIsAuthenticated(true);
+        if (data.userId) setAdminId(data.userId);
+        else {
+          try {
+            const payload = JSON.parse(atob(tok.split('.')[1]));
+            if (payload.id) setAdminId(String(payload.id));
+          } catch(e){}
+        }
+  
         setAuthChecked(true);
         try { localStorage.setItem('danii_admin_token', tok); } catch {}
         if (onLoginSuccessRef.current) {
@@ -183,6 +195,7 @@ export const useAdminAuth = ({
 
   return {
     token,
+    adminId,
     isAuthenticated,
     authChecked,
     pinInput,
