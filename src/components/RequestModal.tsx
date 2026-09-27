@@ -94,6 +94,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
   };
 
   const handleSubmit = async () => {
+    if (submitting || submitted) return;
     const finalCountry = country === 'Otro' ? customCountry : country;
     if (!finalCountry) {
       setError('Por favor selecciona o ingresa tu país.');

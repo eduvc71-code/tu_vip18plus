@@ -698,7 +698,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     setLoading(true);
     
@@ -715,26 +715,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const data = await res.json();
       if (res.ok && data.success) {
         const targetProfileId = isEdit ? editingProfile!.id : data.profile.id;
-        if (selectedPhotoFiles && selectedPhotoFiles.length > 0) {
-          try {
-            const body = new FormData();
-            for (let i = 0; i < selectedPhotoFiles.length; i++) {
-              const originalFile = selectedPhotoFiles[i];
-              if (watermarkEnabled && watermarkText.trim() !== '') {
-                const stampedFile = await addWatermarkToImage(originalFile, watermarkText.trim());
-                body.append('photos', stampedFile);
-              } else {
-                body.append('photos', originalFile);
-              }
-            }
-            await fetch(`/api/admin/profiles/${targetProfileId}/photos`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-              body
-            });
-            setSelectedPhotoFiles(null);
-          } catch { /* Ignore photo error */ }
-        }
+        
         setMessage({ type: 'success', text: `Perfil ${isEdit ? 'actualizado' : 'creado'} y guardado con éxito.` });
         if (data.profile) {
           setEditingProfile(data.profile);
@@ -1041,7 +1022,7 @@ body.append('publish_to_channel', 'true');
   };
 
   // Custom Buttons Handlers
-  const handleSaveButton = async (e: React.FormEvent) => {
+  const handleSaveButton = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!buttonFormData.label.trim() || !buttonFormData.url.trim()) {
       setMessage({ type: 'error', text: 'La etiqueta y el enlace URL son obligatorios' });
@@ -1092,7 +1073,7 @@ body.append('publish_to_channel', 'true');
   };
 
   // Dynamic Polls Handlers
-  const handleSavePoll = async (e: React.FormEvent) => {
+  const handleSavePoll = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     const validOptions = pollFormData.options.map(o => o.trim()).filter(Boolean);
     if (!pollFormData.question.trim() || validOptions.length < 2) {
@@ -1339,7 +1320,7 @@ body.append('publish_to_channel', 'true');
     setPublishing(true);
     try {
       // Ensure profile data is saved with status 'disponible'
-      await fetch(`/api/admin/profiles/${targetId}`, {
+      const saveRes = await fetch(`/api/admin/profiles/${targetId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -1349,6 +1330,13 @@ body.append('publish_to_channel', 'true');
           status: 'disponible'
         })
       });
+
+      if (!saveRes.ok) {
+        const errData = await saveRes.json();
+        setMessage({ type: 'error', text: errData.error || 'Error al guardar los datos antes de publicar' });
+        setPublishing(false);
+        return;
+      }
 
       const res = await fetch(`/api/admin/profiles/${targetId}/publish`, {
         method: 'POST',
@@ -1451,7 +1439,7 @@ body.append('publish_to_channel', 'true');
     if (!confirm('¿Estás seguro de que quieres enviar una difusión masiva por mensaje privado a TODOS los suscriptores del bot con este contenido? Esto puede tardar varios segundos.')) return;
     try {
       setMessage({ type: 'success', text: 'Iniciando difusión masiva...' });
-      const res = await fetch(`/api/admin/profiles/${editingProfile?.id}/broadcast`, {
+      const res = await fetch(`/api/admin/profiles/${editingProfile?.id}/share-to-channel`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1529,7 +1517,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
     }
   };
 
-  const handleSaveAndTestChannel = async (e?: React.FormEvent) => {
+  const handleSaveAndTestChannel = async (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     if (!channelIdInput.trim()) {
       setMessage({ type: 'error', text: 'Por favor ingresa un ID numérico (-100...) o @usuario del canal.' });
@@ -1567,7 +1555,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
     }
   };
 
-  const handleSaveSettings = async (e?: React.FormEvent) => {
+  const handleSaveSettings = async (e?: React.SyntheticEvent) => {
     if (e) e.preventDefault();
     setLoading(true);
     try {
@@ -1606,7 +1594,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
   };
 
   // Payment Methods Actions
-  const handleSavePaymentMethod = async (e?: React.FormEvent, publishAfter = false) => {
+  const handleSavePaymentMethod = async (e?: React.SyntheticEvent, publishAfter = false) => {
     if (e) e.preventDefault();
     if (!editingPaymentMethod) return;
     setLoading(true);

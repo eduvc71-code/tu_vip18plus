@@ -1,4 +1,4 @@
-import express, { Request, Response, NextFunction } from 'express';
+﻿import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -17,6 +17,7 @@ import {
   deleteProfile,
   removeMediaFromProfile,
   createCustomerRequest,
+  findRecentDuplicateCustomerRequest,
   getCustomerRequests,
   getCustomerRequestById,
   getDueCustomerRequests,
@@ -514,6 +515,20 @@ router.post('/requests', async (req: Request, res: Response) => {
     if (!profile) {
       res.status(404).json({ error: 'Perfil no encontrado' });
       return;
+    }
+
+    // Prevent repeated submissions from creating duplicate admin notifications.
+    if (safeUserId) {
+      const duplicate = await findRecentDuplicateCustomerRequest(safeUserId, profile.id, purchaseMessage, 10);
+      if (duplicate) {
+        res.json({
+          success: true,
+          duplicate: true,
+          message: 'Ya recibimos tu solicitud reciente. La Administradora responderá por privado.',
+          request: duplicate
+        });
+        return;
+      }
     }
 
     const request = await createCustomerRequest({
@@ -1337,7 +1352,7 @@ router.put('/admin/profiles/:id/content/vip', requireAdminAuth, async (req: Requ
 // BOT MEDIA QUEUE ENDPOINTS (/admin/bot-queue)
 
 // POST Difusión Masiva a Suscriptores
-router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Request, res: Response) => {
+router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const profileId = req.params.id;
     const { media_url } = req.body;
@@ -1355,107 +1370,47 @@ router.post('/admin/profiles/:id/broadcast', requireAdminAuth, async (req: Reque
     const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
     const { baseUrl, username, channelId } = getBotConfig();
 
-    let subscribers = [];
-    if (operatingMode === 'solo_bot') {
-      subscribers = await getAllSubscribers();
-      if (!subscribers.length) {
-        res.status(400).json({ error: 'No hay suscriptores registrados para enviar difusión masiva.' });
-        return;
-      }
-    } else if (operatingMode === 'bot_and_channel') {
-      if (!channelId) {
-        res.status(400).json({ error: 'Modo Híbrido: No hay un ID de canal configurado.' });
-        return;
-      }
+    if (operatingMode !== 'bot_and_channel' || !channelId) {
+      res.status(400).json({ error: 'Modo Híbrido: No hay un ID de canal configurado para compartir.' });
+      return;
     }
 
     const isPaid = profile.media_stars && profile.media_stars[media_url] && profile.media_stars[media_url] > 0;
-    const starCount = isPaid ? profile.media_stars[media_url] : 0;
-    const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
-    
-    // Change status to 1 (Activo)
-    const currentStatus = { ...(profile.media_status || {}) };
-    currentStatus[media_url] = 1;
-    await saveProfile({ id: profileId, media_status: currentStatus });
-    broadcastEvent('PROFILE_UPDATED', { id: profileId });
-
-    if (operatingMode === 'bot_and_channel') {
-      res.json({ success: true, message: 'Publicado exitosamente en el Canal VIP Free y Mini App.' });
-    } else {
-      res.json({ success: true, message: `Publicado en Mini App y Difusión iniciada a ${subscribers.length} suscriptores.`, count: subscribers.length });
+    if (isPaid) {
+      res.status(400).json({ error: 'El contenido de pago debe publicarse usando su botón amarillo correspondiente.' });
+      return;
     }
 
-    (async () => {
-      const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
-      const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media_url) || media_url.includes('/video');
-      const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
-      const mediaTarget = tgMatch ? tgMatch[1] : media_url;
+    const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
 
-      if (operatingMode === 'bot_and_channel') {
-        try {
-          if (isPaid) {
-            await sendPaidMediaToChannel({
-              mediaUrl: media_url,
-              starCount,
-              caption: captionText,
-              channelId: channelId,
-              profileId: profile.id
-            });
-          } else {
-            const method = isVideo ? 'sendVideo' : 'sendPhoto';
-            const field = isVideo ? 'video' : 'photo';
-            await callTelegramApi(method, {
-              chat_id: channelId,
-              [field]: mediaTarget,
-              caption: captionText,
-                has_spoiler: true,
-                parse_mode: 'Markdown',
-                reply_markup: replyMarkup
-            });
-          }
-          console.log(`Publicación en Canal Híbrido finalizada con éxito.`);
-        } catch (e) {
-          console.error('Error publicando en canal híbrido:', e);
-        }
-      } else {
-        let successCount = 0;
-        let failCount = 0;
-        for (const sub of subscribers) {
-          try {
-            if (isPaid) {
-              await sendPaidMediaToChannel({
-                mediaUrl: media_url,
-                starCount,
-                caption: captionText,
-                channelId: sub.telegram_user_id,
-                profileId: profile.id
-              });
-            } else {
-              const method = isVideo ? 'sendVideo' : 'sendPhoto';
-              const field = isVideo ? 'video' : 'photo';
-              await callTelegramApi(method, {
-                chat_id: sub.telegram_user_id,
-                [field]: mediaTarget,
-                caption: captionText,
-                has_spoiler: true,
-                parse_mode: 'Markdown',
-                reply_markup: replyMarkup
-              });
-            }
-            successCount++;
-          } catch (e) {
-            failCount++;
-          }
-          await new Promise(r => setTimeout(r, 50));
-        }
-        console.log(`Broadcast finished. Success: ${successCount}, Failed: ${failCount}`);
+    res.json({ success: true, message: 'Compartido exitosamente en el Canal VIP.' });
+
+    (async () => {
+      try {
+        const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
+        const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media_url) || media_url.includes('/video');
+        const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+        const mediaTarget = tgMatch ? tgMatch[1] : media_url;
+
+        const method = isVideo ? 'sendVideo' : 'sendPhoto';
+        const field = isVideo ? 'video' : 'photo';
+        await callTelegramApi(method, {
+          chat_id: channelId,
+          [field]: mediaTarget,
+          caption: captionText,
+          has_spoiler: true,
+          parse_mode: 'Markdown',
+          reply_markup: replyMarkup
+        });
+        console.log("Compartido en Canal Híbrido finalizado con éxito.");
+      } catch (e) {
+        console.error('Error publicando en canal híbrido:', e);
       }
     })();
   } catch (err: any) {
-    res.status(500).json({ error: 'Error al iniciar la publicación', details: err?.message });
+    res.status(500).json({ error: 'Error al intentar compartir en el canal', details: err?.message });
   }
 });
-
 router.get('/admin/bot-queue', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
     const queue = await getBotMediaQueue();

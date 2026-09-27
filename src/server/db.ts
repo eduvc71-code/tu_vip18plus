@@ -1,4 +1,4 @@
-import initSqlJs, { Database } from 'sql.js';
+﻿import initSqlJs, { Database } from 'sql.js';
 import fs from 'fs';
 import path from 'path';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
@@ -29,7 +29,7 @@ export async function getDb(): Promise<Database> {
         fs.writeFileSync(DB_FILE, b2Buf);
         db = new SQL.Database(b2Buf);
         loadedFromB2 = true;
-        console.log('[Database] ✅ Base de datos de producción restaurada exitosamente desde Backblaze B2');
+        console.log('[Database] âœ… Base de datos de producción restaurada exitosamente desde Backblaze B2');
       } else {
         console.log('[Database] No se encontró base previa en B2.');
       }
@@ -87,7 +87,7 @@ function consolidateToSingleVipProfile(database: Database): void {
 
   const cols = res[0].columns;
   const rows = res[0].values.map(v => Object.fromEntries(cols.map((c, i) => [c, v[i]])));
-  const target = rows.find(r => String(r.name).includes('🧸') || String(r.name).toLowerCase().includes('dani')) || rows[0];
+  const target = rows.find(r => String(r.name).includes('🧾') || String(r.name).toLowerCase().includes('dani')) || rows[0];
 
   const allPhotosSet = new Set<string>();
   const mergedStatus: Record<string, number> = {};
@@ -367,7 +367,7 @@ function seedInitialData(database: Database): void {
 
   if (count === 0) {
     const now = new Date().toISOString();
-    const modelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM DANI 🧸🩷';
+    const modelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM DANI 🧾🩸';
 
     const sampleProfiles: Partial<Profile>[] = [
       {
@@ -447,7 +447,7 @@ function seedPaymentMethods(database: Database): void {
     }> = [
       {
         id: 'qr_bolivia',
-        title: '🇧🇴 PAGO QR BOLIVIA',
+        title: 'ðŸ‡§ðŸ‡´ PAGO QR BOLIVIA',
         category: 'national',
         image_url: existingQr,
         description: 'Escanea el código QR desde cualquier banco boliviano o app de pagos para realizar tu transferencia inmediata en Bs. Envía el comprobante para habilitar tu acceso.',
@@ -455,7 +455,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'peru',
-        title: '🇵🇪 PERU',
+        title: 'ðŸ‡µðŸ‡ª PERU',
         category: 'international',
         image_url: null,
         description: 'Pagos en Perú disponibles mediante Yape, Plin o transferencia bancaria local (BCP, BBVA, Interbank). Envía tu comprobante a la administradora.',
@@ -463,7 +463,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'chile',
-        title: '🇨🇱 CHILE',
+        title: 'ðŸ‡¨ðŸ‡± CHILE',
         category: 'international',
         image_url: null,
         description: 'Pagos en Chile disponibles mediante CuentaRUT (BancoEstado) o transferencia electrónica bancaria en pesos chilenos.',
@@ -471,7 +471,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'argentina',
-        title: '🇦🇷 ARGENTINA',
+        title: 'ðŸ‡¦ðŸ‡· ARGENTINA',
         category: 'international',
         image_url: null,
         description: 'Transferencias disponibles en Argentina mediante Mercado Pago (alias/CVU), Ualá o transferencia bancaria en pesos argentinos.',
@@ -479,15 +479,15 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'espana',
-        title: '🇪🇸 ESPAÑA',
+        title: 'ðŸ‡ªðŸ‡¸ ESPAÑA',
         category: 'international',
         image_url: null,
-        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (€).',
+        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (â‚¬).',
         priority_order: 5
       },
       {
         id: 'mexico',
-        title: '🇲🇽 MEXICO',
+        title: 'ðŸ‡²ðŸ‡½ MEXICO',
         category: 'international',
         image_url: null,
         description: 'Pagos en México mediante transferencia interbancaria SPEI (CLABE), OXXO Pay o Spin by OXXO.',
@@ -495,7 +495,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'paraguay',
-        title: '🇵🇾 PARAGUAY',
+        title: 'ðŸ‡µðŸ‡¾ PARAGUAY',
         category: 'international',
         image_url: null,
         description: 'Transferencias locales en Paraguay mediante SIPAP, Tigo Money o bancos en Guaraníes (PYG).',
@@ -503,15 +503,15 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'brasil',
-        title: '🇧🇷 BRASIL',
+        title: 'ðŸ‡§ðŸ‡· BRASIL',
         category: 'international',
         image_url: null,
-        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferência bancária local.',
+        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferÃªncia bancária local.',
         priority_order: 8
       },
       {
         id: 'uruguay',
-        title: '🇺🇾 URUGUAY',
+        title: 'ðŸ‡ºðŸ‡¾ URUGUAY',
         category: 'international',
         image_url: null,
         description: 'Pagos en Uruguay mediante Prex, Brou o transferencia local en pesos uruguayos o dólares.',
@@ -519,7 +519,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'colombia',
-        title: '🇨🇴 COLOMBIA',
+        title: 'ðŸ‡¨ðŸ‡´ COLOMBIA',
         category: 'international',
         image_url: null,
         description: 'Pagos en Colombia disponibles mediante Nequi, Daviplata, Bancolombia o PSE.',
@@ -527,7 +527,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'rusia',
-        title: '🇷🇺 RUSIA',
+        title: 'ðŸ‡·ðŸ‡º RUSIA',
         category: 'international',
         image_url: null,
         description: 'Pagos y transferencias internacionales / criptomonedas (USDT) para Rusia.',
@@ -535,7 +535,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'ecuador',
-        title: '🇪🇨 ECUADOR',
+        title: 'ðŸ‡ªðŸ‡¨ ECUADOR',
         category: 'international',
         image_url: null,
         description: 'Transferencias directas en Ecuador (USD) mediante Banco Pichincha, Banco Guayaquil o app DeUna.',
@@ -543,7 +543,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'venezuela',
-        title: '🇻🇪 VENEZUELA',
+        title: 'ðŸ‡»ðŸ‡ª VENEZUELA',
         category: 'international',
         image_url: null,
         description: 'Pagos en Venezuela mediante Pago Móvil (Bs), Zinli o Binance Pay USDT.',
@@ -551,7 +551,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'cripto',
-        title: '🪙 CRIPTOMONEDA',
+        title: 'ðŸª™ CRIPTOMONEDA',
         category: 'service',
         image_url: null,
         description: 'Aceptamos USDT (TRC-20, BEP-20, TON, Polygon), Bitcoin (BTC), Ethereum (ETH) o Binance Pay ID sin comisiones.',
@@ -559,7 +559,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'tigo_money',
-        title: '☎️ TIGO MONEY',
+        title: 'â˜Žï¸ TIGO MONEY',
         category: 'service',
         image_url: null,
         description: 'Envío directo por Tigo Money Bolivia al número de la administradora.',
@@ -567,7 +567,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'paypal',
-        title: '💸 PAYPAL',
+        title: 'ðŸ’¸ PAYPAL',
         category: 'service',
         image_url: null,
         description: 'Pagos internacionales seguros mediante PayPal (saldo o tarjeta de débito/crédito internacional).',
@@ -591,7 +591,7 @@ function seedPaymentMethods(database: Database): void {
       },
       {
         id: 'zelle',
-        title: '💳 ZELLE',
+        title: 'ðŸ’³ ZELLE',
         category: 'service',
         image_url: null,
         description: 'Transferencia instantánea en USD mediante Zelle desde cualquier cuenta bancaria de Estados Unidos.',
@@ -1046,6 +1046,33 @@ export async function createCustomerRequest(req: Partial<CustomerRequest>): Prom
   };
 }
 
+export async function findRecentDuplicateCustomerRequest(
+  telegramUserId: string,
+  profileId: string,
+  notes: string,
+  withinMinutes = 10
+): Promise<CustomerRequest | null> {
+  const database = await getDb();
+  const stmt = database.prepare(`
+    SELECT * FROM customer_requests
+    WHERE telegram_user_id = ?
+      AND profile_id = ?
+      AND notes = ?
+      AND status != 'fallida'
+      AND created_at >= datetime('now', ?)
+    ORDER BY created_at DESC
+    LIMIT 1
+  `);
+  stmt.bind([telegramUserId, profileId, notes, `-${Math.max(1, Math.floor(withinMinutes))} minutes`]);
+  if (!stmt.step()) {
+    stmt.free();
+    return null;
+  }
+  const row = stmt.getAsObject() as unknown as CustomerRequest;
+  stmt.free();
+  return row;
+}
+
 export async function getCustomerRequests(): Promise<CustomerRequest[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM customer_requests ORDER BY created_at DESC");
@@ -1440,7 +1467,7 @@ export async function deletePoll(id: string): Promise<boolean> {
 export async function registerSubscriber(userId: string, username?: string, firstName?: string): Promise<void> {
   const combined = `${username || ''} ${firstName || ''}`;
   if (
-    /(sms[-_ ]?boom|bomber|бомбер|спам|смс|crypto|airdrop)/i.test(combined) ||
+    /(sms[-_ ]?boom|bomber|Ð±Ð¾Ð¼Ð±ÐµÑ€|ÑÐ¿Ð°Ð¼|ÑÐ¼Ñ|crypto|airdrop)/i.test(combined) ||
     /[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF]/.test(combined)
   ) {
     return; // Descartar bots de spam
@@ -1708,3 +1735,4 @@ export async function getAllSubscribers(): Promise<any[]> {
     return obj;
   });
 }
+
