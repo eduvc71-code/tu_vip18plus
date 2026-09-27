@@ -1031,6 +1031,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleUploadPhotos = async (profileId: string) => {
     if (!selectedPhotoFiles || selectedPhotoFiles.length === 0) return;
+    if (!uploadComment.trim()) {
+      setMessage({ type: 'error', text: 'Escribe la descripción del contenido antes de publicarlo.' });
+      return;
+    }
     setUploadingPhotos(true);
     for (let i = 0; i < selectedPhotoFiles.length; i++) {
       if (selectedPhotoFiles[i].size > 20 * 1024 * 1024) {
@@ -2590,17 +2594,19 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               )}
                             </div>
 
-                            {/* Entrada opcional rápida para comentar o activar sugestivo al subir */}
+                            {/* Descripción obligatoria de la publicación Free */}
                             <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
                               <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
                                 <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                                Comentario / Descripción guardada en Telegram (Opcional):
+                                Descripción de la publicación <span className="text-rose-400">(Obligatoria)</span>
                               </label>
                               <input
                                 type="text"
                                 value={uploadComment}
                                 onChange={(e) => setUploadComment(e.target.value)}
-                                placeholder="Ej: 🔥 Nueva sesión de adelanto exclusivo..."
+                                required
+                                aria-required="true"
+                                placeholder="Escribe el texto que acompañará la publicación en Canal Free..."
                                 className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
                               />
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
@@ -2682,7 +2688,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <button
                                 type="button"
                                 onClick={() => handleUploadPhotos(editingProfile.id)}
-                                disabled={uploadingPhotos || !watermarkEnabled || watermarkText.trim() === ''}
+                                disabled={uploadingPhotos || !uploadComment.trim() || !watermarkEnabled || watermarkText.trim() === ''}
                                 className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
                                   'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
                                 }`}

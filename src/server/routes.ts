@@ -1135,11 +1135,12 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
 
     const files = req.files as Express.Multer.File[];
     if (!files?.length) return res.status(400).json({ error: 'Selecciona al menos una foto o video Free.' });
+    const comment = String(req.body.description || req.body.comment || '').trim();
+    if (!comment) return res.status(400).json({ error: 'La descripción de la publicación es obligatoria.' });
     const uploadedUrls: string[] = [];
     const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
     const mediaToPublish: Array<{ url: string; fileId: string | null; isVideo: boolean }> = [];
 
-    const comment = req.body.description || req.body.comment || '';
     const bodegaChatId = getSystemSetting('bodega_channel_id');
     const privateAdminChatId = config.adminIds?.[0];
     const telegramStorageChatId = bodegaChatId || privateAdminChatId;
@@ -1233,7 +1234,7 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     }
     const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];
     for (const media of mediaToPublish) {
-      const caption = mediaDescriptions[media.url] || comment || updated.description || '';
+      const caption = mediaDescriptions[media.url] || comment;
       const method = media.isVideo ? 'sendVideo' : 'sendPhoto';
       const field = media.isVideo ? 'video' : 'photo';
       const mediaTarget = media.fileId || media.url;
