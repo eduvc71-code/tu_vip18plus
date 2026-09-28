@@ -570,7 +570,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
   const [adminContactUsername, setAdminContactUsername] = useState('');
-  const [vipReactionsEnabled, setVipReactionsEnabled] = useState(false);
   const [freePreviewUrl, setFreePreviewUrl] = useState<string | null>(null);
   const [vipPreviewUrl, setVipPreviewUrl] = useState<string | null>(null);
   const [vipPreviewType, setVipPreviewType] = useState<'image' | 'video' | null>(null);
@@ -660,8 +659,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [paidModalStarCount, setPaidModalStarCount] = useState<number | ''>(50);
   const [paidModalCaption, setPaidModalCaption] = useState<string>('');
   const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
-  const [profileReactions, setProfileReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
-  const [paidModalReactions, setPaidModalReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
 
 
   // Custom buttons state
@@ -3503,22 +3500,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   ) : (
                                     <p className="text-[10px] text-zinc-500 italic">Sin descripción general</p>
                                   )}
-
-                                  {/* Reacciones */}
-                                  <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-800 text-[11px] text-zinc-400">
-                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                      â¤ï¸ {editingProfile?.reactions?.hearts || 0}
-                                    </span>
-                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                      â­ {editingProfile?.reactions?.stars || 0}
-                                    </span>
-                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                      🔥 {editingProfile?.reactions?.fires || 0}
-                                    </span>
-                                    <span className="flex items-center gap-1 bg-zinc-950 px-2 py-1 rounded-lg border border-zinc-800">
-                                      ðŸ‘ {editingProfile?.reactions?.likes || 0}
-                                    </span>
-                                  </div>
 
                                   {/* Galería visible */}
                                   <div className="pt-2 border-t border-zinc-800 space-y-1.5">

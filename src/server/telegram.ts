@@ -26,7 +26,6 @@ import {
   getSystemSetting,
   saveSystemSetting,
   addAdminTelegramId,
-  toggleProfileReaction,
   getPublicCustomButtons,
   getAllCustomButtons,
   getAllPolls,
@@ -558,24 +557,6 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   }
 }
 
-type ReactionListener = (event: { profileId: string; reactions: any }) => void;
-const reactionListeners: Set<ReactionListener> = new Set();
-
-export function onReactionUpdated(listener: ReactionListener) {
-  reactionListeners.add(listener);
-  return () => reactionListeners.delete(listener);
-}
-
-export function notifyReactionListeners(data: { profileId: string; reactions: any }) {
-  for (const listener of reactionListeners) {
-    try {
-      listener(data);
-    } catch (e) {
-      console.error('Error notifying reaction listener:', e);
-    }
-  }
-}
-
 export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string, username: string) {
   const { appShortName } = getBotConfig();
   const botAppUrl = `https://t.me/${username}/${appShortName || 'canalVipFreeIamDanii'}?startapp=ver_${profile.id}`;
@@ -601,26 +582,6 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
       ...customButtonRows
     ]
   };
-}
-
-export async function updateTelegramMessageReactions(profileId: string): Promise<boolean> {
-  const { channelId, username, baseUrl } = getBotConfig();
-  const profile = await getProfileById(profileId);
-  if (!profile || !profile.telegram_message_id) return false;
-
-  const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
-
-  try {
-    const res = await callTelegramApi('editMessageReplyMarkup', {
-      chat_id: channelId,
-      message_id: profile.telegram_message_id,
-      reply_markup: replyMarkup
-    });
-    return Boolean(res.ok);
-  } catch (err) {
-    console.warn('[Telegram Reactions Sync Error]:', err);
-    return false;
-  }
 }
 
 export async function sendPhotoToUser(chatId: string | number, photoUrl: string, caption?: string) {
@@ -2059,28 +2020,6 @@ async function handleCallbackQuery(cb: any) {
   const data = cb.data || '';
   const userIdStr = String(fromId);
 
-  // Reaction Callbacks
-  if (data.startsWith('react_')) {
-    try {
-      const parts = data.split('_');
-      // format: react_profileId_emoji
-      const emoji = parts.pop();
-      const profileId = parts.slice(1).join('_'); // in case profile.id has underscores
-      const profile = await getProfileById(profileId);
-      if (profile && emoji) {
-        const reactions = profile.reactions || {};
-        reactions[emoji] = (reactions[emoji] || 0) + 1;
-        profile.reactions = reactions;
-        await saveProfile(profile);
-        await updateTelegramMessageReactions(profileId);
-        await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: `Has reaccionado con ${emoji}` });
-      } else {
-        await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Publicación no encontrada', show_alert: true });
-      }
-    } catch(e) { console.warn(e); }
-    return;
-  }
-
   // 1. Client Callbacks (accessible to everyone)
   if (data.startsWith('client_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
@@ -2105,68 +2044,6 @@ async function handleCallbackQuery(cb: any) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const methodId = data.replace('pay_method_', '');
     await showPaymentMethodDetail(chatId, methodId);
-    return;
-  }
-
-  // 1.1. Reactions Callbacks (accessible to all users in channel and bot)
-  if (data.startsWith('react_')) {
-    const raw = data.slice('react_'.length);
-    const knownTypes = [
-      'heart_eyes',
-      'star_struck',
-      'in_love',
-      'heart',
-      'fire',
-      'like',
-      'kiss',
-      'star',
-      'clap',
-      'party'
-    ];
-    let reactionType = '';
-    let profileId = '';
-    for (const t of knownTypes) {
-      if (raw.startsWith(t + '_')) {
-        reactionType = t;
-        profileId = raw.slice(t.length + 1);
-        break;
-      }
-    }
-    if (!reactionType) {
-      const parts = raw.split('_');
-      reactionType = parts[0];
-      profileId = parts.slice(1).join('_');
-    }
-
-    const emojiMap: Record<string, string> = {
-      heart: '❤️',
-      fire: '🔥',
-      like: '👍',
-      in_love: '🥰',
-      kiss: '💋',
-      star: '⭐',
-      heart_eyes: '😍',
-      clap: '👏',
-      party: '🎉',
-      star_struck: '🤩'
-    };
-
-    try {
-      const { profile: updated, userReacted } = await toggleProfileReaction(profileId, userIdStr, reactionType);
-      await updateTelegramMessageReactions(profileId);
-
-      const emoji = emojiMap[reactionType] || '❤️';
-      await callTelegramApi('answerCallbackQuery', {
-        callback_query_id: cb.id,
-        text: userReacted ? `¡Reaccionaste con ${emoji}!` : `Reacción ${emoji} retirada.`
-      });
-
-      // Notify Mini App in real-time
-      notifyReactionListeners({ profileId, reactions: updated.reactions });
-    } catch (err) {
-      console.error('[Reaction Callback Error]:', err);
-      await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    }
     return;
   }
 
@@ -2635,7 +2512,6 @@ export async function sendPaidMediaToChannel(params: {
   caption?: string;
   channelId?: string;
   profileId?: string;
-  reactions?: string[];
 }): Promise<{ ok: boolean; messageId?: number; error?: string }> {
   const { channelId, username, baseUrl } = getBotConfig();
   const targetChannel = params.channelId || channelId;
@@ -2672,30 +2548,7 @@ export async function sendPaidMediaToChannel(params: {
     const { getProfileById } = require('./db.js');
     const profile = await getProfileById(params.profileId, false);
     if (profile) {
-      let markup = await buildChannelPostMarkup(profile, baseUrl, username);
-      // If specific reactions are provided for this VIP post, we override the profile ones
-      if (params.reactions && params.reactions.length > 0) {
-         let reactionButtons: any[] = [];
-         const profileReactions = profile.reactions || {};
-         for (const emoji of params.reactions) {
-           const count = profileReactions[emoji] || 0;
-           reactionButtons.push({
-             text: count > 0 ? `${emoji} ${count}` : emoji,
-             callback_data: `react_${profile.id}_${emoji}`
-           });
-         }
-         // Replace or add the reactions row
-         // buildChannelPostMarkup usually puts reactions as the last row before standard buttons, let's just prepend it.
-         // Actually, let's just rebuild the keyboard specifically for this VIP post:
-         markup = {
-           inline_keyboard: [
-             ...markup.inline_keyboard.filter(row => !row.some(btn => btn.callback_data && btn.callback_data.startsWith('react_'))),
-           ]
-         };
-         // Insert reactions row at the beginning or right above the main app button
-         markup.inline_keyboard.unshift(reactionButtons);
-      }
-      payload.reply_markup = markup;
+      payload.reply_markup = await buildChannelPostMarkup(profile, baseUrl, username);
     }
   } else {
     payload.reply_markup = {

@@ -13,10 +13,6 @@ export interface EphemeralMediaConfig {
   };
 }
 
-export interface ProfileReactions {
-  [emoji: string]: number | undefined;
-}
-
 export interface CustomButton {
   id: string;
   label: string;
@@ -60,7 +56,6 @@ export interface Profile {
   updated_at: string;
   telegram_message_id?: number | null;
   priority_order: number;
-  reactions?: ProfileReactions;
 }
 
 export type BotMediaCategory = 'bienvenida' | 'auto_reply' | 'drip' | 'vip_privado' | 'general';

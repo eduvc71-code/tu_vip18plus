@@ -266,7 +266,6 @@ function initTables(database: any): void {
       updated_at TEXT NOT NULL,
       telegram_message_id INTEGER,
       priority_order INTEGER DEFAULT 0,
-        active_reactions TEXT,
       ephemeral_config TEXT
     );
   `);
@@ -278,8 +277,12 @@ function initTables(database: any): void {
   if (!existingProfileCols.has('ephemeral_config')) {
     database.run(`ALTER TABLE profiles ADD COLUMN ephemeral_config TEXT`);
   }
-  if (!existingProfileCols.has('reactions')) {
-    database.run(`ALTER TABLE profiles ADD COLUMN reactions TEXT`);
+  for (const column of ['reactions', 'active_reactions']) {
+    if (existingProfileCols.has(column)) {
+      try { database.run(`ALTER TABLE profiles DROP COLUMN ${column}`); } catch (error) {
+        console.warn(`[Database] No se pudo retirar la columna obsoleta ${column}:`, (error as any)?.message || error);
+      }
+    }
   }
   if (!existingProfileCols.has('media_descriptions')) {
     database.run(`ALTER TABLE profiles ADD COLUMN media_descriptions TEXT`);
@@ -306,15 +309,7 @@ function initTables(database: any): void {
     );
   `);
 
-  database.run(`
-    CREATE TABLE IF NOT EXISTS profile_reactions (
-      profile_id TEXT NOT NULL,
-      user_id TEXT NOT NULL,
-      reaction_type TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      PRIMARY KEY (profile_id, user_id, reaction_type)
-    );
-  `);
+  database.run('DROP TABLE IF EXISTS profile_reactions');
 
   database.run(`
     CREATE TABLE IF NOT EXISTS customer_requests (
@@ -762,39 +757,6 @@ function normalizeDictKeys(dict: Record<string, any>): Record<string, any> {
 }
 
 // Data Access Methods
-function parseReactions(raw: any) {
-  const defaults = {
-    likes: 0,
-    hearts: 0,
-    stars: 0,
-    fires: 0,
-    in_love: 0,
-    kiss: 0,
-    heart_eyes: 0,
-    clap: 0,
-    party: 0,
-    star_struck: 0
-  };
-  if (!raw) return defaults;
-  try {
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    return {
-      likes: Number(parsed.likes) || 0,
-      hearts: Number(parsed.hearts) || 0,
-      stars: Number(parsed.stars) || 0,
-      fires: Number(parsed.fires) || 0,
-      in_love: Number(parsed.in_love) || 0,
-      kiss: Number(parsed.kiss) || 0,
-      heart_eyes: Number(parsed.heart_eyes) || 0,
-      clap: Number(parsed.clap) || 0,
-      party: Number(parsed.party) || 0,
-      star_struck: Number(parsed.star_struck) || 0,
-    };
-  } catch {
-    return defaults;
-  }
-}
-
 // Data Access Methods & Hydration Helper
 function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
   const obj = { ...raw };
@@ -849,7 +811,6 @@ function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
     });
   }
 
-  obj.reactions = parseReactions(obj.reactions);
   return obj as Profile;
 }
 
@@ -920,9 +881,6 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
     const updatedStatus = profile.status ?? existing.status;
     const updatedTgMsgId = profile.telegram_message_id !== undefined ? profile.telegram_message_id : existing.telegram_message_id;
     const updatedPriority = profile.priority_order ?? existing.priority_order;
-    const updatedReactions = profile.reactions !== undefined
-      ? JSON.stringify(profile.reactions)
-      : (existing.reactions ? JSON.stringify(existing.reactions) : JSON.stringify({ likes: 0, hearts: 0, stars: 0, fires: 0 }));
     const updatedMediaDesc = profile.media_descriptions !== undefined
       ? JSON.stringify(profile.media_descriptions)
       : (existing.media_descriptions ? JSON.stringify(existing.media_descriptions) : '{}');
@@ -938,7 +896,7 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
 
     database.run(`
       UPDATE profiles
-      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, reactions = ?, media_descriptions = ?, media_status = ?, media_stars = ?, telegram_media_file_ids = ?
+      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, priority_order = ?, media_descriptions = ?, media_status = ?, media_stars = ?, telegram_media_file_ids = ?
       WHERE id = ?
     `, [
       updatedName,
@@ -952,7 +910,6 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       now,
       updatedTgMsgId ?? null,
       updatedPriority,
-      updatedReactions,
       updatedMediaDesc,
       updatedMediaStatus,
       updatedMediaStars,
@@ -960,14 +917,13 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       profile.id
     ]);
   } else {
-    const initialReactions = JSON.stringify(profile.reactions || { likes: 0, hearts: 0, stars: 0, fires: 0 });
     const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
     const initialMediaStatus = JSON.stringify(profile.media_status || {});
     const initialMediaStars = JSON.stringify(profile.media_stars || {});
     const initialTgFileIds = JSON.stringify(profile.telegram_media_file_ids || {});
     database.run(`
-      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, reactions, media_descriptions, media_status, media_stars, telegram_media_file_ids)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, media_descriptions, media_status, media_stars, telegram_media_file_ids)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       profile.id,
       profile.name || 'Sin nombre',
@@ -983,7 +939,6 @@ export async function saveProfile(profile: Partial<Profile> & { id: string }): P
       now,
       profile.telegram_message_id || null,
       profile.priority_order || 0,
-      initialReactions,
       initialMediaDesc,
       initialMediaStatus,
       initialMediaStars,
@@ -1020,75 +975,6 @@ export async function removeMediaFromProfile(profileId: string, mediaUrl: string
     media_stars: updatedMediaStars,
     telegram_media_file_ids: updatedTgFiles
   });
-}
-
-export async function toggleProfileReaction(
-  profileId: string,
-  userId: string,
-  reactionType: string
-): Promise<{ profile: Profile; userReacted: boolean }> {
-  const database = await getDb();
-  const profile = await getProfileById(profileId);
-  if (!profile) {
-    throw new Error('Perfil no encontrado');
-  }
-
-  const reactionKeyMap: Record<string, string> = {
-    like: 'likes',
-    heart: 'hearts',
-    star: 'stars',
-    fire: 'fires',
-    in_love: 'in_love',
-    kiss: 'kiss',
-    heart_eyes: 'heart_eyes',
-    clap: 'clap',
-    party: 'party',
-    star_struck: 'star_struck'
-  };
-  const key = reactionKeyMap[reactionType] || reactionType;
-  const reactions: Record<string, number> = { ...((profile.reactions as Record<string, number>) || {}) };
-
-  // Check if user already reacted with this type
-  const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?");
-  stmt.bind([profileId, userId, reactionType]);
-  const hasReacted = stmt.step();
-  stmt.free();
-
-  let userReacted = false;
-  if (hasReacted) {
-    database.run("DELETE FROM profile_reactions WHERE profile_id = ? AND user_id = ? AND reaction_type = ?", [profileId, userId, reactionType]);
-    reactions[key] = Math.max(0, (reactions[key] || 1) - 1);
-    userReacted = false;
-  } else {
-    database.run("INSERT OR REPLACE INTO profile_reactions (profile_id, user_id, reaction_type, created_at) VALUES (?, ?, ?, ?)", [
-      profileId,
-      userId,
-      reactionType,
-      new Date().toISOString()
-    ]);
-    reactions[key] = (reactions[key] || 0) + 1;
-    userReacted = true;
-  }
-
-  const updated = await saveProfile({
-    id: profileId,
-    reactions
-  });
-
-  return { profile: updated, userReacted };
-}
-
-export async function getUserReactions(profileId: string, userId: string): Promise<string[]> {
-  const database = await getDb();
-  const stmt = database.prepare("SELECT reaction_type FROM profile_reactions WHERE profile_id = ? AND user_id = ?");
-  stmt.bind([profileId, userId]);
-  const list: string[] = [];
-  while (stmt.step()) {
-    const row = stmt.getAsObject() as { reaction_type: string };
-    if (row.reaction_type) list.push(row.reaction_type);
-  }
-  stmt.free();
-  return list;
 }
 
 export async function deleteProfile(id: string): Promise<boolean> {
@@ -1223,7 +1109,6 @@ export async function getDueCustomerRequests(nowIso: string): Promise<CustomerRe
     requests.push(stmt.getAsObject() as unknown as CustomerRequest);
   }
   stmt.free();
-  saveDb();
   return requests;
 }
 
