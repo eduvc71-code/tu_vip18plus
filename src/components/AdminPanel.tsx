@@ -630,6 +630,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [channelTitle, setChannelTitle] = useState<string>('');
   const [verifyingChannel, setVerifyingChannel] = useState(false);
   const [enlargedMediaUrl, setEnlargedMediaUrl] = useState<string | null>(null);
+  const [showProfileGallery, setShowProfileGallery] = useState(false);
+
+  useEffect(() => {
+    setShowProfileGallery(false);
+  }, [editingProfile?.id]);
 
   // Upload workflow state (comment and ephemeral before upload)
   const [uploadComment, setUploadComment] = useState('');
@@ -2986,6 +2991,16 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         {/* Separación y Filtros de Contenido */}
                         {photos.length > 0 ? (
                           <div className="space-y-3.5 pt-2">
+                            <button
+                              type="button"
+                              onClick={() => setShowProfileGallery(prev => !prev)}
+                              aria-expanded={showProfileGallery}
+                              className="w-full sm:w-auto px-4 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 hover:text-white hover:border-amber-500/50 font-bold text-xs transition-colors cursor-pointer"
+                            >
+                              {showProfileGallery ? 'Ocultar galería' : 'Ver galería'}
+                            </button>
+                            {showProfileGallery && (
+                            <div className="space-y-3.5">
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-zinc-900 gap-2">
                               <div className="flex items-center gap-1.5 bg-zinc-900/90 p-1 rounded-xl border border-zinc-800">
                                 <button
@@ -3105,6 +3120,8 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   );
                                 })}
                               </div>
+                            )}
+                            </div>
                             )}
                           </div>
                         ) : (
