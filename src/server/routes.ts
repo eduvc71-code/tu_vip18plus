@@ -1179,6 +1179,17 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     }
     broadcastEvent('PROFILE_UPDATED', updated);
     const publishedCount = publishResults.filter(result => result.messageId).length;
+    const channelUsername = String(getSystemSetting('channel_username') || '').replace(/^@/, '');
+    const channelIdMatch = String(config.channelId).match(/^-100(\d+)$/);
+    const publishedPosts = publishResults.flatMap(result => {
+      if (!result.messageId) return [];
+      const url = channelUsername
+        ? `https://t.me/${channelUsername}/${result.messageId}`
+        : channelIdMatch
+          ? `https://t.me/c/${channelIdMatch[1]}/${result.messageId}`
+          : null;
+      return url ? [{ messageId: result.messageId, url }] : [];
+    });
     const failed = publishResults.filter(result => result.error);
     if (failed.length > 0) {
       return res.status(502).json({
@@ -1187,6 +1198,7 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
         profile: updated,
         new_media: uploadedUrls,
         publishedCount,
+        publishedPosts,
         publishErrors: failed,
         error: `${publishedCount} de ${files.length} archivo(s) se publicaron. ${failed.length} fallaron; revisa Auditoría antes de reintentar.`
       });
@@ -1196,6 +1208,7 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
       profile: updated,
       new_media: uploadedUrls,
       publishedCount,
+      publishedPosts,
       snapshotKey
     });
   } catch (err: any) {

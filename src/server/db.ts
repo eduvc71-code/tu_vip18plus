@@ -95,6 +95,10 @@ class SqlJsCompatibleDatabase {
   }
 
   export() {
+    const checkpoint = this.db.pragma('wal_checkpoint(TRUNCATE)')[0];
+    if (checkpoint?.busy) {
+      throw new Error('No se pudo consolidar el WAL de SQLite antes de exportar la base.');
+    }
     return fs.readFileSync(DB_FILE);
   }
 }
@@ -102,6 +106,13 @@ class SqlJsCompatibleDatabase {
 
 let db: any | null = null;
 let b2SyncTimer: NodeJS.Timeout | null = null;
+let b2SyncQueue: Promise<unknown> = Promise.resolve();
+
+function queueDatabaseSnapshot(buffer: Buffer): Promise<string> {
+  const sync = b2SyncQueue.then(() => backupDatabaseToB2(buffer));
+  b2SyncQueue = sync.catch(() => undefined);
+  return sync;
+}
 
 export async function getDb(): Promise<any> {
   if (db) return db;
@@ -222,16 +233,18 @@ function consolidateToSingleVipProfile(database: any): void {
 export function saveDb(): void {
   if (!db) return;
   try {
-    const data = db.export();
-    const buffer = Buffer.from(data);
-    fs.writeFileSync(DB_FILE, buffer);
+    // Consolidate WAL writes into the main database file before scheduling a snapshot.
+    db.export();
 
     // Debounced automatic background sync to B2 (persists data across Render restarts)
     if (b2SyncTimer) clearTimeout(b2SyncTimer);
     b2SyncTimer = setTimeout(async () => {
       try {
+        b2SyncTimer = null;
+        if (!db) return;
+        const buffer = Buffer.from(db.export());
         console.log(`[Database] Iniciando respaldo a B2 (${buffer.length} bytes)...`);
-        await backupDatabaseToB2(buffer);
+        await queueDatabaseSnapshot(buffer);
         console.log('[Database] Snapshot sincronizado exitosamente con Backblaze B2');
       } catch (err: any) {
         console.warn('[Database] Advertencia al sincronizar snapshot con B2:', err?.message);
@@ -244,10 +257,12 @@ export function saveDb(): void {
 
 export async function syncDbToB2Now(): Promise<string> {
   const database = await getDb();
-  const data = database.export();
-  const buffer = Buffer.from(data);
-  fs.writeFileSync(DB_FILE, buffer);
-  return await backupDatabaseToB2(buffer);
+  if (b2SyncTimer) {
+    clearTimeout(b2SyncTimer);
+    b2SyncTimer = null;
+  }
+  const buffer = Buffer.from(database.export());
+  return await queueDatabaseSnapshot(buffer);
 }
 
 function initTables(database: any): void {

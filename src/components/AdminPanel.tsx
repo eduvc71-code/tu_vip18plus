@@ -571,6 +571,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
   const [adminContactUsername, setAdminContactUsername] = useState('');
   const [freePreviewUrl, setFreePreviewUrl] = useState<string | null>(null);
+  const [publishedPostUrls, setPublishedPostUrls] = useState<string[]>([]);
   const [vipPreviewUrl, setVipPreviewUrl] = useState<string | null>(null);
   const [vipPreviewType, setVipPreviewType] = useState<'image' | 'video' | null>(null);
   const [freePreviewType, setFreePreviewType] = useState<'image' | 'video' | null>(null);
@@ -634,6 +635,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   useEffect(() => {
     setShowProfileGallery(false);
+    setPublishedPostUrls([]);
   }, [editingProfile?.id]);
 
   // Upload workflow state (comment and ephemeral before upload)
@@ -1051,6 +1053,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         body
       });
       const data = await res.json();
+      setPublishedPostUrls(Array.isArray(data.publishedPosts)
+        ? data.publishedPosts.map((post: { url?: string }) => post.url).filter((url: unknown): url is string => typeof url === 'string')
+        : []);
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
@@ -2336,7 +2341,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                     }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    <span>3. Ver para Publicar</span>
+                    <span>3. Vista previa</span>
                   </button>
                 </div>
 
@@ -3142,7 +3147,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           onClick={() => setProfileStep(3)}
                           className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                         >
-                          Continuar a Ver para Publicar (Paso 3) ➔
+                          Continuar para ver la vista previa (Paso 3) ➔
                         </button>
                       </div>
                     </div>
@@ -3160,12 +3165,29 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5">
                         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
                           <h4 className="font-bold text-white flex items-center gap-2 text-xs">
-                            <Eye className="w-4 h-4 text-amber-400" /> Paso 3: Ver para Publicar
+                          <Eye className="w-4 h-4 text-amber-400" /> Paso 3: Vista previa
                           </h4>
                           <div className="flex items-center gap-1.5">
                             
                           </div>
                         </div>
+
+                        {publishedPostUrls.length > 0 && (
+                          <div className="flex flex-wrap gap-2" aria-live="polite">
+                            {publishedPostUrls.map((postUrl, index) => (
+                              <a
+                                key={postUrl}
+                                href={postUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition-colors"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                                {publishedPostUrls.length === 1 ? 'Ver publicación en Canal Free' : `Ver publicación ${index + 1} en Canal Free`}
+                              </a>
+                            ))}
+                          </div>
+                        )}
 
                         {/* Metadatos Rápidos */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 bg-zinc-900/80 border border-zinc-800 rounded-xl text-[11px]">
