@@ -2086,11 +2086,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
   const tabs = allTabs.filter(t => (t.id === 'audit' || t.id === 'b2') ? isMasterAdmin : true);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-[100dvh] max-h-[100dvh] overflow-hidden sm:p-3 sm:items-center sm:justify-center">
+    <div className="admin-panel-viewport fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-[100dvh] max-h-[100dvh] overflow-hidden sm:items-stretch">
       <div className={`relative w-full h-full max-h-full min-h-0 bg-zinc-900 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
         isFullScreen
           ? 'h-screen w-screen max-h-screen max-w-none rounded-none border-none'
-          : 'sm:max-w-4xl sm:rounded-3xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[92vh] rounded-none border-none'
+          : 'sm:mx-auto sm:max-w-6xl xl:max-w-[1600px] sm:rounded-2xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[calc(100dvh-1rem)] lg:rounded-3xl rounded-none border-none'
       }`}>
 
         {/* ── Header ── */}
@@ -2189,7 +2189,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
         <button
           type="button"
           onClick={() => setShowHelpGuide(true)}
-          className="fixed bottom-5 right-4 z-40 w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xl shadow-2xl shadow-amber-500/40 border-2 border-amber-300 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-40 w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xl shadow-2xl shadow-amber-500/40 border-2 border-amber-300 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all"
           title="Guía Práctica del Administrador"
         >
           <span>?</span>
@@ -2249,7 +2249,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
           {/* ── Tab Views ── */}
           <div 
-            className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y px-1 sm:px-4 py-2 sm:py-3 space-y-2.5 sm:space-y-3.5 pb-28"
+            className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y px-2 sm:px-5 lg:px-7 py-2 sm:py-3 space-y-2.5 sm:space-y-3.5 pb-[calc(7rem+env(safe-area-inset-bottom))]"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
 
