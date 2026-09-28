@@ -313,8 +313,6 @@ router.get('/info', (_req: Request, res: Response) => {
     auto_reply_delay_minutes: autoReplyDelay,
     qr_image_url: getSystemSetting('qr_image_url') || '',
     admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'Danii_Catalogo_SCZ_bot',
-      reactions_enabled: getSystemSetting('reactions_enabled') === 'true',
-      reactions_list: JSON.parse(getSystemSetting('reactions_list') || '["❤️", "🔥", "😍", "😘", "💦"]'),
     pinned_message_text: getSystemSetting('pinned_message_text') || '',
     pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
     model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
@@ -1672,7 +1670,7 @@ router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res:
 // POST Update Bot Settings
 router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description, reactions_enabled, reactions_list } = req.body;
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description } = req.body;
     if (bot_username !== undefined) {
       const cleanUsername = String(bot_username).replace(/^@/, '').trim();
       saveSystemSetting('bot_username', cleanUsername);
@@ -1709,12 +1707,6 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
     if (splash_description !== undefined) {
       saveSystemSetting('splash_description', String(splash_description).trim());
     }
-    if (reactions_enabled !== undefined) {
-      saveSystemSetting('reactions_enabled', reactions_enabled ? 'true' : 'false');
-    }
-    if (reactions_list !== undefined && Array.isArray(reactions_list)) {
-      saveSystemSetting('reactions_list', JSON.stringify(reactions_list));
-    }
     const adminId = (req as any).adminUserId || 'Admin Web';
     await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración de modo y parámetros actualizada');
     const updatedConfig = getBotConfig();
@@ -1732,9 +1724,7 @@ router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Respo
       admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'Danii_Catalogo_SCZ_bot',
       model_display_name: getSystemSetting('model_display_name') || 'Tú',
       model_vip_link: getSystemSetting('model_vip_link') || '',
-      splash_description: getSystemSetting('splash_description') || '',
-      reactions_enabled: getSystemSetting('reactions_enabled') === 'true',
-      reactions_list: JSON.parse(getSystemSetting('reactions_list') || '["❤️", "🔥", "😍", "😘", "💦"]')
+      splash_description: getSystemSetting('splash_description') || ''
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al guardar configuración' });

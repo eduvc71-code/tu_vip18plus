@@ -588,41 +588,13 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
-  // Generate Reactions Row
-  let reactionButtons: any[] = [];
-  try {
-    const enabled = getSystemSetting('reactions_enabled') === 'true';
-    if (enabled) {
-      const reactionsList: string[] = JSON.parse(getSystemSetting('reactions_list') || '["❤️", "🔥", "😍", "😘", "💦"]');
-      const profileReactions = profile.reactions || {};
-      
-      // Filter only reactions that have counts > 0 to keep UI clean, 
-      // or show all configured. We'll show all configured to encourage clicks,
-      // but the user said "LO MAS PEQUEÑO POSIBLE DEBAJO DEL POST"
-      for (const emoji of reactionsList) {
-        const count = profileReactions[emoji] || 0;
-        // The button will open the mini app since it's a channel and we can't easily catch callback queries there without full bot access to messages.
-        // Actually, inline keyboards in channels send callback queries to the bot IF the bot posted the message.
-        // But the easiest way to handle it safely in the channel and avoid spam is just to use url back to mini app, OR callback_data.
-        // We'll use callback_data for real-time channel interaction:
-        reactionButtons.push({ text: `${count > 0 ? count : ''} ${emoji}`.trim(), callback_data: `react_${profile.id}_${emoji}` });
-      }
-    }
-  } catch(e) { console.warn('Error parsing reactions:', e) }
-
+  // Telegram-native reactions are configured in the channel settings.
+  // Posts here use only the Mini App link and configured custom URL buttons.
   const keyboard = [
     [
       { text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }
     ]
   ];
-
-  // Group reactions in rows of up to 5
-  if (reactionButtons.length > 0) {
-    for (let i = 0; i < reactionButtons.length; i += 5) {
-      keyboard.push(reactionButtons.slice(i, i + 5));
-    }
-  }
-
   return {
     inline_keyboard: [
       ...keyboard,

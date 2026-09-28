@@ -140,12 +140,6 @@ const TAB_HELP: Record<string, { headline: string; sub: string; badge: string; b
           { icon: '✍️', label: 'Descripción de venta', text: 'Escribe un texto visible aunque la foto esté bloqueada. Ej: "🔥 Desbloquea este exclusivo..."' },
           { icon: '🔒', label: 'Publicar', text: 'El contenido aparece desenfocado en el Canal. El cliente paga y el bot entrega el acceso al instante.' },
         ] },
-      { color: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/30', icon: '5️⃣', title: 'Reacciones Interactivas ❤️',
-        steps: [
-          { icon: '💬', label: 'Barra flotante de 5 segundos', text: 'Al abrir un archivo en la Mini App, aparece una barra de emojis de reacción.' },
-          { icon: '🔄', label: 'Sincronización en tiempo real', text: 'Al tocar una reacción, el contador se actualiza automáticamente en el Canal VIP.' },
-          { icon: '⚙️', label: 'Configurar emojis', text: 'Ve a Telegram → Reacciones Interactivas para elegir qué emojis mostrar.' },
-        ] },
     ],
   },
   requests: {
@@ -218,7 +212,7 @@ const TAB_HELP: Record<string, { headline: string; sub: string; badge: string; b
     ],
   },
   telegram: {
-    headline: 'Configuración de Telegram', sub: 'Bot, canal, anuncios fijados y reacciones',
+    headline: 'Configuración de Telegram', sub: 'Bot, canal y anuncios fijados',
     badge: '⚙️ TELEGRAM', badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
     sections: [
       { color: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/30', icon: '🤖', title: 'Modo de Operación',
@@ -230,12 +224,6 @@ const TAB_HELP: Record<string, { headline: string; sub: string; badge: string; b
         steps: [
           { icon: '✍️', label: 'Texto del anuncio', text: 'Escribe el mensaje que permanecerá fijo en la parte superior del Canal VIP Free.' },
           { icon: '🟢', label: 'Activar / Desactivar', text: 'Usa el interruptor para mostrar u ocultar el anuncio sin perder el texto guardado.' },
-        ] },
-      { color: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/30', icon: '❤️', title: 'Reacciones Interactivas',
-        steps: [
-          { icon: '😍', label: 'Habilitar reacciones', text: 'Activa la barra de emojis flotante que aparece al abrir contenido en la Mini App.' },
-          { icon: '🎨', label: 'Lista de emojis', text: 'Escribe los emojis separados por espacio. Ej: ❤️ 🔥 😍 💎 👑' },
-          { icon: '🔄', label: 'Sincronización automática', text: 'Cada reacción de la Mini App actualiza el contador en el Canal VIP en tiempo real.' },
         ] },
     ],
   },
@@ -582,9 +570,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedPhotoFiles, setSelectedPhotoFiles] = useState<FileList | null>(null);
   const [newBotUsername, setNewBotUsername] = useState(botUsername || '');
   const [adminContactUsername, setAdminContactUsername] = useState('');
-  const [reactionsEnabled, setReactionsEnabled] = useState(false);
-  const [reactionsList, setReactionsList] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜', '😘', '💦']);
-  const [freeReactionsEnabled, setFreeReactionsEnabled] = useState(false);
   const [vipReactionsEnabled, setVipReactionsEnabled] = useState(false);
   const [freePreviewUrl, setFreePreviewUrl] = useState<string | null>(null);
   const [vipPreviewUrl, setVipPreviewUrl] = useState<string | null>(null);
@@ -677,7 +662,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [publishingPaidMedia, setPublishingPaidMedia] = useState(false);
   const [profileReactions, setProfileReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
   const [paidModalReactions, setPaidModalReactions] = useState<string[]>(['â¤ï¸', '🔥', 'ðŸ˜']);
-  const availableEmojis = ['â¤ï¸', '🔥', 'ðŸ˜', '😘', '💦', '😈', 'ðŸ‘', '🥵'];
 
 
   // Custom buttons state
@@ -811,8 +795,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.auto_reply_delay_minutes !== undefined) setAutoReplyDelay(String(infoData.auto_reply_delay_minutes));
         if (infoData.qr_image_url !== undefined) setQrImageUrl(infoData.qr_image_url);
         if (infoData.admin_contact_username !== undefined) setAdminContactUsername(infoData.admin_contact_username || '');
-        if (infoData.reactions_enabled !== undefined) setReactionsEnabled(Boolean(infoData.reactions_enabled));
-        if (infoData.reactions_list !== undefined && Array.isArray(infoData.reactions_list)) setReactionsList(infoData.reactions_list);
         if (infoData.pinned_message_text !== undefined) setPinnedMessageText(infoData.pinned_message_text);
         if (infoData.pinned_message_active !== undefined) setPinnedMessageActive(Boolean(infoData.pinned_message_active));
         if (infoData.channel_id) setChannelIdInput(infoData.channel_id);
@@ -1815,8 +1797,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
         body: JSON.stringify({
           bot_username: newBotUsername,
           admin_contact_username: adminContactUsername,
-            reactions_enabled: reactionsEnabled,
-            reactions_list: reactionsList,
           channel_id: channelIdInput,
           telegram_only_access: true,
           auto_reply_delay_minutes: autoReplyDelay,
@@ -2645,45 +2625,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               </div>
                             </div>
                             
-                            {/* Check de Reacciones Free */}
-                            <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={freeReactionsEnabled}
-                                    onChange={(e) => setFreeReactionsEnabled(e.target.checked)}
-                                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-amber-500 focus:ring-amber-500 cursor-pointer"
-                                  />
-                                  <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1">
-                                    Activar Reacciones para este Post (Telegram)
-                                  </span>
-                                </label>
-                                
-                                {freeReactionsEnabled && (
-                                    <div className="pt-2 border-t border-zinc-800/80">
-                                      <div className="flex flex-wrap gap-1.5 pt-1">
-                                        {availableEmojis.map(emoji => {
-                                          const isSelected = formData.active_reactions?.includes(emoji);
-                                          return (
-                                            <button
-                                              key={emoji}
-                                              type="button"
-                                              onClick={() => {
-                                                const current = formData.active_reactions || [];
-                                                const next = isSelected ? current.filter(e => e !== emoji) : [...current, emoji];
-                                                setFormData({ ...formData, active_reactions: next });
-                                              }}
-                                              className={`px-2.5 py-1 rounded-full text-sm transition-all border ${isSelected ? 'bg-amber-500/20 border-amber-500/50 text-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.2)]' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                                            >
-                                              {emoji}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                )}
-                            </div>
-
                             {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
                               <button
                                 type="button"
@@ -4609,46 +4550,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 </form>
 
                 
-                {/* REACCIONES INTERACTIVAS */}
-                <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-amber-400" /> Reacciones Interactivas (Mini App & Canal)
-                  </h4>
-                  <p className="text-zinc-400">
-                    Habilita la barra flotante de 5 segundos con iconos de reacción al abrir fotos o videos. Al reaccionar en la Mini App, el contador se actualizará en el Canal VIP automáticamente.
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    <label className="flex items-center gap-2 cursor-pointer w-fit">
-                      <input 
-                        type="checkbox" 
-                        checked={reactionsEnabled} 
-                        onChange={(e) => setReactionsEnabled(e.target.checked)} 
-                        className="w-4 h-4 rounded accent-amber-500 cursor-pointer" 
-                      />
-                      <span className="text-sm font-bold text-white">Habilitar visualización de Reacciones</span>
-                    </label>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[11px] font-bold text-zinc-400">Lista de iconos (Sepáralos por un espacio):</label>
-                      <input 
-                         type="text"
-                         value={reactionsList.join(' ')}
-                         onChange={(e) => setReactionsList(e.target.value.split(/\s+/).filter(Boolean))}
-                         className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-base focus:outline-none focus:border-amber-500"
-                         placeholder="?? ?? ?? ?? ??"
-                      />
-                    </div>
-                    <div className="flex justify-end mt-1">
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="py-2 px-4 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0 disabled:opacity-60"
-                      >
-                        Guardar Reacciones
-                      </button>
-                    </div>
-                  </div>
-                </form>
-
                 {/* AUTO REPLY DELAY */} 
 
                 <form onSubmit={handleSaveSettings} className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3">
@@ -4688,7 +4589,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         Canal VIP Oficial de Telegram (Publicación y Novedades)
                       </h4>
                       <p className="text-zinc-400 text-xs mt-0.5">
-                        El bot publicará aquí tus publicaciones y fotos con botones interactivos de reacciones (â¤ï¸ â­ 🔥 ðŸ‘).
+                        El bot publicará aquí tus publicaciones y fotos. Las reacciones nativas se configuran desde Telegram.
                       </p>
                     </div>
                     {channelVerified === true && (
