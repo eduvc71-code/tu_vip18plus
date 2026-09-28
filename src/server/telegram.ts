@@ -2544,19 +2544,8 @@ export async function sendPaidMediaToChannel(params: {
   payload.caption = finalCaption;
   payload.parse_mode = 'Markdown';
 
-  if (params.profileId) {
-    const { getProfileById } = require('./db.js');
-    const profile = await getProfileById(params.profileId, false);
-    if (profile) {
-      payload.reply_markup = await buildChannelPostMarkup(profile, baseUrl, username);
-    }
-  } else {
-    payload.reply_markup = {
-      inline_keyboard: [
-        [{ text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }]
-      ]
-    };
-  }
+  // Telegram rejects inline keyboards on sendPaidMedia (BUTTON_TYPE_INVALID).
+  // The price is already included in the paid media request.
 
   const res = await callTelegramApi('sendPaidMedia', payload);
   if (res && res.ok && res.result) {

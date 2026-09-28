@@ -4004,7 +4004,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               </div>
                               <div>
                                 <h4 className="text-sm sm:text-base font-bold text-white flex items-center gap-1.5 font-serif">
-                                  Publicar con Telegram Stars â­
+                                  Publicar con Telegram Stars
                                 </h4>
                                 <p className="text-[11px] text-amber-300/80">
                                   Contenido exclusivo de pago bloqueado con candado
@@ -4048,7 +4048,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             {/* Selector de Precio en Estrellas */}
                             <div className="space-y-2">
                               <label className="block text-xs font-bold text-zinc-200">
-                                Precio en Telegram Stars (â­ Estrellas):
+                                Precio en Telegram Stars:
                               </label>
                               {/* Presets */}
                               <div className="grid grid-cols-5 gap-1.5">
@@ -4063,7 +4063,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         : 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-750 hover:text-white'
                                     }`}
                                   >
-                                    <span>â­ {stars}</span>
+                                    <span>{stars}</span>
                                   </button>
                                 ))}
                               </div>
@@ -4080,7 +4080,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   />
                                   <Star className="w-4 h-4 text-amber-400 fill-amber-400 absolute left-3 top-1/2 -translate-y-1/2" />
                                 </div>
-                                <span className="text-xs text-zinc-400 font-semibold">Estrellas (1 - 2500)</span>
+                                <span className="text-xs text-zinc-400 font-semibold">Estrellas (1–2500)</span>
                               </div>
                             </div>
 
@@ -4123,7 +4123,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               ) : (
                                 <>
                                   <Send className="w-4 h-4" />
-                                  <span>Publicar por â­ {paidModalStarCount} Estrellas</span>
+                                  <span>Publicar por {paidModalStarCount} Stars</span>
                                 </>
                               )}
                             </button>
