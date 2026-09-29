@@ -85,9 +85,9 @@ export function getPaymentMethodFlag(method: PaymentMethod | string): string {
   if (lower.includes('zelle') || lower.includes('estados unidos') || lower.includes('usa') || /\bus\b/i.test(lower)) return '🇺🇸';
   if (lower.includes('cripto') || lower.includes('usdt') || lower.includes('bitcoin') || lower.includes('binance')) return '🪙';
   if (lower.includes('paypal')) return '💸';
-  if (lower.includes('estrella') || lower.includes('stars')) return 'â­';
-  if (lower.includes('tigo')) return 'â˜Žï¸';
-  if (lower.includes('western') || lower.includes('remitly') || lower.includes('moneygram')) return 'ðŸŒ';
+  if (lower.includes('estrella') || lower.includes('stars')) return '⭐';
+  if (lower.includes('tigo')) return '☎️';
+  if (lower.includes('western') || lower.includes('remitly') || lower.includes('moneygram')) return '🌐';
 
   return '💳';
 }
@@ -269,11 +269,44 @@ const TAB_HELP: Record<string, { headline: string; sub: string; badge: string; b
   },
 };
 
+/* ── UI/UX (solo visual): Skeleton de carga reutilizable ─────────────── */
+const SkeletonBlock: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div aria-hidden="true" className={`animate-pulse bg-zinc-800/70 rounded-lg ${className}`} />
+);
+
+const RequestSkeleton: React.FC = () => (
+  <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3" aria-hidden="true">
+    <div className="flex items-center gap-2"><SkeletonBlock className="w-6 h-6 rounded-full !bg-zinc-800/70" /><SkeletonBlock className="h-3.5 w-32" /><SkeletonBlock className="h-3 w-20" /></div>
+    <SkeletonBlock className="h-3 w-2/3" />
+    <SkeletonBlock className="h-3 w-1/3" />
+    <div className="flex justify-end"><SkeletonBlock className="h-8 w-40 rounded-xl" /></div>
+  </div>
+);
+
+const ListRowSkeleton: React.FC = () => (
+  <div className="p-3 flex items-center justify-between gap-4" aria-hidden="true">
+    <div className="flex items-center gap-2 min-w-0"><SkeletonBlock className="h-4 w-16" /><SkeletonBlock className="h-3 w-48 max-w-[50vw]" /></div>
+    <SkeletonBlock className="h-3 w-14 shrink-0" />
+  </div>
+);
+
+const TileSkeleton: React.FC<{ aspectClass?: string }> = ({ aspectClass = 'aspect-square' }) => (
+  <div className={`relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 ${aspectClass}`} aria-hidden="true">
+    <SkeletonBlock className="absolute inset-0 h-full w-full !rounded-none !bg-zinc-800/60" />
+  </div>
+);
+
 const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose, activeTab }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
   if (!isOpen) return null;
   const guide = TAB_HELP[activeTab] || TAB_HELP['profiles'];
   return (
-    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" aria-label="Guía práctica del administrador" className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full sm:max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[88vh]">
         <div className="flex justify-center pt-3 pb-1 sm:hidden shrink-0">
           <div className="w-10 h-1 rounded-full bg-zinc-700" />
@@ -547,6 +580,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [selectedAuditedMedia, setSelectedAuditedMedia] = useState<AuditedGalleryMedia | null>(null);
   const [auditB2Deleting, setAuditB2Deleting] = useState(false);
   const [loading, setLoading] = useState(false);
+  // UI/UX (solo visual): distingue la carga inicial de las recargas por acciones
+  const [initialLoading, setInitialLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Edit / New Form State
@@ -760,6 +795,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         fetch('/api/admin/payment-methods', { headers }),
         fetch('/api/admin/bot-queue', { headers })
       ]);
+
+      // UI/UX (solo visual): ya hay datos reales en pantalla, se desactivan los esqueletos
+      setInitialLoading(false);
 
       if (resP.ok) {
         const fetchedProfiles = await resP.json();
@@ -1115,7 +1153,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: `â­ Contenido VIP guardado en Telegram y Base de Datos (â­ ${data.star_count} Estrellas). Revisa la previsualización antes de publicar.`
+          text: `⭐ Contenido VIP guardado en Telegram y Base de Datos (⭐ ${data.star_count} Estrellas). Revisa la previsualización antes de publicar.`
         });
         setVipDraftMediaUrl(data.media_url);
         setVipPhase('preview');
@@ -1149,7 +1187,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'âœï¸ Cambios guardados para este contenido VIP.' });
+        setMessage({ type: 'success', text: '✏️ Cambios guardados para este contenido VIP.' });
         setVipPhase('preview');
         if (editingProfile && data.profile) setEditingProfile(data.profile);
         fetchData();
@@ -1183,7 +1221,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({
           type: 'success',
-          text: `🎉 ¡Contenido VIP publicado con éxito en el Canal por â­ ${vipStarCount} Estrellas!`
+          text: `🎉 ¡Contenido VIP publicado con éxito en el Canal por ⭐ ${vipStarCount} Estrellas!`
         });
         setVipDraftMediaUrl(null);
         setVipFile(null);
@@ -1250,7 +1288,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
-        setMessage({ type: 'success', text: 'ðŸ—‘ï¸ Archivo eliminado de la biblioteca del bot.' });
+        setMessage({ type: 'success', text: '🗑️ Archivo eliminado de la biblioteca del bot.' });
         fetchData();
       } else {
         setMessage({ type: 'error', text: 'Error al eliminar archivo del bot' });
@@ -1463,7 +1501,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleDeleteMediaPermanently = async (photoUrl: string) => {
     if (!editingProfile) return;
-    if (!confirm('âš ï¸ ¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE este archivo del Servidor Telegram y Servidor DB?\n\nEsta acción borrará el archivo de raíz y no se puede deshacer.')) return;
+    if (!confirm('⚠️ ¿Estás seguro de que deseas ELIMINAR DEFINITIVAMENTE este archivo del Servidor Telegram y Servidor DB?\n\nEsta acción borrará el archivo de raíz y no se puede deshacer.')) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/profiles/${editingProfile.id}/media`, {
@@ -1473,7 +1511,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setMessage({ type: 'success', text: 'ðŸ—‘ï¸ Archivo eliminado físicamente del servidor y base de datos.' });
+        setMessage({ type: 'success', text: '🗑️ Archivo eliminado físicamente del servidor y base de datos.' });
         if (enlargedMediaUrl === photoUrl) setEnlargedMediaUrl(null);
         if (data.profile) setEditingProfile(data.profile);
         fetchData();
@@ -2039,6 +2077,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
               Cerrar página
             </button>
           </div>
+
+          <p className="text-[9px] text-zinc-600/60 tracking-wide pt-2 select-none">
+            Gestor de Contenido / Mini App Telegram — Ver. 1.0
+          </p>
         </div>
 
         {/* Modal de Instrucciones de Instalación iOS Safari */}
@@ -2081,7 +2123,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
   const isMasterAdmin = adminId === MASTER_ADMIN;
   const allTabs: { id: AdminTab; icon: React.ReactNode; label: string; badge?: number }[] = [
     { id: 'profiles', icon: <Users className="w-4 h-4" />, label: 'Mi Perfil' },
-    { id: 'requests', icon: <Inbox className="w-4 h-4" />, label: 'Solicitudes', badge: requests.length },
+    { id: 'requests', icon: <Inbox className="w-4 h-4" />, label: 'Solicitudes', badge: requests.filter(r => r.status !== 'comision_pagada').length },
     { id: 'payments', icon: <CreditCard className="w-4 h-4" />, label: 'Métodos de Pago', badge: paymentMethods.length },
     { id: 'buttons', icon: <Sparkles className="w-4 h-4" />, label: 'Botones', badge: customButtons.length },
     { id: 'polls', icon: <BarChart2 className="w-4 h-4" />, label: 'Encuestas', badge: dynamicPolls.length },
@@ -2105,13 +2147,13 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
           style={{ paddingTop: deviceLayout.safeAreaTop > 0 ? `${deviceLayout.safeAreaTop + 6}px` : undefined }}
           className="p-2 sm:p-3.5 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/90 shrink-0 gap-2"
         >
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1" aria-busy={(loading || authLoading)} title={(loading || authLoading) ? 'Sincronizando datos…' : undefined}>
             <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <div className="min-w-0 flex-1">
               <h2 className="text-sm sm:text-base font-extrabold text-white tracking-tight truncate flex items-center gap-1.5">
                 <span>Panel Admin</span>
-                <span className="text-zinc-600 font-normal hidden xs:inline">•</span>
-                <span className="text-amber-400/90 font-medium text-xs truncate hidden xs:inline">{modelDisplayName || formData.name || 'Danii'}</span>
+                <span className="text-zinc-600 font-normal hidden sm:inline">•</span>
+                <span className="text-amber-400/90 font-medium text-xs truncate hidden sm:inline">{modelDisplayName || formData.name || 'Danii'}</span>
               </h2>
               <p className="text-[10px] text-zinc-400 truncate">Gestión de contenido</p>
             </div>
@@ -2119,7 +2161,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
           <div className="flex items-center gap-1.5 shrink-0">
             {(loading || authLoading) && (
-              <div className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mr-1" />
+              <div className="flex items-center gap-1.5 mr-1" role="status" aria-live="polite">
+                <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                <span className="hidden md:inline text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">Sincronizando…</span>
+              </div>
             )}
             {isAuthenticated && (
               <button
@@ -2170,7 +2215,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 title={isFullScreen ? 'Salir de pantalla completa' : 'Pantalla completa (ocultar barra del navegador)'}
               >
                 {isFullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                <span className="hidden xs:inline text-xs font-bold">{isFullScreen ? 'Ventana' : 'Pantalla'}</span>
+                <span className="hidden sm:inline text-xs font-bold">{isFullScreen ? 'Ventana' : 'Pantalla'}</span>
               </button>
             )}
             {isAuthenticated && (
@@ -2207,7 +2252,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
         {/* ── Global Floating Toast Notification ── */}
         {message && (
-          <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[92%] pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
+          <div role="status" aria-live="polite" className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[92%] pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
             <div className={`px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border flex items-center gap-3 text-xs font-semibold ${
               message.type === 'success'
                 ? 'bg-zinc-950/95 border-emerald-500/50 text-emerald-300 shadow-emerald-500/20'
@@ -2345,7 +2390,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   </button>
                 </div>
 
-                {/* ── PASO 1: DATOS BÃSICOS ── */}
+                {/* ── PASO 1: DATOS BÁSICOS ── */}
                 {profileStep === 1 && (
                   <form onSubmit={async (e) => {
                     e.preventDefault();
@@ -2724,7 +2769,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     <label className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
                                       <Star className="w-3.5 h-3.5 fill-current" /> Precio en Estrellas de Telegram:
                                     </label>
-                                    <span className="font-mono text-xs font-black text-amber-300">â­ {vipStarCount}</span>
+                                    <span className="font-mono text-xs font-black text-amber-300">⭐ {vipStarCount}</span>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-1.5">
                                     {[10, 25, 50, 100, 250, 500].map((stars) => (
@@ -2738,7 +2783,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                             : 'bg-zinc-800 text-zinc-400 hover:text-white'
                                         }`}
                                       >
-                                        â­ {stars}
+                                        ⭐ {stars}
                                       </button>
                                     ))}
                                     <input
@@ -2832,7 +2877,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     >
                                       <span>Desbloquear con</span>
                                       <span className="flex items-center gap-1 bg-amber-500/20 px-2 py-0.5 rounded text-amber-300">
-                                        â­ {vipStarCount}
+                                        ⭐ {vipStarCount}
                                       </span>
                                     </button>
                                   </div>
@@ -2844,7 +2889,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     onClick={() => setVipPhase('upload')}
                                     className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs cursor-pointer transition-colors"
                                   >
-                                    â† Atrás (Subir otro)
+                                    ← Atrás (Subir otro)
                                   </button>
                                   {editingProfile && (
                                     <button
@@ -2889,8 +2934,8 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     <option value="bienvenida">🎉 Mensaje de Bienvenida (/start)</option>
                                     <option value="auto_reply">💬 Respuesta Automática a Consultas</option>
                                     <option value="vip_privado">🔒 Contenido Privado VIP (Chat Privado)</option>
-                                    <option value="drip">â³ Drip / Campaña Programada</option>
-                                    <option value="general">ðŸ“ General / Soporte</option>
+                                    <option value="drip">⏳ Drip / Campaña Programada</option>
+                                    <option value="general">📁 General / Soporte</option>
                                   </select>
                                 </div>
                                 <div>
@@ -2944,7 +2989,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 <span className="text-[10px] text-zinc-500">Listos para despachar por el bot</span>
                               </div>
 
-                              {botQueue.length === 0 ? (
+                              {initialLoading ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" aria-hidden="true">
+                                  {[0,1,2,3].map(i => <TileSkeleton key={i} aspectClass="aspect-video" />)}
+                                </div>
+                              ) : botQueue.length === 0 ? (
                                 <div className="p-6 text-center bg-zinc-950 border border-dashed border-zinc-800 rounded-xl text-zinc-500 text-xs">
                                   Aún no hay archivos en la biblioteca del bot. Sube uno arriba para guardarlo.
                                 </div>
@@ -3047,7 +3096,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <span className="text-[10px] text-zinc-500">Toca un archivo para ver detalles o cambiar su estado</span>
                             </div>
 
-                            {displayedPhotos.length === 0 ? (
+                            {initialLoading ? (
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3" aria-hidden="true">
+                                {[0,1,2,3,4,5,6,7].map(i => <TileSkeleton key={i} />)}
+                              </div>
+                            ) : displayedPhotos.length === 0 ? (
                               <div className="p-8 text-center bg-zinc-950/40 border border-dashed border-zinc-850 rounded-2xl text-zinc-500 text-xs">
                                 No hay archivos en este filtro.
                               </div>
@@ -3291,7 +3344,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                       <div className="absolute bottom-2 left-2 flex flex-wrap items-center gap-1 z-10">
                                         {isCover && (
                                           <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-zinc-950 font-black text-[9px] uppercase tracking-wider shadow">
-                                            â­ Portada
+                                            ⭐ Portada
                                           </span>
                                         )}
                                         {isEphemeral && (
@@ -3301,7 +3354,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                         )}
                                         {editingProfile?.media_stars?.[photoUrl] && (
                                           <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-black text-[9px] flex items-center gap-0.5 shadow">
-                                            â­ {editingProfile.media_stars[photoUrl]} Stars
+                                            ⭐ {editingProfile.media_stars[photoUrl]} Stars
                                           </span>
                                         )}
                                       </div>
@@ -3336,7 +3389,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                               <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Cobro en Canal:
                                             </span>
                                             <span className="text-amber-300 font-bold text-[9px]">
-                                              â­ {editingProfile.media_stars[photoUrl]} Estrellas
+                                              ⭐ {editingProfile.media_stars[photoUrl]} Estrellas
                                             </span>
                                           </div>
                                         )}
@@ -3353,7 +3406,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                           title="Publicar de Pago en Canal VIP (Cobro con Telegram Stars)"
                                         >
                                           <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                                          <span className="text-[10px] font-bold hidden sm:inline">â­ Pago</span>
+                                          <span className="text-[10px] font-bold hidden sm:inline">⭐ Pago</span>
                                         </button>
 
                                         <button
@@ -3706,7 +3759,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               )}
                               {editingProfile.photos?.[0] === enlargedMediaUrl && (
                                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[10px] font-bold uppercase">
-                                  â­ Portada Principal
+                                  ⭐ Portada Principal
                                 </span>
                               )}
                             </div>
@@ -3920,7 +3973,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                                           body: JSON.stringify({ photos: reordered })
                                         });
-                                        setMessage({ type: 'success', text: 'â­ Foto seleccionada como Portada Principal' });
+                                        setMessage({ type: 'success', text: '⭐ Foto seleccionada como Portada Principal' });
                                         fetchData();
                                       } catch {
                                         setMessage({ type: 'error', text: 'Error al cambiar foto de portada' });
@@ -3928,7 +3981,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     }}
                                     className="py-3 sm:py-2 px-3 rounded-xl bg-zinc-850 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5"
                                   >
-                                    â­ Poner como Portada
+                                    ⭐ Poner como Portada
                                   </button>
                                 )}
 
@@ -3969,7 +4022,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   title="Publicar de Pago en Canal con Cobro de Telegram Stars"
                                 >
                                   <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                                  Publicar con Estrellas â­
+                                  Publicar con Estrellas ⭐
                                 </button>
                               </div>
 
@@ -4694,13 +4747,18 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   </h3>
                   <button
                     onClick={() => fetchData()}
-                    className="self-start sm:self-auto shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+                    disabled={loading}
+                    className="self-start sm:self-auto shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Actualizar
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> {loading ? 'Actualizando…' : 'Actualizar'}
                   </button>
                 </div>
 
-                {requests.length === 0 ? (
+                {initialLoading ? (
+                  <div className="space-y-3" aria-hidden="true">
+                    <RequestSkeleton /><RequestSkeleton /><RequestSkeleton />
+                  </div>
+                ) : requests.length === 0 ? (
                   <div className="p-8 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl space-y-2">
                     <Inbox className="w-10 h-10 text-zinc-700 mx-auto" />
                     <p className="text-zinc-400">No hay solicitudes registradas aún.</p>
@@ -5052,7 +5110,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
                               >
                                 <Upload className="w-3.5 h-3.5" />
-                                <span>{uploadingPaymentImage ? 'Subiendo imagen...' : 'â¬†ï¸ Subir y Guardar Imagen / QR'}</span>
+                                <span>{uploadingPaymentImage ? 'Subiendo imagen...' : '⬆️ Subir y Guardar Imagen / QR'}</span>
                               </button>
                             )}
                           </div>
@@ -5200,7 +5258,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         required
                         value={buttonFormData.label}
                         onChange={e => setButtonFormData({ ...buttonFormData, label: e.target.value })}
-                        placeholder="Ej: ðŸŽ Promoción 50% VIP o 💋 Canal Free"
+                        placeholder="Ej: 🎁 Promoción 50% VIP o 💋 Canal Free"
                         className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
                       />
                     </div>
@@ -5276,7 +5334,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 {/* Lista de Botones */}
                 <div className="space-y-2">
                   <h4 className="font-bold text-zinc-300">Botones Registrados ({customButtons.length})</h4>
-                  {customButtons.length === 0 ? (
+                  {initialLoading ? (
+                    <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 divide-y divide-zinc-900" aria-hidden="true">
+                      <ListRowSkeleton /><ListRowSkeleton /><ListRowSkeleton />
+                    </div>
+                  ) : customButtons.length === 0 ? (
                     <div className="p-6 text-center bg-zinc-950/60 border border-zinc-800 rounded-2xl text-zinc-400">
                       No hay botones configurados todavía. Agrega el primero arriba.
                     </div>
@@ -5347,7 +5409,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
               </div>
             )}
 
-            {/* TAB: DINÃMICAS Y ENCUESTAS */}
+            {/* TAB: DINÁMICAS Y ENCUESTAS */}
             {activeTab === 'polls' && (
               <div className="space-y-5 text-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
@@ -5462,7 +5524,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                 {/* Lista de Encuestas */}
                 <div className="space-y-3">
                   <h4 className="font-bold text-zinc-300">Encuestas Activas ({dynamicPolls.length})</h4>
-                  {dynamicPolls.length === 0 ? (
+                  {initialLoading ? (
+                    <div className="space-y-3" aria-hidden="true">
+                      <RequestSkeleton /><RequestSkeleton />
+                    </div>
+                  ) : dynamicPolls.length === 0 ? (
                     <div className="p-6 text-center bg-zinc-950/60 border border-zinc-800 rounded-2xl text-zinc-400">
                       No hay encuestas creadas aún.
                     </div>
@@ -5608,7 +5674,11 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   )}
                 </section>
 
-                {auditLogs.length === 0 ? (
+                {initialLoading ? (
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl divide-y divide-zinc-900" aria-hidden="true">
+                    <ListRowSkeleton /><ListRowSkeleton /><ListRowSkeleton /><ListRowSkeleton />
+                  </div>
+                ) : auditLogs.length === 0 ? (
                   <div className="p-8 text-center bg-zinc-950/60 border border-zinc-800/80 rounded-2xl space-y-2">
                     <Activity className="w-10 h-10 text-zinc-700 mx-auto" />
                     <p className="text-zinc-400">No hay registros de auditoría aún.</p>
