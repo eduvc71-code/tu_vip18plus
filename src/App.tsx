@@ -485,19 +485,41 @@ export default function App() {
         {/* Custom Interactive Buttons */}
         {customButtons.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-2.5 my-3">
-            {customButtons.map(btn => (
-              <a
-                key={btn.id}
-                href={btn.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                <span>{btn.label}</span>
-                <ExternalLink className="w-3 h-3 opacity-60" />
-              </a>
-            ))}
+            {customButtons.map(btn => {
+              const actionType = btn.type || 'url';
+              const resolvedHref = actionType === 'telegram' && !/^https?:\/\//i.test(btn.url)
+                ? (btn.url.startsWith('tg://') ? btn.url : `https://${btn.url}`)
+                : btn.url;
+
+              if (actionType === 'subscription') {
+                return (
+                  <button
+                    key={btn.id}
+                    type="button"
+                    onClick={() => setRequestProfile(profiles[0] || null)}
+                    className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{btn.label}</span>
+                    <ExternalLink className="w-3 h-3 opacity-60" />
+                  </button>
+                );
+              }
+
+              return (
+                <a
+                  key={btn.id}
+                  href={resolvedHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{btn.label}</span>
+                  <ExternalLink className="w-3 h-3 opacity-60" />
+                </a>
+              );
+            })}
           </div>
         )}
 

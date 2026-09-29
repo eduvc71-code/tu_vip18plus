@@ -417,6 +417,7 @@ function initTables(database: any): void {
       id TEXT PRIMARY KEY,
       label TEXT NOT NULL,
       url TEXT NOT NULL,
+      button_type TEXT NOT NULL DEFAULT 'url',
       visible_channel INTEGER DEFAULT 1,
       visible_miniapp INTEGER DEFAULT 1,
       is_active INTEGER DEFAULT 1,
@@ -424,6 +425,12 @@ function initTables(database: any): void {
       created_at TEXT NOT NULL
     );
   `);
+
+  const customButtonInfo = database.exec('PRAGMA table_info(custom_buttons)');
+  const hasButtonType = customButtonInfo[0]?.values.some((col: any[]) => col[1] === 'button_type');
+  if (!hasButtonType) {
+    database.run('ALTER TABLE custom_buttons ADD COLUMN button_type TEXT NOT NULL DEFAULT "url"');
+  }
 
   database.run(`
     CREATE TABLE IF NOT EXISTS dynamic_polls (
@@ -1314,6 +1321,7 @@ export async function getAllCustomButtons(): Promise<CustomButton[]> {
       id: String(obj.id),
       label: String(obj.label || ''),
       url: String(obj.url || ''),
+      type: (String(obj.button_type || obj.type || 'url') as any) || 'url',
       visible_channel: Boolean(obj.visible_channel),
       visible_miniapp: Boolean(obj.visible_miniapp),
       is_active: Boolean(obj.is_active),
@@ -1328,19 +1336,21 @@ export async function getPublicCustomButtons(target: 'channel' | 'miniapp'): Pro
   return all.filter(btn => btn.is_active && (target === 'channel' ? btn.visible_channel : btn.visible_miniapp));
 }
 
-export async function saveCustomButton(btn: Partial<CustomButton> & { label: string; url: string }): Promise<CustomButton> {
+export async function saveCustomButton(btn: Partial<CustomButton> & { label: string; url?: string }): Promise<CustomButton> {
   const database = await getDb();
   const id = btn.id || `btn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const now = new Date().toISOString();
+  const type = (btn.type || 'url') as 'url' | 'telegram' | 'subscription';
+  const safeUrl = String(btn.url || '').trim();
   const visibleChannel = btn.visible_channel !== undefined ? (btn.visible_channel ? 1 : 0) : 1;
   const visibleMiniapp = btn.visible_miniapp !== undefined ? (btn.visible_miniapp ? 1 : 0) : 1;
   const isActive = btn.is_active !== undefined ? (btn.is_active ? 1 : 0) : 1;
   const priorityOrder = btn.priority_order ?? 0;
 
   database.run(`
-    INSERT OR REPLACE INTO custom_buttons (id, label, url, visible_channel, visible_miniapp, is_active, priority_order, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [id, btn.label, btn.url, visibleChannel, visibleMiniapp, isActive, priorityOrder, btn.created_at || now]);
+    INSERT OR REPLACE INTO custom_buttons (id, label, url, button_type, visible_channel, visible_miniapp, is_active, priority_order, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, btn.label, safeUrl, type, visibleChannel, visibleMiniapp, isActive, priorityOrder, btn.created_at || now]);
 
   saveDb();
   const buttons = await getAllCustomButtons();

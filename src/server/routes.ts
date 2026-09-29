@@ -1821,15 +1821,22 @@ router.get('/admin/buttons', requireAdminAuth, async (_req: Request, res: Respon
 // POST Create or update custom button (admin)
 router.post('/admin/buttons', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    const { id, label, url, visible_channel, visible_miniapp, is_active, priority_order } = req.body;
-    if (!label || !url) {
-      res.status(400).json({ error: 'La etiqueta y la URL son requeridas' });
+    const { id, label, url, type, visible_channel, visible_miniapp, is_active, priority_order } = req.body;
+    const buttonType = type === 'telegram' || type === 'subscription' ? type : 'url';
+    const normalizedUrl = String(url || '').trim();
+    if (!label || !String(label).trim()) {
+      res.status(400).json({ error: 'La etiqueta es requerida' });
+      return;
+    }
+    if (buttonType !== 'subscription' && !normalizedUrl) {
+      res.status(400).json({ error: 'La URL o deep-link es requerida para este tipo de botón' });
       return;
     }
     const saved = await saveCustomButton({
       id,
       label: String(label).trim(),
-      url: String(url).trim(),
+      url: normalizedUrl,
+      type: buttonType,
       visible_channel: visible_channel !== undefined ? Boolean(visible_channel) : true,
       visible_miniapp: visible_miniapp !== undefined ? Boolean(visible_miniapp) : true,
       is_active: is_active !== undefined ? Boolean(is_active) : true,

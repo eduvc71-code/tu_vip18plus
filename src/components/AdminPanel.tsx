@@ -736,6 +736,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [buttonFormData, setButtonFormData] = useState({
     label: '',
     url: '',
+    type: 'url' as 'url' | 'telegram' | 'subscription',
     visible_channel: true,
     visible_miniapp: true,
     is_active: true
@@ -1301,8 +1302,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Custom Buttons Handlers
   const handleSaveButton = async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    if (!buttonFormData.label.trim() || !buttonFormData.url.trim()) {
-      setMessage({ type: 'error', text: 'La etiqueta y el enlace URL son obligatorios' });
+    if (!buttonFormData.label.trim()) {
+      setMessage({ type: 'error', text: 'La etiqueta del botón es requerida.' });
+      return;
+    }
+    if (buttonFormData.type !== 'subscription' && !buttonFormData.url.trim()) {
+      setMessage({ type: 'error', text: 'La URL o deep-link es requerida para este tipo de botón.' });
       return;
     }
     setSavingButton(true);
@@ -1319,7 +1324,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (res.ok && data.success) {
         setMessage({ type: 'success', text: `Botón "${data.button.label}" guardado correctamente.` });
         setEditingButton(null);
-        setButtonFormData({ label: '', url: '', visible_channel: true, visible_miniapp: true, is_active: true });
+        setButtonFormData({ label: '', url: '', type: 'url', visible_channel: true, visible_miniapp: true, is_active: true });
         fetchData();
       } else {
         setMessage({ type: 'error', text: data.error || 'Error al guardar botón' });
@@ -5263,14 +5268,28 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       />
                     </div>
                     <div>
-                      <label className="block text-zinc-400 mb-1 font-semibold">Enlace Destino (URL o Telegram) *</label>
+                      <label className="block text-zinc-400 mb-1 font-semibold">Tipo de botón</label>
+                      <select
+                        value={buttonFormData.type}
+                        onChange={e => setButtonFormData({ ...buttonFormData, type: e.target.value as 'url' | 'telegram' | 'subscription' })}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="url">URL</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="subscription">Suscripción / flujo interno</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-zinc-400 mb-1 font-semibold">
+                        {buttonFormData.type === 'subscription' ? 'Destino interno (opcional)' : 'Enlace Destino (URL o Telegram) *'}
+                      </label>
                       <input
-                        type="url"
-                        required
+                        type="text"
                         value={buttonFormData.url}
                         onChange={e => setButtonFormData({ ...buttonFormData, url: e.target.value })}
-                        placeholder="https://t.me/... o https://..."
+                        placeholder={buttonFormData.type === 'subscription' ? 'Opcional: usa el flujo interno de suscripción' : 'https://... o t.me/... o tg://...'}
                         className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500"
+                        required={buttonFormData.type !== 'subscription'}
                       />
                     </div>
                   </div>
@@ -5321,7 +5340,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         type="button"
                         onClick={() => {
                           setEditingButton(null);
-                          setButtonFormData({ label: '', url: '', visible_channel: true, visible_miniapp: true, is_active: true });
+                          setButtonFormData({ label: '', url: '', type: 'url', visible_channel: true, visible_miniapp: true, is_active: true });
                         }}
                         className="py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
                       >
@@ -5351,6 +5370,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <span className="font-bold text-white text-xs">{btn.label}</span>
                               <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${btn.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-800 text-zinc-500'}`}>
                                 {btn.is_active ? 'ACTIVO' : 'INACTIVO'}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[9px] font-semibold uppercase">
+                                {btn.type || 'url'}
                               </span>
                               {btn.visible_channel && (
                                 <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 text-[9px] font-semibold">
@@ -5382,6 +5404,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 setButtonFormData({
                                   label: btn.label,
                                   url: btn.url,
+                                  type: (btn.type || 'url') as 'url' | 'telegram' | 'subscription',
                                   visible_channel: Boolean(btn.visible_channel),
                                   visible_miniapp: Boolean(btn.visible_miniapp),
                                   is_active: Boolean(btn.is_active)

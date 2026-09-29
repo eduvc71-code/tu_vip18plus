@@ -13,10 +13,13 @@ export interface EphemeralMediaConfig {
   };
 }
 
+export type CustomButtonType = 'url' | 'telegram' | 'subscription';
+
 export interface CustomButton {
   id: string;
   label: string;
   url: string;
+  type?: CustomButtonType;
   visible_channel: boolean;
   visible_miniapp: boolean;
   is_active: boolean;
