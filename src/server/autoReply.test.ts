@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
-import { getOfficialFeeText, isPublicTelegramCallbackData } from './telegram.ts';
+import { getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
 
 const methods = [
   { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
@@ -44,4 +44,15 @@ test('public Telegram callback prefixes are allowed for all users', () => {
   assert.equal(isPublicTelegramCallbackData('vip_plan_123_bolivia_monthly'), true);
   assert.equal(isPublicTelegramCallbackData('pay_method_qr_bolivia'), true);
   assert.equal(isPublicTelegramCallbackData('admin_btn_list'), false);
+});
+
+test('callback payloads tolerate underscores inside Telegram botonera ids', () => {
+  const countryData = parseTelegramBotoneraCallbackData('vip_country_botonera_1697031305000_abc_bolivia');
+  assert.deepEqual(countryData, { kind: 'country', botoneraId: 'botonera_1697031305000_abc', countryId: 'bolivia' });
+
+  const planMenuData = parseTelegramBotoneraCallbackData('vip_plan_menu_botonera_1697031305000_abc_bolivia');
+  assert.deepEqual(planMenuData, { kind: 'plan_menu', botoneraId: 'botonera_1697031305000_abc', countryId: 'bolivia' });
+
+  const planData = parseTelegramBotoneraCallbackData('vip_plan_botonera_1697031305000_abc_bolivia_monthly');
+  assert.deepEqual(planData, { kind: 'plan', botoneraId: 'botonera_1697031305000_abc', countryId: 'bolivia', planId: 'monthly' });
 });

@@ -94,6 +94,69 @@ export function isPublicTelegramCallbackData(data: string): boolean {
   return /^(client_|vip_|pay_method_)/.test(data);
 }
 
+export function parseTelegramBotoneraCallbackData(data: string): {
+  kind: 'country' | 'country_menu' | 'plan_menu' | 'plan';
+  botoneraId: string;
+  countryId?: string;
+  planId?: string;
+} | null {
+  if (!data) return null;
+
+  if (data.startsWith('vip_country_menu_')) {
+    const payload = data.slice('vip_country_menu_'.length);
+    if (!payload) return null;
+    return { kind: 'country_menu', botoneraId: payload };
+  }
+
+  if (data.startsWith('vip_country_')) {
+    const payload = data.slice('vip_country_'.length);
+    const parts = payload.split('__');
+    if (parts.length >= 2) {
+      return { kind: 'country', botoneraId: parts[0], countryId: parts.slice(1).join('__') };
+    }
+    const legacy = payload.split('_');
+    if (legacy.length < 2) return null;
+    return {
+      kind: 'country',
+      botoneraId: legacy.slice(0, -1).join('_'),
+      countryId: legacy[legacy.length - 1]
+    };
+  }
+
+  if (data.startsWith('vip_plan_menu_')) {
+    const payload = data.slice('vip_plan_menu_'.length);
+    const parts = payload.split('__');
+    if (parts.length >= 2) {
+      return { kind: 'plan_menu', botoneraId: parts[0], countryId: parts.slice(1).join('__') };
+    }
+    const legacy = payload.split('_');
+    if (legacy.length < 2) return null;
+    return {
+      kind: 'plan_menu',
+      botoneraId: legacy.slice(0, -1).join('_'),
+      countryId: legacy[legacy.length - 1]
+    };
+  }
+
+  if (data.startsWith('vip_plan_')) {
+    const payload = data.slice('vip_plan_'.length);
+    const parts = payload.split('__');
+    if (parts.length >= 3) {
+      return { kind: 'plan', botoneraId: parts[0], countryId: parts[1], planId: parts.slice(2).join('__') };
+    }
+    const legacy = payload.split('_');
+    if (legacy.length < 3) return null;
+    return {
+      kind: 'plan',
+      botoneraId: legacy.slice(0, -2).join('_'),
+      countryId: legacy[legacy.length - 2],
+      planId: legacy[legacy.length - 1]
+    };
+  }
+
+  return null;
+}
+
 export function verifyTelegramWebAppData(initData: string): { valid: boolean; user?: any } {
   const { token } = getBotConfig();
   if (!initData) return { valid: false };
@@ -1886,7 +1949,7 @@ export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
   for (let i = 0; i < countries.length; i += 2) {
     const row: any[] = [];
     for (const country of countries.slice(i, i + 2)) {
-      row.push({ text: `${country.flag || '🌍'} ${country.name || country.label || 'País'}`, callback_data: `vip_country_${botonera.id}_${country.id}` });
+      row.push({ text: `${country.flag || '🌍'} ${country.name || country.label || 'País'}`, callback_data: `vip_country_${botonera.id}__${country.id}` });
     }
     rows.push(row);
   }
@@ -1920,7 +1983,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
 
   const activePlans = (botonera.plans || []).filter((item: any) => item.active);
   if (activePlans.length > 0) {
-    rows.push([{ text: '💎 Ver planes de suscripción', callback_data: `vip_plan_menu_${botonera.id}_${countryId}` }]);
+    rows.push([{ text: '💎 Ver planes de suscripción', callback_data: `vip_plan_menu_${botonera.id}__${countryId}` }]);
   }
   rows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
 
@@ -1994,7 +2057,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
       ? relevantMethods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
       : [[{ text: '📲 Hablar con administradora', url: adminUrl }]];
 
-    rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}_${countryId}` }]);
+    rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]);
 
     const text = `*${botonera.confirmation_title || 'Confirmar suscripción'}*\n\n` +
       `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
@@ -2013,7 +2076,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
 
   const keyboard = [
     [{ text: '✅ Confirmar solicitud', url: adminUrl }],
-    [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}_${countryId}` }, { text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]
+    [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }, { text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]
   ];
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
 }
@@ -2223,7 +2286,7 @@ async function handleCallbackQuery(cb: any) {
 
   if (data.startsWith('vip_country_menu_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const botoneraId = data.replace('vip_country_menu_', '');
+    const botoneraId = data.slice('vip_country_menu_'.length);
     const items = await getAllTelegramBotoneras();
     const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
     if (botonera) {
@@ -2236,45 +2299,40 @@ async function handleCallbackQuery(cb: any) {
 
   if (data.startsWith('vip_country_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const parts = data.split('_');
-    const botoneraId = parts[2];
-    const countryId = parts[3];
-    if (botoneraId && countryId) {
-      await sendTelegramPlanOptions(chatId, botoneraId, countryId);
+    const parsed = parseTelegramBotoneraCallbackData(data);
+    if (parsed && parsed.kind === 'country' && parsed.botoneraId && parsed.countryId) {
+      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
     }
     return;
   }
 
   if (data.startsWith('vip_plan_menu_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const parts = data.split('_');
-    const botoneraId = parts[3];
-    const countryId = parts[4];
-    const items = await getAllTelegramBotoneras();
-    const botonera = items.find(item => item.id === botoneraId);
-    if (botonera && countryId) {
-      const activePlans = (botonera.plans || []).filter((item: any) => item.active);
-      const rows = activePlans.map((plan: any) => [{
-        text: plan.name || 'Plan',
-        callback_data: `vip_plan_${botonera.id}_${countryId}_${plan.id}`
-      }]);
-      rows.push([{ text: '🔙 Cambiar método', callback_data: `vip_country_${botonera.id}_${countryId}` }]);
-      await sendMessage(chatId, `*${botonera.plan_label || 'Elige tu plan'}*\n\n_Selecciona la suscripción para continuar._`, {
-        reply_markup: { inline_keyboard: rows },
-        parse_mode: 'Markdown'
-      });
+    const parsed = parseTelegramBotoneraCallbackData(data);
+    if (parsed && parsed.kind === 'plan_menu' && parsed.botoneraId && parsed.countryId) {
+      const items = await getAllTelegramBotoneras();
+      const botonera = items.find(item => item.id === parsed.botoneraId);
+      if (botonera) {
+        const activePlans = (botonera.plans || []).filter((item: any) => item.active);
+        const rows = activePlans.map((plan: any) => [{
+          text: plan.name || 'Plan',
+          callback_data: `vip_plan_${botonera.id}__${parsed.countryId}__${plan.id}`
+        }]);
+        rows.push([{ text: '🔙 Cambiar método', callback_data: `vip_country_${botonera.id}__${parsed.countryId}` }]);
+        await sendMessage(chatId, `*${botonera.plan_label || 'Elige tu plan'}*\n\n_Selecciona la suscripción para continuar._`, {
+          reply_markup: { inline_keyboard: rows },
+          parse_mode: 'Markdown'
+        });
+      }
     }
     return;
   }
 
   if (data.startsWith('vip_plan_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const parts = data.split('_');
-    const botoneraId = parts[2];
-    const countryId = parts[3];
-    const planId = parts[4];
-    if (botoneraId && countryId && planId) {
-      await sendTelegramPlanConfirmation(chatId, botoneraId, countryId, planId);
+    const parsed = parseTelegramBotoneraCallbackData(data);
+    if (parsed && parsed.kind === 'plan' && parsed.botoneraId && parsed.countryId && parsed.planId) {
+      await sendTelegramPlanConfirmation(chatId, parsed.botoneraId, parsed.countryId, parsed.planId);
     }
     return;
   }

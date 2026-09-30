@@ -2097,12 +2097,12 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
     for (let i = 0; i < visibleCountries.length; i += 2) {
       const row: any[] = [];
       for (const country of visibleCountries.slice(i, i + 2)) {
-        row.push({ text: `${country.flag} ${country.name}`, callback_data: `vip_country_${botonera.id}_${country.id}` });
+        row.push({ text: `${country.flag} ${country.name}`, callback_data: `vip_country_${botonera.id}__${country.id}` });
       }
       rows.push(row);
     }
     if (visiblePlans.length > 0) {
-      rows.push([{ text: `🚀 ${botonera.title}`, callback_data: `vip_country_${botonera.id}_${visibleCountries[0]?.id || 'country'}` }]);
+      rows.push([{ text: `🚀 ${botonera.title}`, callback_data: `vip_country_${botonera.id}__${visibleCountries[0]?.id || 'country'}` }]);
     }
 
     const messageText = `*${botonera.title}*\n\n${botonera.intro}\n\n_${botonera.country_label}_`;
