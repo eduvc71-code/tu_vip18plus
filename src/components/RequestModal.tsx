@@ -122,10 +122,15 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
       const data = await res.json();
       if (res.ok && data.success) {
         setSubmitted(true);
-        const tg = (window as any).Telegram?.WebApp;
-        if (tg?.close) {
-          window.setTimeout(() => tg.close(), 2500);
-        }
+
+        // No cerramos la Mini App de Telegram aquí. La llamada a WebApp.close() provoca
+        // que la vista quede en negro al terminar la confirmación. Para este flujo, basta
+        // con ocultar el modal de solicitud y devolver al usuario a la pantalla anterior.
+        window.setTimeout(() => {
+          try {
+            onClose();
+          } catch {}
+        }, 1800);
       } else {
         setError(data.error || 'Error al enviar la solicitud');
       }
