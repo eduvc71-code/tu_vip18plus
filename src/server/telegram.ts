@@ -28,6 +28,7 @@ import {
   addAdminTelegramId,
   getPublicCustomButtons,
   getAllCustomButtons,
+  getAllTelegramBotoneras,
   getAllPolls,
   registerSubscriber,
   getAllPaymentMethods,
@@ -86,6 +87,11 @@ export function isAdminUser(telegramUserId: string | number): boolean {
     return false;
   }
   return adminIds.includes(String(telegramUserId));
+}
+
+export function isPublicTelegramCallbackData(data: string): boolean {
+  if (!data) return false;
+  return /^(client_|vip_|pay_method_)/.test(data);
 }
 
 export function verifyTelegramWebAppData(initData: string): { valid: boolean; user?: any } {
@@ -1869,6 +1875,149 @@ export async function sendClientPagos(chatId: string | number) {
   });
 }
 
+export async function getActiveTelegramBotoneraFlow(): Promise<any | null> {
+  const items = await getAllTelegramBotoneras();
+  return items.filter(item => item.is_active && item.status !== 'draft').sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0] || null;
+}
+
+export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
+  const countries = (botonera?.countries || []).filter((item: any) => item.active);
+  const rows: any[][] = [];
+  for (let i = 0; i < countries.length; i += 2) {
+    const row: any[] = [];
+    for (const country of countries.slice(i, i + 2)) {
+      row.push({ text: `${country.flag || '🌍'} ${country.name || country.label || 'País'}`, callback_data: `vip_country_${botonera.id}_${country.id}` });
+    }
+    rows.push(row);
+  }
+  rows.push([{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
+  return rows;
+}
+
+export async function sendTelegramBotoneraFlow(chatId: string | number) {
+  const botonera = await getActiveTelegramBotoneraFlow();
+  if (!botonera) {
+    return await sendMessage(chatId, '⚠️ Aún no hay una botonera VIP publicada para este flujo.');
+  }
+
+  const text = `*${botonera.title || 'SUSCRIPCIÓN VIP'}*\n\n${botonera.intro || 'Selecciona tu país para continuar.'}`;
+  const keyboard = buildTelegramBotoneraKeyboard(botonera);
+  return await sendMessage(chatId, text, {
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+export async function sendTelegramPlanOptions(chatId: string | number, botoneraId: string, countryId: string) {
+  const items = await getAllTelegramBotoneras();
+  const botonera = items.find(item => item.id === botoneraId) || null;
+  if (!botonera) return;
+
+  const country = (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
+  const methods = await getRelevantPaymentMethodsForCountry(country?.name || '');
+  const rows: any[][] = methods.length > 0
+    ? methods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
+    : [[{ text: '📲 Hablar con administradora', url: `https://t.me/${(getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim()}` }]];
+
+  const activePlans = (botonera.plans || []).filter((item: any) => item.active);
+  if (activePlans.length > 0) {
+    rows.push([{ text: '💎 Ver planes de suscripción', callback_data: `vip_plan_menu_${botonera.id}_${countryId}` }]);
+  }
+  rows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
+
+  const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n${botonera.plan_label || 'Métodos de pago disponibles'}\n\n_Elige el método de pago y luego la suscripción._`;
+  return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows } });
+}
+
+function normalizeTelegramKey(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function resolveCountryNameFromPaymentMethodTitle(title: string): string | null {
+  const aliases: Record<string, string[]> = {
+    Bolivia: ['bolivia', 'bo'],
+    Perú: ['peru', 'perú', 'pe'],
+    Chile: ['chile', 'cl'],
+    Argentina: ['argentina', 'ar'],
+    España: ['espana', 'españa', 'es', 'spain'],
+    México: ['mexico', 'méxico', 'mx'],
+    Paraguay: ['paraguay', 'py'],
+    Brasil: ['brasil', 'brazil', 'br'],
+    Uruguay: ['uruguay', 'uy'],
+    Colombia: ['colombia', 'co'],
+    Ecuador: ['ecuador', 'ec'],
+    Venezuela: ['venezuela', 've'],
+    Rusia: ['rusia', 'russia', 'ru']
+  };
+
+  const normalized = normalizeTelegramKey(title);
+  for (const [countryName, items] of Object.entries(aliases)) {
+    if (items.some(item => normalized.includes(normalizeTelegramKey(item)))) {
+      return countryName;
+    }
+  }
+
+  return null;
+}
+
+async function getRelevantPaymentMethodsForCountry(countryName: string): Promise<PaymentMethod[]> {
+  const methods = await getPublicPaymentMethods();
+  const target = normalizeTelegramKey(countryName);
+
+  return methods.filter(method => {
+    if (!method.is_active) return false;
+    const title = method.title || '';
+    const methodCountry = resolveCountryNameFromPaymentMethodTitle(title);
+    if (methodCountry && normalizeTelegramKey(methodCountry) === target) return true;
+    if (target === 'bolivia' && (method.id === 'qr_bolivia' || /bolivia/i.test(title))) return true;
+    return false;
+  });
+}
+
+export async function sendTelegramPlanConfirmation(chatId: string | number, botoneraId: string, countryId: string, planId: string) {
+  const items = await getAllTelegramBotoneras();
+  const botonera = items.find(item => item.id === botoneraId) || null;
+  if (!botonera) return;
+
+  const country = (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
+  const plan = (botonera.plans || []).find((item: any) => String(item.id) === String(planId));
+  const normalizedPlanType = String(plan?.plan_type || '').toLowerCase();
+  const adminUsername = (getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  const adminUrl = `https://t.me/${adminUsername}`;
+
+  if (normalizedPlanType === 'monthly') {
+    const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
+    const rows: any[][] = relevantMethods.length > 0
+      ? relevantMethods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
+      : [[{ text: '📲 Hablar con administradora', url: adminUrl }]];
+
+    rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}_${countryId}` }]);
+
+    const text = `*${botonera.confirmation_title || 'Confirmar suscripción'}*\n\n` +
+      `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
+      `${plan?.name || 'Plan'}\n\n` +
+      `Selecciona el método de pago disponible para este país y luego confirma con la administradora en privado.`;
+
+    return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+  }
+
+  const text = `*${botonera.confirmation_title || 'Confirmar suscripción'}*\n\n` +
+    `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
+    `${plan?.name || 'Plan'}\n\n` +
+    `${botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.'}\n\n` +
+    `${botonera.contact_text || 'Contacta a la administradora en privado.'}\n\n` +
+    `📲 [@${adminUsername}](${adminUrl})`;
+
+  const keyboard = [
+    [{ text: '✅ Confirmar solicitud', url: adminUrl }],
+    [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}_${countryId}` }, { text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]
+  ];
+  return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
+}
+
 export function getOfficialFeeText(method: { id: string; title: string; price?: string | null; category?: string }, profileRateBs?: number | string): string {
   const isBoliviaMethod = method.id === 'qr_bolivia' || /bolivia/i.test(method.title) || method.category === 'national';
 
@@ -2037,6 +2186,14 @@ async function handleCallbackQuery(cb: any) {
   const data = cb.data || '';
   const userIdStr = String(fromId);
 
+  console.info('[TelegramCallback]', {
+    fromId,
+    chatId,
+    data,
+    messageChatType: cb.message?.chat?.type,
+    isAdmin: isAdminUser(fromId)
+  });
+
   // 1. Client Callbacks (accessible to everyone)
   if (data.startsWith('client_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
@@ -2061,6 +2218,71 @@ async function handleCallbackQuery(cb: any) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const methodId = data.replace('pay_method_', '');
     await showPaymentMethodDetail(chatId, methodId);
+    return;
+  }
+
+  if (data.startsWith('vip_country_menu_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const botoneraId = data.replace('vip_country_menu_', '');
+    const items = await getAllTelegramBotoneras();
+    const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
+    if (botonera) {
+      await sendMessage(chatId, `*${botonera.title || 'SUSCRIPCIÓN VIP'}*\n\n${botonera.intro || 'Selecciona tu país para continuar.'}`, {
+        reply_markup: { inline_keyboard: buildTelegramBotoneraKeyboard(botonera) }
+      });
+    }
+    return;
+  }
+
+  if (data.startsWith('vip_country_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const parts = data.split('_');
+    const botoneraId = parts[2];
+    const countryId = parts[3];
+    if (botoneraId && countryId) {
+      await sendTelegramPlanOptions(chatId, botoneraId, countryId);
+    }
+    return;
+  }
+
+  if (data.startsWith('vip_plan_menu_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const parts = data.split('_');
+    const botoneraId = parts[3];
+    const countryId = parts[4];
+    const items = await getAllTelegramBotoneras();
+    const botonera = items.find(item => item.id === botoneraId);
+    if (botonera && countryId) {
+      const activePlans = (botonera.plans || []).filter((item: any) => item.active);
+      const rows = activePlans.map((plan: any) => [{
+        text: plan.name || 'Plan',
+        callback_data: `vip_plan_${botonera.id}_${countryId}_${plan.id}`
+      }]);
+      rows.push([{ text: '🔙 Cambiar método', callback_data: `vip_country_${botonera.id}_${countryId}` }]);
+      await sendMessage(chatId, `*${botonera.plan_label || 'Elige tu plan'}*\n\n_Selecciona la suscripción para continuar._`, {
+        reply_markup: { inline_keyboard: rows },
+        parse_mode: 'Markdown'
+      });
+    }
+    return;
+  }
+
+  if (data.startsWith('vip_plan_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const parts = data.split('_');
+    const botoneraId = parts[2];
+    const countryId = parts[3];
+    const planId = parts[4];
+    if (botoneraId && countryId && planId) {
+      await sendTelegramPlanConfirmation(chatId, botoneraId, countryId, planId);
+    }
+    return;
+  }
+
+  // Protección explícita para estos flujos públicos: la botonera VIP y los métodos de pago no deben bloquearse por chat privado ni por acceso admin.
+  if (isPublicTelegramCallbackData(data)) {
+    console.info('[TelegramCallbackPublicAllowed]', { data, fromId, chatId });
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     return;
   }
 

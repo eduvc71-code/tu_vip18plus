@@ -34,6 +34,9 @@ import {
   getPublicCustomButtons,
   saveCustomButton,
   deleteCustomButton,
+  getAllTelegramBotoneras,
+  saveTelegramBotonera,
+  deleteTelegramBotonera,
   getAllPolls,
   getActivePolls,
   savePoll,
@@ -370,6 +373,33 @@ export function isSpecialPlanRequest(notes: string): boolean {
   const text = (notes || '').trim();
   if (!text) return false;
   return /SUSCRIPCIÓN\s*SEMESTRAL|SEMESTRAL|SUSCRIPCIÓN\s*PERMANENTE|PERMANENTE/i.test(text);
+}
+
+export function extractCountryFromRequestText(notes: string): string {
+  const text = (notes || '').trim();
+  if (!text) return 'No especificado';
+
+  const countries = [
+    { label: 'Bolivia', pattern: /bolivia/i },
+    { label: 'Perú', pattern: /perú|peru/i },
+    { label: 'Chile', pattern: /chile/i },
+    { label: 'Argentina', pattern: /argentina/i },
+    { label: 'España', pattern: /españa|espana/i },
+    { label: 'México', pattern: /méxico|mexico/i },
+    { label: 'Paraguay', pattern: /paraguay/i },
+    { label: 'Brasil', pattern: /brasil|brazil/i },
+    { label: 'Uruguay', pattern: /uruguay/i },
+    { label: 'Colombia', pattern: /colombia/i },
+    { label: 'Rusia', pattern: /rusia|russia/i },
+    { label: 'Ecuador', pattern: /ecuador/i },
+    { label: 'Venezuela', pattern: /venezuela/i }
+  ];
+
+  for (const country of countries) {
+    if (country.pattern.test(text)) return country.label;
+  }
+
+  return 'No especificado';
 }
 
 /**
@@ -1969,6 +1999,134 @@ router.get('/buttons/public', async (req: Request, res: Response) => {
     res.json(buttons);
   } catch (err: any) {
     res.status(500).json({ error: 'Error al cargar botones públicos' });
+  }
+});
+
+// ==========================================
+// TELEGRAM RAPID BOTONERA ENDPOINTS
+// ==========================================
+
+router.get('/admin/telegram-botoneras', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const items = await getAllTelegramBotoneras();
+    res.json(items);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener la botonera VIP', details: err?.message });
+  }
+});
+
+router.post('/admin/telegram-botoneras', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {};
+    if (!payload.name || !String(payload.name).trim()) {
+      res.status(400).json({ error: 'El nombre de la botonera es requerido' });
+      return;
+    }
+    if (!payload.title || !String(payload.title).trim()) {
+      res.status(400).json({ error: 'El título principal es requerido' });
+      return;
+    }
+    if (!Array.isArray(payload.countries) || payload.countries.length === 0) {
+      res.status(400).json({ error: 'Debes definir al menos un país o bandera' });
+      return;
+    }
+    if (!Array.isArray(payload.plans) || payload.plans.length === 0) {
+      res.status(400).json({ error: 'Debes definir al menos un plan de suscripción' });
+      return;
+    }
+
+    const saved = await saveTelegramBotonera({
+      id: payload.id,
+      name: String(payload.name).trim(),
+      status: payload.status || 'draft',
+      target: payload.target || 'channel',
+      title: String(payload.title).trim(),
+      intro: String(payload.intro || 'Selecciona tu país para continuar.').trim(),
+      country_label: String(payload.country_label || 'País / Bandera').trim(),
+      plan_label: String(payload.plan_label || 'Elige tu plan').trim(),
+      confirmation_title: String(payload.confirmation_title || 'Confirmar suscripción').trim(),
+      confirmation_text: String(payload.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
+      contact_text: String(payload.contact_text || 'Escríbenos por Telegram en privado para validar tu comprobante.').trim(),
+      is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
+      countries: payload.countries,
+      plans: payload.plans,
+      created_at: payload.created_at,
+      updated_at: payload.updated_at
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CREATE_TELEGRAM_BOTONERA', adminId, `Botonera creada/actualizada: ${saved.name}`);
+    broadcastEvent('TELEGRAM_BOTONERA_UPDATED', saved);
+    res.json({ success: true, botonera: saved });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar la botonera VIP', details: err?.message });
+  }
+});
+
+router.delete('/admin/telegram-botoneras/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    await deleteTelegramBotonera(req.params.id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_TELEGRAM_BOTONERA', adminId, `Botonera eliminada: ${req.params.id}`);
+    broadcastEvent('TELEGRAM_BOTONERA_UPDATED', { deleted: req.params.id });
+    res.json({ success: true, message: 'Botonera eliminada correctamente.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar la botonera VIP', details: err?.message });
+  }
+});
+
+router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const all = await getAllTelegramBotoneras();
+    const botonera = all.find(item => item.id === id);
+    if (!botonera) {
+      res.status(404).json({ error: 'Botonera no encontrada' });
+      return;
+    }
+
+    const { channelId } = getBotConfig();
+    if (!channelId) {
+      res.status(400).json({ error: 'No hay canal Telegram configurado para publicar la botonera.' });
+      return;
+    }
+
+    const visibleCountries = (botonera.countries || []).filter(item => item.active);
+    const visiblePlans = (botonera.plans || []).filter(item => item.active);
+    const rows: any[][] = [];
+    for (let i = 0; i < visibleCountries.length; i += 2) {
+      const row: any[] = [];
+      for (const country of visibleCountries.slice(i, i + 2)) {
+        row.push({ text: `${country.flag} ${country.name}`, callback_data: `vip_country_${botonera.id}_${country.id}` });
+      }
+      rows.push(row);
+    }
+    if (visiblePlans.length > 0) {
+      rows.push([{ text: `🚀 ${botonera.title}`, callback_data: `vip_country_${botonera.id}_${visibleCountries[0]?.id || 'country'}` }]);
+    }
+
+    const messageText = `*${botonera.title}*\n\n${botonera.intro}\n\n_${botonera.country_label}_`;
+    const result = await sendMessage(channelId, messageText, {
+      reply_markup: { inline_keyboard: rows }
+    });
+
+    if (!result || !result.ok) {
+      res.status(400).json({ error: result?.description || 'No se pudo publicar la botonera en Telegram.' });
+      return;
+    }
+
+    const updated = await saveTelegramBotonera({
+      ...botonera,
+      id: botonera.id,
+      status: 'published',
+      published_message_id: result.result?.message_id || botonera.published_message_id || null
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('PUBLISH_TELEGRAM_BOTONERA', adminId, `Botonera publicada: ${updated.name}`);
+    res.json({ success: true, botonera: updated, published_message_id: result.result?.message_id || null });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al publicar la botonera VIP', details: err?.message });
   }
 });
 

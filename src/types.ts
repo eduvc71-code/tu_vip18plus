@@ -27,6 +27,45 @@ export interface CustomButton {
   created_at: string;
 }
 
+export interface TelegramBotoneraCountry {
+  id: string;
+  flag: string;
+  name: string;
+  label: string;
+  order: number;
+  active: boolean;
+}
+
+export interface TelegramBotoneraPlan {
+  id: string;
+  name: string;
+  plan_type: 'monthly' | 'semester' | 'permanent';
+  price: string;
+  description: string;
+  order: number;
+  active: boolean;
+}
+
+export interface TelegramBotonera {
+  id: string;
+  name: string;
+  status: 'draft' | 'published' | 'anchored';
+  target: 'channel' | 'bot' | 'both';
+  title: string;
+  intro: string;
+  country_label: string;
+  plan_label: string;
+  confirmation_title: string;
+  confirmation_text: string;
+  contact_text: string;
+  is_active: boolean;
+  countries: TelegramBotoneraCountry[];
+  plans: TelegramBotoneraPlan[];
+  created_at: string;
+  updated_at: string;
+  published_message_id?: number | null;
+}
+
 export interface DynamicPoll {
   id: string;
   question: string;

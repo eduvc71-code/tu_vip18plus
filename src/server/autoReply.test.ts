@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
-import { getOfficialFeeText } from './telegram.ts';
+import { getOfficialFeeText, isPublicTelegramCallbackData } from './telegram.ts';
 
 const methods = [
   { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
@@ -36,4 +36,12 @@ test('extractCountryFromRequestText keeps the country in the client message', ()
   assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN SEMESTRAL. Soy de Bolivia. Solicito información VIP.'), 'Bolivia');
   assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN PERMANENTE. Soy de Perú.'), 'Perú');
   assert.equal(extractCountryFromRequestText('Requiero información VIP.'), 'No especificado');
+});
+
+test('public Telegram callback prefixes are allowed for all users', () => {
+  assert.equal(isPublicTelegramCallbackData('client_cmd_menu'), true);
+  assert.equal(isPublicTelegramCallbackData('vip_country_123_bolivia'), true);
+  assert.equal(isPublicTelegramCallbackData('vip_plan_123_bolivia_monthly'), true);
+  assert.equal(isPublicTelegramCallbackData('pay_method_qr_bolivia'), true);
+  assert.equal(isPublicTelegramCallbackData('admin_btn_list'), false);
 });

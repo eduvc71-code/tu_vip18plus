@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, TelegramBotonera, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
 import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -189,9 +189,9 @@ function consolidateToSingleVipProfile(database: any): void {
   const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
   if (!res || res.length === 0 || !res[0].values || res[0].values.length <= 1) return;
 
-  const cols = res[0].columns;
-  const rows = res[0].values.map(v => Object.fromEntries(cols.map((c, i) => [c, v[i]])));
-  const target = rows.find(r => String(r.name).includes('🧾') || String(r.name).toLowerCase().includes('dani')) || rows[0];
+  const cols = res[0].columns as string[];
+  const rows = res[0].values.map((v: any[]) => Object.fromEntries(cols.map((c: string, i: number) => [c, v[i]])));
+  const target = rows.find((r: Record<string, any>) => String(r.name).includes('🧾') || String(r.name).toLowerCase().includes('dani')) || rows[0];
 
   const allPhotosSet = new Set<string>();
   const mergedStatus: Record<string, number> = {};
@@ -287,7 +287,7 @@ function initTables(database: any): void {
 
   const profileCols = database.exec("PRAGMA table_info(profiles)");
   const existingProfileCols = new Set(
-    profileCols[0]?.values.map(row => String(row[1])) || []
+    profileCols[0]?.values.map((row: any[]) => String(row[1])) || []
   );
   if (!existingProfileCols.has('ephemeral_config')) {
     database.run(`ALTER TABLE profiles ADD COLUMN ephemeral_config TEXT`);
@@ -345,7 +345,7 @@ function initTables(database: any): void {
 
   const requestColumns = database.exec("PRAGMA table_info(customer_requests)");
   const existingRequestColumns = new Set(
-    requestColumns[0]?.values.map(row => String(row[1])) || []
+    requestColumns[0]?.values.map((row: any[]) => String(row[1])) || []
   );
   for (const column of ['admin_notified_at', 'auto_reply_at', 'responded_at']) {
     if (!existingRequestColumns.has(column)) {
@@ -431,6 +431,27 @@ function initTables(database: any): void {
   if (!hasButtonType) {
     database.run('ALTER TABLE custom_buttons ADD COLUMN button_type TEXT NOT NULL DEFAULT "url"');
   }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS telegram_botoneras (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      target TEXT NOT NULL DEFAULT 'channel',
+      title TEXT NOT NULL,
+      intro TEXT NOT NULL,
+      country_label TEXT NOT NULL,
+      plan_label TEXT NOT NULL,
+      confirmation_title TEXT NOT NULL,
+      confirmation_text TEXT NOT NULL,
+      contact_text TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      flow_json TEXT NOT NULL,
+      published_message_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
 
   database.run(`
     CREATE TABLE IF NOT EXISTS dynamic_polls (
@@ -845,10 +866,10 @@ export async function getAllProfiles(): Promise<Profile[]> {
   const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
   if (!res || res.length === 0) return [];
   
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const raw: any = {};
-    columns.forEach((col, idx) => {
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
       raw[col] = row[idx];
     });
     return hydrateProfile(raw, false);
@@ -860,10 +881,10 @@ export async function getPublicProfiles(): Promise<Profile[]> {
   const res = database.exec("SELECT * FROM profiles WHERE status IN ('disponible', 'ocupada') AND age >= 18 ORDER BY priority_order ASC, updated_at DESC");
   if (!res || res.length === 0) return [];
   
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const raw: any = {};
-    columns.forEach((col, idx) => {
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
       raw[col] = row[idx];
     });
     return hydrateProfile(raw, true);
@@ -1082,10 +1103,10 @@ export async function getCustomerRequests(): Promise<CustomerRequest[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM customer_requests ORDER BY created_at DESC");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => {
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
       obj[col] = row[idx];
     });
     return obj as CustomerRequest;
@@ -1201,10 +1222,10 @@ export async function getAuditLogs(): Promise<AuditLog[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => {
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
       obj[col] = row[idx];
     });
     return obj as AuditLog;
@@ -1226,10 +1247,10 @@ export async function getSyncErrors(): Promise<SyncErrorLog[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM sync_errors ORDER BY timestamp DESC LIMIT 50");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => {
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
       obj[col] = row[idx];
     });
     return obj as SyncErrorLog;
@@ -1317,10 +1338,10 @@ export async function getAllCustomButtons(): Promise<CustomButton[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM custom_buttons ORDER BY priority_order ASC, created_at DESC");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
     return {
       id: String(obj.id),
       label: String(obj.label || ''),
@@ -1369,16 +1390,115 @@ export async function deleteCustomButton(id: string): Promise<boolean> {
 }
 
 // ==========================================
+// Telegram Botonera / Rapid Subscription Flow
+// ==========================================
+export async function getAllTelegramBotoneras(): Promise<TelegramBotonera[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM telegram_botoneras ORDER BY updated_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row: any[]) => {
+    const obj: any = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    const flow = (() => {
+      try { return JSON.parse(String(obj.flow_json || '{}')); } catch { return {}; }
+    })();
+    return {
+      id: String(obj.id),
+      name: String(obj.name || 'Botonera VIP'),
+      status: (obj.status || 'draft') as 'draft' | 'published' | 'anchored',
+      target: (obj.target || 'channel') as 'channel' | 'bot' | 'both',
+      title: String(obj.title || 'SUSCRIPCIÓN VIP'),
+      intro: String(obj.intro || 'Selecciona tu país para continuar.'),
+      country_label: String(obj.country_label || 'País / Bandera'),
+      plan_label: String(obj.plan_label || 'Elige tu plan'),
+      confirmation_title: String(obj.confirmation_title || 'Confirmar suscripción'),
+      confirmation_text: String(obj.confirmation_text || 'Tu solicitud quedará en revisión privada.'),
+      contact_text: String(obj.contact_text || 'Contacta a la administradora en privado.'),
+      is_active: Boolean(obj.is_active),
+      countries: Array.isArray(flow.countries) ? flow.countries : [],
+      plans: Array.isArray(flow.plans) ? flow.plans : [],
+      created_at: String(obj.created_at || new Date().toISOString()),
+      updated_at: String(obj.updated_at || new Date().toISOString()),
+      published_message_id: obj.published_message_id ? Number(obj.published_message_id) : null
+    } satisfies TelegramBotonera;
+  });
+}
+
+export async function saveTelegramBotonera(botonera: Partial<TelegramBotonera> & { name: string; title: string }): Promise<TelegramBotonera> {
+  const database = await getDb();
+  const now = new Date().toISOString();
+  const id = botonera.id || `botonera_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const normalized = {
+    id,
+    name: String(botonera.name || 'Botonera VIP').trim(),
+    status: botonera.status || 'draft',
+    target: botonera.target || 'channel',
+    title: String(botonera.title || 'SUSCRIPCIÓN VIP').trim(),
+    intro: String(botonera.intro || 'Selecciona tu país para continuar.').trim(),
+    country_label: String(botonera.country_label || 'País / Bandera').trim(),
+    plan_label: String(botonera.plan_label || 'Elige tu plan').trim(),
+    confirmation_title: String(botonera.confirmation_title || 'Confirmar suscripción').trim(),
+    confirmation_text: String(botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
+    contact_text: String(botonera.contact_text || 'Contacta a la administradora en privado.').trim(),
+    is_active: Boolean(botonera.is_active !== false),
+    countries: Array.isArray(botonera.countries) ? botonera.countries : [],
+    plans: Array.isArray(botonera.plans) ? botonera.plans : [],
+    published_message_id: botonera.published_message_id ?? null
+  };
+
+  const flowJson = JSON.stringify({
+    countries: normalized.countries,
+    plans: normalized.plans
+  });
+
+  database.run(`
+    INSERT OR REPLACE INTO telegram_botoneras (
+      id, name, status, target, title, intro, country_label, plan_label,
+      confirmation_title, confirmation_text, contact_text, is_active, flow_json,
+      published_message_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    normalized.id,
+    normalized.name,
+    normalized.status,
+    normalized.target,
+    normalized.title,
+    normalized.intro,
+    normalized.country_label,
+    normalized.plan_label,
+    normalized.confirmation_title,
+    normalized.confirmation_text,
+    normalized.contact_text,
+    normalized.is_active ? 1 : 0,
+    flowJson,
+    normalized.published_message_id,
+    botonera.created_at || now,
+    now
+  ]);
+
+  saveDb();
+  return (await getAllTelegramBotoneras()).find(item => item.id === id)!;
+}
+
+export async function deleteTelegramBotonera(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run('DELETE FROM telegram_botoneras WHERE id = ?', [id]);
+  saveDb();
+  return true;
+}
+
+// ==========================================
 // Dynamic Polls Management
 // ==========================================
 export async function getAllPolls(): Promise<DynamicPoll[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM dynamic_polls ORDER BY created_at DESC");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
     let options: string[] = [];
     let votes: Record<number, number> = {};
     try { options = JSON.parse(obj.options || '[]'); } catch { options = []; }
@@ -1508,10 +1628,10 @@ export async function getAllPaymentMethods(): Promise<PaymentMethod[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM payment_methods ORDER BY priority_order ASC");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
     return {
       id: String(obj.id),
       title: String(obj.title || ''),
@@ -1569,10 +1689,10 @@ export async function getBotMediaQueue(): Promise<BotMediaItem[]> {
   const database = await getDb();
   const res = database.exec("SELECT * FROM bot_media_queue ORDER BY created_at DESC");
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const raw: any = {};
-    columns.forEach((col, idx) => { raw[col] = row[idx]; });
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { raw[col] = row[idx]; });
     return {
       id: String(raw.id),
       media_url: String(raw.media_url),
@@ -1647,7 +1767,7 @@ export async function getDatabaseStats(): Promise<{
 }> {
   const database = await getDb();
   const tablesRes = database.exec("SELECT name FROM sqlite_master WHERE type='table'");
-  const tables = tablesRes?.[0]?.values?.map(v => String(v[0])) || [];
+  const tables = tablesRes?.[0]?.values?.map((v: any[]) => String(v[0])) || [];
   const stats: Record<string, number> = {};
   for (const t of tables) {
     try {
@@ -1737,10 +1857,10 @@ export async function getAllSubscribers(): Promise<any[]> {
   const database = await getDb();
   const res = database.exec('SELECT * FROM subscribers');
   if (!res || res.length === 0) return [];
-  const columns = res[0].columns;
-  return res[0].values.map(row => {
-    const obj: any = {};
-    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
     return obj;
   });
 }
