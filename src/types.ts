@@ -146,6 +146,7 @@ export interface PaymentMethod {
   category: 'national' | 'international' | 'service';
   image_url?: string | null;
   description?: string;
+  price?: string | null;
   is_active: boolean;
   priority_order: number;
   updated_at?: string;

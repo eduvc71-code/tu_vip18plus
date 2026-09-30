@@ -1,4 +1,4 @@
-﻿import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -67,8 +67,9 @@ import {
   sendPaidMediaToChannel,
   createStarsInvoiceLink,
   getTelegramFilePath,
-  uploadBufferToTelegram
-, callTelegramApi, buildChannelPostMarkup } from './telegram.js';
+  uploadBufferToTelegram,
+  showPaymentMethodDetail,
+  callTelegramApi, buildChannelPostMarkup } from './telegram.js';
 
 export const router = express.Router();
 
@@ -308,6 +309,7 @@ router.post('/telegram/access/verify', (req: Request, res: Response) => {
   res.json({ valid: true, user: verified.user });
 });
 
+
 // POST Generate Stars Invoice Link for Web App
 router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
   try {
@@ -365,23 +367,76 @@ export async function scheduleAutoReply(requestId: string) {
 
 let autoReplyWorkerRunning = false;
 
+export function isSpecialPlanRequest(notes: string): boolean {
+  const text = (notes || '').trim();
+  if (!text) return false;
+  return /SUSCRIPCIÓN\s*SEMESTRAL|SEMESTRAL|SUSCRIPCIÓN\s*PERMANENTE|PERMANENTE/i.test(text);
+}
+
+export function resolveAutoReplyMethodId(notes: string, methods: Array<{ id: string; title: string }>): string | null {
+  const text = (notes || '').trim();
+  if (!text || isSpecialPlanRequest(text)) return null;
+
+  const normalized = text.toLowerCase();
+  const emojiRegex = /[\u2700-\u27BF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g;
+
+  const boliviaMethod = methods.find(m => m.id === 'qr_bolivia' || /bolivia/i.test(m.title));
+  if (boliviaMethod && /bolivia/i.test(normalized)) {
+    return boliviaMethod.id;
+  }
+
+  for (const method of methods) {
+    const cleanTitle = method.title.replace(emojiRegex, '').trim();
+    if (!cleanTitle) continue;
+
+    if (normalized.includes(cleanTitle.toLowerCase())) return method.id;
+    if (normalized.includes(method.id.toLowerCase())) return method.id;
+  }
+
+  return null;
+}
+
 export async function processDueAutoReplies(): Promise<void> {
   if (autoReplyWorkerRunning) return;
   autoReplyWorkerRunning = true;
   try {
     const dueRequests = await getDueCustomerRequests(new Date().toISOString());
     for (const request of dueRequests) {
+      const notes = request.notes || '';
+      if (isSpecialPlanRequest(notes)) {
+        console.log(`[AutoReply] Se omite respuesta automática para solicitud ${request.id}: plan especial semestral/permanente.`);
+        continue;
+      }
+
       if (!request.telegram_user_id) {
         await updateCustomerRequestStatus(request.id, 'fallida');
         continue;
       }
 
-      const qrUrl = getSystemSetting('qr_image_url');
       const brandTitle = getSystemSetting('model_display_name') || getBotConfig().brandName || 'IAM Danii VIP';
-      const autoReplyText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
-      const delivery = qrUrl
-        ? await sendPhotoToUser(request.telegram_user_id, qrUrl, autoReplyText)
-        : await sendMessage(request.telegram_user_id, autoReplyText);
+      const allMethods = await getPublicPaymentMethods();
+      const matchedMethodId = resolveAutoReplyMethodId(notes, allMethods);
+
+      let delivery: { ok: boolean; description?: string };
+
+      if (matchedMethodId) {
+        // Enviar el detalle del método de pago correspondiente
+        const introText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responderte personalmente. Te enviamos los datos de pago para continuar:\n`;
+        await sendMessage(request.telegram_user_id, introText);
+
+        const profile = request.profile_id ? await getProfileById(request.profile_id) : null;
+        const isBoliviaMethod = matchedMethodId === 'qr_bolivia' || /bolivia/i.test((allMethods.find(m => m.id === matchedMethodId)?.title || ''));
+        const priceOverride = isBoliviaMethod ? profile?.rate_bs : undefined;
+        await showPaymentMethodDetail(request.telegram_user_id, matchedMethodId, { profileRateBs: priceOverride });
+        delivery = { ok: true };
+      } else {
+        // Fallback: QR genérico o mensaje simple
+        const qrUrl = getSystemSetting('qr_image_url');
+        const autoReplyText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
+        delivery = qrUrl
+          ? await sendPhotoToUser(request.telegram_user_id, qrUrl, autoReplyText)
+          : await sendMessage(request.telegram_user_id, autoReplyText);
+      }
 
       if (delivery.ok) {
         await updateCustomerRequestStatus(request.id, 'auto_respondida');
@@ -514,12 +569,15 @@ router.post('/requests', async (req: Request, res: Response) => {
     if (safeUserId) {
       const publicName = getSystemSetting('model_display_name') || profile.name || 'IAM Danii';
       const brandTitle = `${publicName} • Espacio VIP (+18)`;
-      const isSpecialPlan = /SEMESTRAL|PERMANENTE/i.test(purchaseMessage);
+      const isSpecialPlan = isSpecialPlanRequest(purchaseMessage);
       const planDetail = isSpecialPlan ? "" : ` (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs})`;
       const adminUsername = getSystemSetting('admin_contact_username') || 'Danii_Catalogo_SCZ_bot';
       const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}*${planDetail}.\n\nSu mensaje se envío a la Administradora (@${adminUsername}) y se le responderá en breve.`;
       await sendMessage(safeUserId, userConfirmText);
-      await scheduleAutoReply(request.id);
+
+      if (!isSpecialPlan) {
+        await scheduleAutoReply(request.id);
+      }
     } else {
       await markCustomerRequestScheduled(request.id, new Date().toISOString());
     }
@@ -2018,11 +2076,12 @@ router.put('/admin/payment-methods/:id', requireAdminAuth, async (req: Request, 
       return;
     }
 
-    const { title, description, is_active, priority_order, image_url, category } = req.body;
+    const { title, description, price, is_active, priority_order, image_url, category } = req.body;
     const updated = await savePaymentMethod({
       id,
       title,
       description,
+      price,
       is_active,
       priority_order,
       image_url,

@@ -22,6 +22,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   const [progress, setProgress] = useState(0);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showPrivacyButton, setShowPrivacyButton] = useState(false);
 
   const isVideo = Boolean(
     mediaType === 'video' ||
@@ -55,6 +57,14 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
     return () => clearInterval(timer);
   }, [isPreview]);
 
+  // Mostrar botón de Políticas sólo a usuarios nuevos (localStorage flag)
+  useEffect(() => {
+    try {
+      const seen = localStorage.getItem('danii_vip_privacy_seen');
+      setShowPrivacyButton(!seen && !isPreview);
+    } catch {}
+  }, [isPreview]);
+
   const triggerFinish = () => {
     if (isPreview) {
       onFinish();
@@ -67,12 +77,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   };
 
   return (
-    <div
-      onClick={triggerFinish}
-      className={`fixed inset-0 z-50 flex flex-col justify-between p-4 sm:p-6 bg-zinc-950 text-zinc-100 overflow-hidden select-none cursor-pointer transition-opacity duration-500 ${
-        isFadingOut ? 'opacity-0 scale-98 pointer-events-none' : 'opacity-100'
-      }`}
-    >
+    <>
+      <div
+        onClick={triggerFinish}
+        className={`fixed inset-0 z-50 flex flex-col justify-between p-4 sm:p-6 bg-zinc-950 text-zinc-100 overflow-hidden select-none cursor-pointer transition-opacity duration-500 ${
+          isFadingOut ? 'opacity-0 scale-98 pointer-events-none' : 'opacity-100'
+        }`}
+      >
       {/* Fondo Multimedia (Video o Foto) con escala elegante */}
       {mediaUrl ? (
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -177,6 +188,19 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             </div>
           )}
 
+          {/* Botón Políticas de Privacidad visible sólo a nuevos clientes */}
+          {showPrivacyButton && (
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowPrivacyModal(true); }}
+                className="text-[11px] underline text-zinc-200 hover:text-amber-300"
+              >
+                Políticas de Privacidad
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={(e) => {
@@ -199,6 +223,36 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
       </div>
 
     </div>
+
+      {/* Modal simple de Políticas (abre contenido oficial de Telegram o muestra texto breve) */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowPrivacyModal(false)}>
+          <div className="w-full max-w-lg bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-zinc-100 text-sm" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-2">Políticas de Privacidad</h3>
+            <p className="text-xs text-zinc-300 mb-3 leading-relaxed">
+              Esta Mini App respeta la política de privacidad de Telegram aplicada a canales y bots. Puedes revisar la política oficial en el enlace siguiente.
+            </p>
+            <div className="flex items-center gap-2 justify-end">
+              <a
+                href="https://telegram.org/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold px-3 py-2 rounded-xl bg-amber-500 text-zinc-950"
+              >Abrir Política Oficial</a>
+              <button
+                type="button"
+                onClick={() => {
+                  try { localStorage.setItem('danii_vip_privacy_seen', '1'); } catch {}
+                  setShowPrivacyModal(false);
+                  setShowPrivacyButton(false);
+                }}
+                className="text-xs px-3 py-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-200"
+              >He leído</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

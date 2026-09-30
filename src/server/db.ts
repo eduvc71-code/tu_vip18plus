@@ -1,4 +1,4 @@
-﻿import Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
@@ -464,11 +464,15 @@ function initTables(database: any): void {
       category TEXT NOT NULL,
       image_url TEXT,
       description TEXT,
+      price TEXT,
       is_active INTEGER DEFAULT 1,
       priority_order INTEGER DEFAULT 0,
       updated_at TEXT NOT NULL
     );
   `);
+  try {
+    database.run("ALTER TABLE payment_methods ADD COLUMN price TEXT");
+  } catch {}
 }
 
 function seedInitialData(database: any): void {
@@ -1514,6 +1518,7 @@ export async function getAllPaymentMethods(): Promise<PaymentMethod[]> {
       category: obj.category as 'national' | 'international' | 'service',
       image_url: obj.image_url ? String(obj.image_url) : null,
       description: String(obj.description || ''),
+      price: obj.price !== null && obj.price !== undefined ? String(obj.price) : null,
       is_active: Boolean(obj.is_active),
       priority_order: Number(obj.priority_order || 0),
       updated_at: String(obj.updated_at || '')
@@ -1540,13 +1545,14 @@ export async function savePaymentMethod(method: Partial<PaymentMethod> & { id: s
   const category = method.category !== undefined ? method.category : (existing?.category ?? 'service');
   const imageUrl = method.image_url !== undefined ? method.image_url : (existing?.image_url ?? null);
   const description = method.description !== undefined ? method.description : (existing?.description ?? '');
+  const price = method.price !== undefined ? (method.price !== null ? String(method.price) : null) : (existing?.price ?? null);
   const isActive = method.is_active !== undefined ? (method.is_active ? 1 : 0) : (existing?.is_active ? 1 : 0);
   const priorityOrder = method.priority_order !== undefined ? method.priority_order : (existing?.priority_order ?? 0);
 
   database.run(`
-    INSERT OR REPLACE INTO payment_methods (id, title, category, image_url, description, is_active, priority_order, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `, [method.id, title, category, imageUrl, description, isActive, priorityOrder, now]);
+    INSERT OR REPLACE INTO payment_methods (id, title, category, image_url, description, price, is_active, priority_order, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [method.id, title, category, imageUrl, description, price, isActive, priorityOrder, now]);
 
   // If this is qr_bolivia and an image_url is provided, also sync it to system_settings qr_image_url
   if (method.id === 'qr_bolivia' && imageUrl) {

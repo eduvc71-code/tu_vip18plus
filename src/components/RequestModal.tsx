@@ -19,7 +19,7 @@ interface RequestModalProps {
   onClose: () => void;
 }
 
-type Step = 'menu' | 'mensual' | 'country' | 'confirm';
+type Step = 'menu' | 'country' | 'confirm';
 type PlanType = 'mensual' | 'semestral' | 'permanente' | null;
 
 
@@ -70,16 +70,14 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
   const handlePlanSelect = (plan: PlanType) => {
     setSelectedPlan(plan);
     if (plan === 'mensual') {
-      setStep('mensual');
+      if (onOpenPaymentMethods) {
+        onClose();
+        onOpenPaymentMethods();
+        return;
+      }
+      setStep('country');
     } else {
       setStep('country');
-    }
-  };
-
-  const handleMensualProceed = () => {
-    if (onOpenPaymentMethods) {
-      onClose();
-      onOpenPaymentMethods();
     }
   };
 
@@ -239,30 +237,6 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
               </div>
               <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-purple-400" />
             </button>
-          </div>
-        ) : step === 'mensual' ? (
-          <div className="text-center flex flex-col justify-center h-full space-y-6 pt-4">
-            <div>
-              <span className="text-4xl mb-4 block">🧸</span>
-              <h3 className="text-xl font-black text-white tracking-tight uppercase">Suscripción Mensual</h3>
-              <div className="mt-4 inline-flex items-center justify-center p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl">
-                <span className="text-3xl font-black text-amber-400">Bs. {profile.rate_bs}</span>
-                <span className="text-amber-500/60 font-bold ml-2 text-sm mt-2">/ mes</span>
-              </div>
-            </div>
-            
-            <p className="text-sm text-zinc-400 px-4">
-              Podrás ver las banderas, países habilitados y opciones de pago al continuar.
-            </p>
-
-            <button
-              onClick={handleMensualProceed}
-              className="w-full py-4 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-sm tracking-widest uppercase transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer mt-4 active:scale-95"
-            >
-              <Send className="w-5 h-5" />
-              Adquirir Contenido V.I.P.
-            </button>
-            <button onClick={() => setStep('menu')} className="text-xs text-zinc-500 hover:text-white uppercase font-bold mt-2 cursor-pointer">Volver al menú</button>
           </div>
         ) : (
           <form onSubmit={handleCountryNext} className="flex flex-col h-full space-y-5 pt-2 text-left">

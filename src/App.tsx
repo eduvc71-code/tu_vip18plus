@@ -442,6 +442,14 @@ export default function App() {
           splashDescription={splashDescription}
           onFinish={() => {
             setShowSplash(false);
+            try {
+              // Notify server that this user saw the welcome splash (useful to send welcome post only once)
+              void fetch('/api/telegram/welcome-seen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user_id: tgUser?.id || null })
+              }).catch(() => {});
+            } catch {}
             if (!isAgeVerified) {
               setShowAgeModal(true);
             }
@@ -722,6 +730,7 @@ export default function App() {
         }}
         adminContactUsername={adminContactUsername}
         paymentMethods={paymentMethods}
+        boliviaRateBs={requestProfile?.rate_bs || selectedProfile?.rate_bs || profiles[0]?.rate_bs || 450}
       />
 
     </div>

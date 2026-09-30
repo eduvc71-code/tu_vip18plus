@@ -1869,7 +1869,22 @@ export async function sendClientPagos(chatId: string | number) {
   });
 }
 
-export async function showPaymentMethodDetail(chatId: string | number, methodId: string) {
+export function getOfficialFeeText(method: { id: string; title: string; price?: string | null; category?: string }, profileRateBs?: number | string): string {
+  const isBoliviaMethod = method.id === 'qr_bolivia' || /bolivia/i.test(method.title) || method.category === 'national';
+
+  if (isBoliviaMethod) {
+    const rate = Number(profileRateBs ?? 0);
+    return Number.isFinite(rate) && rate > 0 ? `Bs. ${rate} / mes` : 'Bs. 450 / mes';
+  }
+
+  return method.price ? `${method.price} / mes` : 'Consultar con Administradora';
+}
+
+export async function showPaymentMethodDetail(
+  chatId: string | number,
+  methodId: string,
+  options?: { profileRateBs?: number | string }
+) {
   const method = await getPaymentMethodById(methodId);
   if (!method) {
     await sendMessage(chatId, '⚠️ Método de pago no disponible.');
@@ -1883,9 +1898,11 @@ export async function showPaymentMethodDetail(chatId: string | number, methodId:
   const adminUsername = rawAdminUsername.replace(/^@/, '').trim();
   const adminContactUrl = `https://t.me/${adminUsername}`;
   const { baseUrl } = getBotConfig();
+  const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
 
   const caption = `✨ *${method.title}* ✨\n\n` +
     `${method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'}\n\n` +
+    `💵 *Tarifa Oficial:* ${officialFeeText}\n\n` +
     `📲 *Envía tu comprobante a:* [@${adminUsername}](${adminContactUrl})\n\n` +
     `_Una vez recibido y verificado tu comprobante, la Administradora te enviará el acceso privado a nuestro contenido VIP._`;
 

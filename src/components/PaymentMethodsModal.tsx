@@ -7,13 +7,15 @@ interface PaymentMethodsModalProps {
   onClose: () => void;
   adminContactUsername?: string;
   paymentMethods: PaymentMethod[];
+  boliviaRateBs?: number | '';
 }
 
 export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
   isOpen,
   onClose,
   adminContactUsername = 'Danii_Catalogo_SCZ_bot',
-  paymentMethods
+  paymentMethods,
+  boliviaRateBs = 450
 }) => {
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -177,15 +179,22 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                   <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-black tracking-wide truncate">
                     <span>{ephemeralMethod.title}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => goToDetail(ephemeralMethod)}
-                    className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title="Ir a Detalle de Pago"
-                    aria-label="Cerrar y abrir detalle"
-                  >
-                    <X className="h-4 w-4 text-amber-400" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-black shrink-0">
+                      {ephemeralMethod.id === 'qr_bolivia' || ephemeralMethod.category === 'national'
+                        ? `Bs. ${boliviaRateBs || 450}`
+                        : (ephemeralMethod.price || 'VIP')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => goToDetail(ephemeralMethod)}
+                      className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+                      title="Ir a Detalle de Pago"
+                      aria-label="Cerrar y abrir detalle"
+                    >
+                      <X className="h-4 w-4 text-amber-400" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Subtítulo & Coordenadas */}
@@ -247,6 +256,19 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                 </h3>
                 <span className="inline-block text-[9px] font-bold text-amber-400 uppercase tracking-wider bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/25 shrink-0">
                   {selectedMethod.category === 'national' ? '🇧🇴 Pago Nacional' : selectedMethod.category === 'international' ? '🌎 Transf. Internacional' : '⚡ Servicio Digital'}
+                </span>
+              </div>
+
+              {/* Tarifa Oficial Suscripción Mensual */}
+              <div className="w-full rounded-xl bg-gradient-to-r from-amber-500/15 via-zinc-950 to-amber-500/15 px-3.5 py-2.5 border border-amber-500/30 flex items-center justify-between text-left shadow-sm">
+                <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                  <span>💎</span>
+                  <span>Tarifa Suscripción Mensual:</span>
+                </span>
+                <span className="text-xs sm:text-sm font-black text-amber-400">
+                  {selectedMethod.id === 'qr_bolivia' || selectedMethod.category === 'national'
+                    ? `Bs. ${boliviaRateBs || 450} / mes`
+                    : (selectedMethod.price ? `${selectedMethod.price} / mes` : 'Consultar con Administradora')}
                 </span>
               </div>
 
@@ -390,15 +412,20 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                     onClick={() => handleCountryClick(qrBolivia)}
                     className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">🇧🇴</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-xl">🇧🇴</span>
                       <div className="flex flex-col">
                         <span className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
                           {qrBolivia.title.replace(/^🇧🇴\s*/, '') || 'PAGO QR BOLIVIA'}
                         </span>
-                        <span className="text-[9px] font-semibold text-emerald-400">
-                          Transferencia bancaria inmediata en Bs.
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-amber-400">
+                            Bs. {boliviaRateBs || 450} / mes
+                          </span>
+                          <span className="text-[9px] font-semibold text-emerald-400">
+                            • Transferencia inmediata
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <span className="text-[11px] font-bold text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
@@ -423,22 +450,32 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                           <button
                             type="button"
                             onClick={() => handleCountryClick(m1)}
-                            className="min-h-[38px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2.5 text-center flex items-center justify-center gap-1.5 transition-all group cursor-pointer active:scale-98"
+                            className="min-h-[44px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2 text-center flex flex-col items-center justify-center gap-0.5 transition-all group cursor-pointer active:scale-98"
                           >
-                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate">
+                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate w-full">
                               {m1.title}
                             </span>
+                            {m1.price && (
+                              <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                {m1.price}
+                              </span>
+                            )}
                           </button>
                         )}
                         {m2 && (
                           <button
                             type="button"
                             onClick={() => handleCountryClick(m2)}
-                            className="min-h-[38px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2.5 text-center flex items-center justify-center gap-1.5 transition-all group cursor-pointer active:scale-98"
+                            className="min-h-[44px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2 text-center flex flex-col items-center justify-center gap-0.5 transition-all group cursor-pointer active:scale-98"
                           >
-                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate">
+                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate w-full">
                               {m2.title}
                             </span>
+                            {m2.price && (
+                              <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                                {m2.price}
+                              </span>
+                            )}
                           </button>
                         )}
                       </React.Fragment>
@@ -460,9 +497,16 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                       onClick={() => handleCountryClick(service)}
                       className="w-full min-h-10 rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 px-3 py-1.5 text-left flex items-center justify-between transition-all group cursor-pointer active:scale-98"
                     >
-                      <span className="font-bold text-xs text-zinc-200 group-hover:text-amber-300">
-                        {service.title}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-xs text-zinc-200 group-hover:text-amber-300">
+                          {service.title}
+                        </span>
+                        {service.price && (
+                          <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            {service.price}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-[10px] text-zinc-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all">
                         Detalles ➔
                       </span>

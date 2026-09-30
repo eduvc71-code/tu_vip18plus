@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { B2Manager } from './B2Manager';
 import { Cloud } from 'lucide-react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
@@ -716,6 +716,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [uploadingWelcomeMedia, setUploadingWelcomeMedia] = useState(false);
   const [savingSplashDescription, setSavingSplashDescription] = useState(false);
   const [showSplashPreview, setShowSplashPreview] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [savingDescriptionOnly, setSavingDescriptionOnly] = useState(false);
 
   // Operating Mode state (Modo A: solo_bot / Modo B: bot_and_channel)
   const [operatingMode, setOperatingMode] = useState<'solo_bot' | 'bot_and_channel'>('solo_bot');
@@ -1002,6 +1004,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de servidor al guardar el perfil' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveDescriptionOnly = async () => {
+    if (!editingProfile) {
+      setMessage({ type: 'error', text: 'Selecciona un perfil antes de guardar la descripción.' });
+      return;
+    }
+    if (!formData.description || !formData.description.trim()) {
+      setMessage({ type: 'error', text: 'La descripción no puede quedar vacía.' });
+      return;
+    }
+    setSavingDescriptionOnly(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${editingProfile.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ description: formData.description })
+      });
+      const data = await res.json();
+      if (res.ok && data.profile) {
+        setMessage({ type: 'success', text: '✅ Mi descripción guardada con éxito.' });
+        setEditingProfile(data.profile);
+        setEditingDescription(false);
+        fetchData();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al guardar la descripción' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión al guardar la descripción' });
+    } finally {
+      setSavingDescriptionOnly(false);
     }
   };
 
@@ -2423,31 +2457,63 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       </div>
 
                       <div>
-                        <label className="block text-zinc-400 mb-1 font-semibold">Precio Suscripción VIP (Bs.)</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-zinc-300 font-semibold flex items-center gap-1.5">
+                            <span>🇧🇴 Precio Suscripción VIP (Bs.)</span>
+                            <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">Solo Clientes Bolivia</span>
+                          </label>
+                        </div>
                         <input
                           type="number"
                           value={formData.rate_bs}
-                          placeholder="Ej: 0 o 350"
+                          placeholder="Ej: 120 o 350"
                           onChange={(e) => setFormData({ ...formData, rate_bs: e.target.value === '' ? '' : Number(e.target.value) })}
-                          className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                          className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors font-bold"
                         />
+                        <span className="text-[10px] text-zinc-500 mt-1 block">
+                          Este monto solo se mostrará a los clientes que seleccionen el país "Bolivia" en la Mini App.
+                        </span>
                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="text-zinc-400 font-semibold flex items-center gap-1.5">
                             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                            Descripción del Contenido VIP (Publicación y Mini App)
+                            Mi descripción
                           </label>
-                          <span className="text-[10px] text-rose-400 font-bold">* Obligatorio</span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-rose-400 font-bold">* Obligatorio</span>
+                            <label className="flex items-center gap-2 text-[11px] text-zinc-300">
+                              <input
+                                type="checkbox"
+                                checked={editingDescription}
+                                onChange={(e) => setEditingDescription(e.target.checked)}
+                                className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-emerald-500 cursor-pointer"
+                              />
+                              <span>{editingDescription ? 'Editar' : 'Locked'}</span>
+                            </label>
+                          </div>
                         </div>
                         <textarea
                           rows={3}
                           value={formData.description}
                           placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda... 💫 15 fotos + 2 videos HD. Esta descripción se publica en Telegram y se muestra en la Mini App."
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                          className="w-full px-3 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 resize-none transition-colors text-xs leading-relaxed"
+                          readOnly={!editingDescription}
+                          className={`w-full px-3 py-2.5 ${editingDescription ? 'bg-zinc-900 border-zinc-700' : 'bg-zinc-950 border-zinc-800/40 opacity-80'} rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 resize-none transition-colors text-xs leading-relaxed`}
                         />
+                        <div className="flex items-center justify-end gap-2 mt-2">
+                          {editingDescription && (
+                            <button
+                              type="button"
+                              disabled={savingDescriptionOnly}
+                              onClick={handleSaveDescriptionOnly}
+                              className="py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-bold text-xs shadow-md disabled:opacity-50"
+                            >
+                              {savingDescriptionOnly ? 'Guardando...' : 'Guardar descripción'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -4956,9 +5022,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           {activeMethods.map((m) => {
                             const flag = getPaymentMethodFlag(m);
                             const clean = getCleanPaymentTitle(m);
+                            const priceTag = m.price ? ` [${m.price}]` : '';
                             return (
                               <option key={m.id} value={m.id}>
-                                {flag} {clean}
+                                {flag} {clean}{priceTag}
                               </option>
                             );
                           })}
@@ -4994,9 +5061,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             inactiveMethods.map((m) => {
                               const flag = getPaymentMethodFlag(m);
                               const clean = getCleanPaymentTitle(m);
+                              const priceTag = m.price ? ` [${m.price}]` : '';
                               return (
                                 <option key={m.id} value={m.id}>
-                                  {flag} {clean}
+                                  {flag} {clean}{priceTag}
                                 </option>
                               );
                             })
@@ -5160,6 +5228,36 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               <option value="service">⚡ Criptomonedas & Servicios Digitales</option>
                             </select>
                           </div>
+
+                          {/* Campo editable Precio Suscripción Mensual (solo para métodos diferentes a Bolivia) */}
+                          {editingPaymentMethod.id !== 'qr_bolivia' && editingPaymentMethod.category !== 'national' ? (
+                            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/30 space-y-1.5 shadow-sm">
+                              <label className="block text-amber-300 font-bold text-[11px] flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                  <span>💎</span>
+                                  <span>Precio Suscripción Mensual</span>
+                                </span>
+                                <span className="text-[10px] text-zinc-400 font-normal">Clientes de este país / método</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={editingPaymentMethod.price || ''}
+                                onChange={(e) => setEditingPaymentMethod({ ...editingPaymentMethod, price: e.target.value })}
+                                placeholder="Ej: 15 USD, 20 USDT, 60 Soles, 15 €, etc."
+                                className="w-full px-3 py-2 bg-zinc-900 border border-amber-500/40 rounded-xl text-white text-xs focus:outline-none focus:border-amber-400 font-bold placeholder-zinc-600 transition-colors"
+                              />
+                              <p className="text-[10px] text-zinc-400 leading-normal">
+                                Este monto se muestra al cliente en la Mini App al consultar este método, y es el valor que el bot enviará automáticamente si la Administradora no responde a tiempo.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-start gap-2">
+                              <span className="text-base shrink-0">ℹ️</span>
+                              <p className="text-[10px] text-amber-200/90 leading-relaxed">
+                                <strong>Precio para Bolivia:</strong> Se administra en la pestaña <strong>"Mi Perfil &gt; Datos"</strong> (Precio Suscripción VIP Bs). Solo los clientes que seleccionen Bolivia verán dicho precio.
+                              </p>
+                            </div>
+                          )}
 
                           <div>
                             <label className="block text-zinc-400 mb-1 font-semibold text-[11px]">
