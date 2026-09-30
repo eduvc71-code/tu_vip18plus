@@ -2035,6 +2035,13 @@ router.post('/admin/telegram-botoneras', requireAdminAuth, async (req: Request, 
       return;
     }
 
+    const sanitizedCountries = Array.isArray(payload.countries)
+      ? payload.countries.filter((country: any) => country && country.active !== false)
+      : [];
+    const sanitizedPlans = Array.isArray(payload.plans)
+      ? payload.plans.filter((plan: any) => plan && plan.active !== false)
+      : [];
+
     const saved = await saveTelegramBotonera({
       id: payload.id,
       name: String(payload.name).trim(),
@@ -2048,8 +2055,8 @@ router.post('/admin/telegram-botoneras', requireAdminAuth, async (req: Request, 
       confirmation_text: String(payload.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
       contact_text: String(payload.contact_text || 'Escríbenos por Telegram en privado para validar tu comprobante.').trim(),
       is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
-      countries: payload.countries,
-      plans: payload.plans,
+      countries: sanitizedCountries,
+      plans: sanitizedPlans,
       created_at: payload.created_at,
       updated_at: payload.updated_at
     });

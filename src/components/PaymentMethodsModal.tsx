@@ -110,22 +110,17 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     onClose();
   };
 
-  // Grouping methods matching screenshot
-  const qrBolivia = paymentMethods.find(m => m.id === 'qr_bolivia');
+  const activeMethods = [...paymentMethods]
+    .filter((method) => method.is_active)
+    .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
 
-  const countryPairs: [string, string][] = [
-    ['peru', 'chile'],
-    ['argentina', 'espana'],
-    ['mexico', 'paraguay'],
-    ['brasil', 'uruguay'],
-    ['colombia', 'rusia'],
-    ['ecuador', 'venezuela']
-  ];
+  const featuredMethods = activeMethods.filter((method) =>
+    method.id === 'qr_bolivia' ||
+    method.category === 'national' ||
+    method.category === 'international'
+  );
 
-  const serviceIds = ['cripto', 'tigo_money', 'paypal', 'telegram_stars', 'western_remitly', 'zelle'];
-  const serviceMethods = serviceIds
-    .map(id => paymentMethods.find(m => m.id === id))
-    .filter((m): m is PaymentMethod => Boolean(m && m.is_active));
+  const serviceMethods = activeMethods.filter((method) => method.category === 'service');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -372,26 +367,22 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
             </div>
           ) : (
             /* ========================================================================= */
-            /* FULL PAYMENT METHODS LIST (REPLICATING SCREENSHOT)                        */
+            /* FULL PAYMENT METHODS LIST GENERATED FROM LIVE DATA                       */
             /* ========================================================================= */
             <div className="space-y-3.5 animate-in fade-in duration-200">
-              
-              {/* Header Box from Screenshot */}
               <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-500/15 via-zinc-950/60 to-zinc-950/90 p-3.5 text-center space-y-1 shadow-inner">
                 <div className="text-sm sm:text-base font-black tracking-wide text-pink-300">
-                  HOLI 💖🔥
+                  PAYMENTS BOARD
                 </div>
                 <div className="text-xs font-extrabold text-white tracking-wide">
-                  TODOS MIS METODOS DE PAGO 🥰💖
+                  TODOS LOS MÉTODOS DE PAGO EN SERVIDOR
                 </div>
                 <div className="pt-1.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[10px] font-bold text-zinc-300">
-                  <span className="flex items-center gap-1">📌 BOLIVIA: <span className="text-sm">🇧🇴</span></span>
-                  <span className="flex items-center gap-1">📌 PERU: <span className="text-sm">🇵🇪</span></span>
-                  <span className="flex items-center gap-1">📌 EXTRANJERO: <span className="text-sm">🇲🇽 🇦🇷 🇺🇸 🌍</span></span>
+                  <span className="flex items-center gap-1">📦 {activeMethods.length} activos</span>
+                  <span className="flex items-center gap-1">🔄 Datos desde B2/DB</span>
                 </div>
               </div>
 
-              {/* Notification Banner for Admin Contact */}
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-center text-[10px] text-zinc-400">
                 <span>Comprobantes y atención privada con la Admin:{' '}</span>
                 <a
@@ -404,106 +395,70 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                 </a>
               </div>
 
-              {/* 1. TOP FULL-WIDTH BUTTON: PAGO QR BOLIVIA */}
-              {qrBolivia && qrBolivia.is_active && (
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => handleCountryClick(qrBolivia)}
-                    className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl">🇧🇴</span>
-                      <div className="flex flex-col">
-                        <span className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
-                          {qrBolivia.title.replace(/^🇧🇴\s*/, '') || 'PAGO QR BOLIVIA'}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-amber-400">
-                            Bs. {boliviaRateBs || 450} / mes
-                          </span>
-                          <span className="text-[9px] font-semibold text-emerald-400">
-                            • Transferencia inmediata
-                          </span>
+              {featuredMethods.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 px-1">
+                    Destacados
+                  </div>
+                  <div className="space-y-1.5">
+                    {featuredMethods.map((method) => (
+                      <button
+                        key={method.id}
+                        type="button"
+                        onClick={() => handleCountryClick(method)}
+                        className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl">{method.category === 'national' ? '🇧🇴' : '🌍'}</span>
+                          <div className="flex flex-col">
+                            <span className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
+                              {method.title}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black text-amber-400">
+                                {method.id === 'qr_bolivia' || method.category === 'national'
+                                  ? `Bs. ${boliviaRateBs || 450} / mes`
+                                  : (method.price ? `${method.price} / mes` : 'Consultar con Administradora')}
+                              </span>
+                              <span className="text-[9px] font-semibold text-emerald-400">
+                                • {method.category === 'service' ? 'Digital' : method.category === 'national' ? 'Nacional' : 'Internacional'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <span className="text-[11px] font-bold text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
-                      Ver QR ➔
-                    </span>
-                  </button>
+                        <span className="text-[11px] font-bold text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
+                          Ver detalle ➔
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {/* 2. 2-COLUMN GRID PAIRS FOR COUNTRIES (REDUCIDO Y COMPACTO) */}
               <div className="space-y-1.5">
                 <div className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 px-1">
-                  Transferencias Locales por País
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {countryPairs.map(([id1, id2]) => {
-                    const m1 = paymentMethods.find(m => m.id === id1 && m.is_active);
-                    const m2 = paymentMethods.find(m => m.id === id2 && m.is_active);
-                    return (
-                      <React.Fragment key={`${id1}_${id2}`}>
-                        {m1 && (
-                          <button
-                            type="button"
-                            onClick={() => handleCountryClick(m1)}
-                            className="min-h-[44px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2 text-center flex flex-col items-center justify-center gap-0.5 transition-all group cursor-pointer active:scale-98"
-                          >
-                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate w-full">
-                              {m1.title}
-                            </span>
-                            {m1.price && (
-                              <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                                {m1.price}
-                              </span>
-                            )}
-                          </button>
-                        )}
-                        {m2 && (
-                          <button
-                            type="button"
-                            onClick={() => handleCountryClick(m2)}
-                            className="min-h-[44px] rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 py-1.5 px-2 text-center flex flex-col items-center justify-center gap-0.5 transition-all group cursor-pointer active:scale-98"
-                          >
-                            <span className="font-bold text-[11px] sm:text-xs text-zinc-200 group-hover:text-amber-300 truncate w-full">
-                              {m2.title}
-                            </span>
-                            {m2.price && (
-                              <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                                {m2.price}
-                              </span>
-                            )}
-                          </button>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 3. FULL-WIDTH SERVICES */}
-              <div className="space-y-1.5 pt-1">
-                <div className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 px-1">
-                  Cripto & Servicios Digitales
+                  Catálogo completo
                 </div>
                 <div className="space-y-1.5">
-                  {serviceMethods.map((service) => (
+                  {activeMethods.map((method) => (
                     <button
-                      key={service.id}
+                      key={method.id}
                       type="button"
-                      onClick={() => handleCountryClick(service)}
+                      onClick={() => handleCountryClick(method)}
                       className="w-full min-h-10 rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 px-3 py-1.5 text-left flex items-center justify-between transition-all group cursor-pointer active:scale-98"
                     >
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-xs text-zinc-200 group-hover:text-amber-300">
-                          {service.title}
+                          {method.title}
                         </span>
-                        {service.price && (
+                        <span className="text-[9px] uppercase tracking-wider text-zinc-500">
+                          {method.category}
+                        </span>
+                        {method.price && (
                           <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            {service.price}
+                            {method.id === 'qr_bolivia' || method.category === 'national'
+                              ? `Bs. ${boliviaRateBs || 450}`
+                              : method.price}
                           </span>
                         )}
                       </div>
@@ -515,7 +470,6 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                 </div>
               </div>
 
-              {/* Close Button */}
               <div className="pt-1">
                 <button
                   type="button"

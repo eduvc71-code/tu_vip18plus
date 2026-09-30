@@ -745,6 +745,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
   const [savingButton, setSavingButton] = useState(false);
 
+  const sanitizeTelegramBotoneraFlow = (botonera: Partial<TelegramBotonera> | null | undefined): Partial<TelegramBotonera> | null | undefined => {
+    if (!botonera) return botonera;
+    return {
+      ...botonera,
+      countries: Array.isArray(botonera.countries) ? botonera.countries.filter(country => country.active) : [],
+      plans: Array.isArray(botonera.plans) ? botonera.plans.filter(plan => plan.active) : []
+    };
+  };
+
   const buildTelegramCountriesFromPaymentMethods = (methods: PaymentMethod[]): TelegramBotoneraCountry[] => {
     const countryMap: Record<string, { flag: string; name: string; label: string }> = {
       bolivia: { flag: '🇧🇴', name: 'Bolivia', label: 'Bolivia' },
@@ -768,7 +777,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
     const items = methods
-      .filter(method => method.category === 'national' || method.category === 'international')
+      .filter(method => method.is_active && (method.category === 'national' || method.category === 'international'))
       .map(method => {
         const raw = method.title
           .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '')
@@ -792,6 +801,39 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       order: index + 1,
       active: true
     }));
+  };
+
+  const normalizeTelegramCountryValue = (value: string) => value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  const matchesCountryMethod = (countryName: string, method: PaymentMethod) => {
+    if (!countryName || !method?.title) return false;
+    const normalizedCountry = normalizeTelegramCountryValue(countryName);
+    const normalizedTitle = normalizeTelegramCountryValue(method.title);
+    if (!normalizedCountry || !normalizedTitle) return false;
+    if (method.id === 'qr_bolivia' && normalizedCountry === 'bolivia') return true;
+
+    const aliases: Record<string, string[]> = {
+      bolivia: ['bolivia', 'bo'],
+      peru: ['peru', 'perú', 'pe'],
+      chile: ['chile', 'cl'],
+      argentina: ['argentina', 'ar'],
+      espana: ['espana', 'españa', 'es'],
+      mexico: ['mexico', 'méxico', 'mx'],
+      paraguay: ['paraguay', 'py'],
+      brasil: ['brasil', 'br'],
+      uruguay: ['uruguay', 'uy'],
+      colombia: ['colombia', 'co'],
+      ecuador: ['ecuador', 'ec'],
+      venezuela: ['venezuela', 've'],
+      rusia: ['rusia', 'ru']
+    };
+
+    const aliasSet = aliases[normalizedCountry] || [normalizedCountry];
+    return aliasSet.some(alias => normalizedTitle.includes(alias));
   };
 
   const buildDefaultTelegramBotonera = (methods: PaymentMethod[] = []): TelegramBotonera => ({
@@ -818,8 +860,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [telegramBotoneras, setTelegramBotoneras] = useState<TelegramBotonera[]>([]);
   const [telegramBotoneraDraft, setTelegramBotoneraDraft] = useState<TelegramBotonera>(buildDefaultTelegramBotonera());
+  const [selectedTelegramPreviewCountryId, setSelectedTelegramPreviewCountryId] = useState<string | null>(null);
   const [savingTelegramBotonera, setSavingTelegramBotonera] = useState(false);
   const [publishingTelegramBotonera, setPublishingTelegramBotonera] = useState(false);
+
+  useEffect(() => {
+    const activeCountries = telegramBotoneraDraft.countries.filter(country => country.active);
+    if (activeCountries.length === 0) {
+      setSelectedTelegramPreviewCountryId(null);
+      return;
+    }
+
+    if (!selectedTelegramPreviewCountryId || !activeCountries.some(country => country.id === selectedTelegramPreviewCountryId)) {
+      setSelectedTelegramPreviewCountryId(activeCountries[0].id || null);
+    }
+  }, [telegramBotoneraDraft.countries, selectedTelegramPreviewCountryId]);
 
   // Dynamic polls state
   const [dynamicPolls, setDynamicPolls] = useState<DynamicPoll[]>([]);
@@ -920,10 +975,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
       if (resB.ok) setCustomButtons(await resB.json());
       if (resBotoneras.ok) {
-        const botoneras = await resBotoneras.json();
-        setTelegramBotoneras(botoneras || []);
-        if (botoneras && botoneras.length > 0 && !telegramBotoneraDraft.id) {
-          setTelegramBotoneraDraft(botoneras[0]);
+        const botoneras = (await resBotoneras.json()) || [];
+        const sanitizedBotoneras = botoneras.map((botonera: TelegramBotonera) => sanitizeTelegramBotoneraFlow(botonera) as TelegramBotonera);
+        setTelegramBotoneras(sanitizedBotoneras);
+        if (sanitizedBotoneras.length > 0 && !telegramBotoneraDraft.id) {
+          setTelegramBotoneraDraft(sanitizeTelegramBotoneraFlow(sanitizedBotoneras[0]) as TelegramBotonera);
         }
       }
       if (resPolls.ok) setDynamicPolls(await resPolls.json());
@@ -1506,12 +1562,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       return;
     }
 
+    const sanitizedBotonera = {
+      ...telegramBotoneraDraft,
+      countries: telegramBotoneraDraft.countries.filter(country => country.active),
+      plans: telegramBotoneraDraft.plans.filter(plan => plan.active)
+    };
+
     setSavingTelegramBotonera(true);
     try {
       const res = await fetch('/api/admin/telegram-botoneras', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(telegramBotoneraDraft)
+        body: JSON.stringify(sanitizedBotonera)
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -5841,20 +5903,50 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                         <div className="mt-3 rounded-2xl border border-amber-500/30 bg-gradient-to-b from-zinc-900 to-zinc-950 p-3">
                           <div className="text-center text-[11px] font-bold text-amber-300 uppercase tracking-wide">{telegramBotoneraDraft.title || 'SUSCRIPCIÓN VIP'}</div>
                           <div className="mt-2 text-[10px] text-zinc-300 text-center">{telegramBotoneraDraft.intro}</div>
+
                           <div className="mt-3 grid grid-cols-2 gap-2">
-                            {telegramBotoneraDraft.countries.filter(item => item.active).slice(0, 6).map((country, index) => (
-                              <button key={`${country.id}-${index}`} type="button" className="px-2 py-2 rounded-lg border border-zinc-700 bg-zinc-900 text-white text-[10px] truncate">
-                                {country.flag} {country.name}
-                              </button>
-                            ))}
+                            {telegramBotoneraDraft.countries.filter(item => item.active).map((country, index) => {
+                              const isSelected = selectedTelegramPreviewCountryId === country.id;
+                              return (
+                                <button
+                                  key={`${country.id}-${index}`}
+                                  type="button"
+                                  onClick={() => setSelectedTelegramPreviewCountryId(country.id)}
+                                  className={`px-2 py-2 rounded-lg border text-[10px] truncate transition-colors ${isSelected ? 'border-amber-400 bg-amber-500/15 text-amber-200' : 'border-zinc-700 bg-zinc-900 text-white'}`}
+                                >
+                                  {country.flag} {country.name}
+                                </button>
+                              );
+                            })}
                           </div>
-                          <div className="mt-3 grid grid-cols-1 gap-2">
-                            {paymentMethods.filter(item => item.is_active).slice(0, 6).map((method, index) => (
-                              <button key={`${method.id}-${index}`} type="button" className="px-2 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-[10px] font-bold text-left">
-                                {method.title}
-                              </button>
-                            ))}
-                          </div>
+
+                          {(() => {
+                            const activeCountries = telegramBotoneraDraft.countries.filter(item => item.active);
+                            const selectedCountry = activeCountries.find(country => country.id === selectedTelegramPreviewCountryId) || activeCountries[0] || null;
+                            const selectedMethods = selectedCountry
+                              ? paymentMethods.filter(method => method.is_active && matchesCountryMethod(selectedCountry.name, method))
+                              : [];
+
+                            return selectedCountry ? (
+                              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
+                                <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300 font-bold">
+                                  {selectedCountry.flag} {selectedCountry.name}
+                                </div>
+                                <div className="mt-2 space-y-2">
+                                  {selectedMethods.length > 0 ? selectedMethods.slice(0, 4).map((method, index) => (
+                                    <div key={`${method.id}-${index}`} className="rounded-lg border border-emerald-500/20 bg-zinc-950/60 p-2">
+                                      <div className="text-[10px] font-bold text-emerald-200">{method.title}</div>
+                                      {method.description && (
+                                        <div className="mt-1 text-[9px] text-zinc-300 leading-relaxed">{method.description}</div>
+                                      )}
+                                    </div>
+                                  )) : (
+                                    <div className="text-[9px] text-zinc-300">Sin métodos activos para este país.</div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                       </div>
 

@@ -64,3 +64,9 @@ test('callback payloads tolerate underscores inside Telegram botonera ids', () =
   const planData = parseTelegramBotoneraCallbackData('vip_plan_botonera_1697031305000_abc_bolivia_monthly');
   assert.deepEqual(planData, { kind: 'plan', botoneraId: 'botonera_1697031305000_abc', countryId: 'bolivia', planId: 'monthly' });
 });
+
+test('legacy public Telegram payloads without botonera id still resolve the active country flow', () => {
+  assert.deepEqual(parseTelegramBotoneraCallbackData('vip_country_bolivia'), { kind: 'country', countryId: 'bolivia' });
+  assert.deepEqual(parseTelegramBotoneraCallbackData('vip_plan_menu_bolivia'), { kind: 'plan_menu', countryId: 'bolivia' });
+  assert.deepEqual(parseTelegramBotoneraCallbackData('vip_plan_bolivia_monthly'), { kind: 'plan', countryId: 'bolivia', planId: 'monthly' });
+});

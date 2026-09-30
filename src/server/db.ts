@@ -1442,8 +1442,8 @@ export async function saveTelegramBotonera(botonera: Partial<TelegramBotonera> &
     confirmation_text: String(botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
     contact_text: String(botonera.contact_text || 'Contacta a la administradora en privado.').trim(),
     is_active: Boolean(botonera.is_active !== false),
-    countries: Array.isArray(botonera.countries) ? botonera.countries : [],
-    plans: Array.isArray(botonera.plans) ? botonera.plans : [],
+    countries: Array.isArray(botonera.countries) ? botonera.countries.filter(item => item && item.active !== false) : [],
+    plans: Array.isArray(botonera.plans) ? botonera.plans.filter(item => item && item.active !== false) : [],
     published_message_id: botonera.published_message_id ?? null
   };
 

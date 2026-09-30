@@ -105,7 +105,7 @@ export function isPublicTelegramCallbackData(data: string): boolean {
 
 export function parseTelegramBotoneraCallbackData(data: string): {
   kind: 'country' | 'country_menu' | 'plan_menu' | 'plan';
-  botoneraId: string;
+  botoneraId?: string;
   countryId?: string;
   planId?: string;
 } | null {
@@ -119,48 +119,70 @@ export function parseTelegramBotoneraCallbackData(data: string): {
 
   if (data.startsWith('vip_country_')) {
     const payload = data.slice('vip_country_'.length);
+    if (!payload) return null;
+
     const parts = payload.split('__');
     if (parts.length >= 2) {
       return { kind: 'country', botoneraId: parts[0], countryId: parts.slice(1).join('__') };
     }
+
     const legacy = payload.split('_');
-    if (legacy.length < 2) return null;
-    return {
-      kind: 'country',
-      botoneraId: legacy.slice(0, -1).join('_'),
-      countryId: legacy[legacy.length - 1]
-    };
+    if (legacy.length >= 2) {
+      return {
+        kind: 'country',
+        botoneraId: legacy.slice(0, -1).join('_') || undefined,
+        countryId: legacy[legacy.length - 1]
+      };
+    }
+
+    return { kind: 'country', countryId: payload };
   }
 
   if (data.startsWith('vip_plan_menu_')) {
     const payload = data.slice('vip_plan_menu_'.length);
+    if (!payload) return null;
+
     const parts = payload.split('__');
     if (parts.length >= 2) {
       return { kind: 'plan_menu', botoneraId: parts[0], countryId: parts.slice(1).join('__') };
     }
+
     const legacy = payload.split('_');
-    if (legacy.length < 2) return null;
-    return {
-      kind: 'plan_menu',
-      botoneraId: legacy.slice(0, -1).join('_'),
-      countryId: legacy[legacy.length - 1]
-    };
+    if (legacy.length >= 2) {
+      return {
+        kind: 'plan_menu',
+        botoneraId: legacy.slice(0, -1).join('_') || undefined,
+        countryId: legacy[legacy.length - 1]
+      };
+    }
+
+    return { kind: 'plan_menu', countryId: payload };
   }
 
   if (data.startsWith('vip_plan_')) {
     const payload = data.slice('vip_plan_'.length);
+    if (!payload) return null;
+
     const parts = payload.split('__');
     if (parts.length >= 3) {
       return { kind: 'plan', botoneraId: parts[0], countryId: parts[1], planId: parts.slice(2).join('__') };
     }
+
     const legacy = payload.split('_');
-    if (legacy.length < 3) return null;
-    return {
-      kind: 'plan',
-      botoneraId: legacy.slice(0, -2).join('_'),
-      countryId: legacy[legacy.length - 2],
-      planId: legacy[legacy.length - 1]
-    };
+    if (legacy.length >= 3) {
+      return {
+        kind: 'plan',
+        botoneraId: legacy.slice(0, -2).join('_') || undefined,
+        countryId: legacy[legacy.length - 2],
+        planId: legacy[legacy.length - 1]
+      };
+    }
+
+    if (legacy.length === 2) {
+      return { kind: 'plan', countryId: legacy[0], planId: legacy[1] };
+    }
+
+    return { kind: 'plan', countryId: payload };
   }
 
   return null;
@@ -1981,11 +2003,25 @@ export async function sendTelegramBotoneraFlow(chatId: string | number) {
 
 export async function sendTelegramPlanOptions(chatId: string | number, botoneraId: string, countryId: string) {
   const items = await getAllTelegramBotoneras();
-  const botonera = items.find(item => item.id === botoneraId) || null;
-  if (!botonera) return;
+  const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
+  if (!botonera) {
+    await sendMessage(chatId, '⚠️ No pude abrir la botonera VIP en este momento. Vuelve al menú principal e inténtalo otra vez.', {
+      reply_markup: { inline_keyboard: [[{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]] }
+    });
+    return;
+  }
 
-  const country = (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
-  const methods = await getRelevantPaymentMethodsForCountry(country?.name || '');
+  const country = (botonera.countries || []).find((item: any) => {
+    const itemId = String(item.id || '');
+    const itemName = String(item.name || item.label || '');
+    return (
+      normalizeTelegramKey(itemId) === normalizeTelegramKey(countryId) ||
+      normalizeTelegramKey(itemName) === normalizeTelegramKey(countryId) ||
+      normalizeTelegramKey(String(item.label || '')) === normalizeTelegramKey(countryId)
+    );
+  }) || (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
+
+  const methods = await getRelevantPaymentMethodsForCountry(country?.name || countryId || '');
 
   if (methods.length > 0) {
     const preferredMethod = methods[0];
@@ -1994,9 +2030,9 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   }
 
   const adminUsername = getAdminContactUsername();
-  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]];
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
 
-  const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n` +
+  const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || countryId || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
     `_Contacta a la administradora para coordinar la suscripción._`;
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows } });
@@ -2307,8 +2343,11 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_country_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
-    if (parsed && parsed.kind === 'country' && parsed.botoneraId && parsed.countryId) {
-      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
+    if (parsed && parsed.kind === 'country' && parsed.countryId) {
+      const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
+      if (fallbackBotoneraId) {
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+      }
     }
     return;
   }
@@ -2316,8 +2355,11 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_plan_menu_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
-    if (parsed && parsed.kind === 'plan_menu' && parsed.botoneraId && parsed.countryId) {
-      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
+    if (parsed && parsed.kind === 'plan_menu' && parsed.countryId) {
+      const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
+      if (fallbackBotoneraId) {
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+      }
     }
     return;
   }
@@ -2325,8 +2367,11 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_plan_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
-    if (parsed && parsed.kind === 'plan' && parsed.botoneraId && parsed.countryId) {
-      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
+    if (parsed && parsed.kind === 'plan' && parsed.countryId) {
+      const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
+      if (fallbackBotoneraId) {
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+      }
     }
     return;
   }
