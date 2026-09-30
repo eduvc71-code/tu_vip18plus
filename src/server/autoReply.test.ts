@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
+import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
 import { getOfficialFeeText } from './telegram.ts';
 
 const methods = [
@@ -30,4 +30,10 @@ test('special plans are excluded from the auto-reply payment flow', () => {
   assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÓN SEMESTRAL. Soy de Bolivia.'), true);
   assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÓN PERMANENTE. Soy de Perú.'), true);
   assert.equal(isSpecialPlanRequest('Quiero pagar desde Perú'), false);
+});
+
+test('extractCountryFromRequestText keeps the country in the client message', () => {
+  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN SEMESTRAL. Soy de Bolivia. Solicito información VIP.'), 'Bolivia');
+  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN PERMANENTE. Soy de Perú.'), 'Perú');
+  assert.equal(extractCountryFromRequestText('Requiero información VIP.'), 'No especificado');
 });
