@@ -1981,13 +1981,11 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
     ? methods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
     : [[{ text: '📲 Hablar con administradora', url: `https://t.me/${(getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim()}` }]];
 
-  const activePlans = (botonera.plans || []).filter((item: any) => item.active);
-  if (activePlans.length > 0) {
-    rows.push([{ text: '💎 Ver planes de suscripción', callback_data: `vip_plan_menu_${botonera.id}__${countryId}` }]);
-  }
   rows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
 
-  const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n${botonera.plan_label || 'Métodos de pago disponibles'}\n\n_Elige el método de pago y luego la suscripción._`;
+  const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n` +
+    `*Métodos de pago disponibles para tu país*\n\n` +
+    `_Elige el método de pago que corresponde a tu país y continúa igual que en la mini app._`;
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows } });
 }
 
@@ -2310,20 +2308,7 @@ async function handleCallbackQuery(cb: any) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
     if (parsed && parsed.kind === 'plan_menu' && parsed.botoneraId && parsed.countryId) {
-      const items = await getAllTelegramBotoneras();
-      const botonera = items.find(item => item.id === parsed.botoneraId);
-      if (botonera) {
-        const activePlans = (botonera.plans || []).filter((item: any) => item.active);
-        const rows = activePlans.map((plan: any) => [{
-          text: plan.name || 'Plan',
-          callback_data: `vip_plan_${botonera.id}__${parsed.countryId}__${plan.id}`
-        }]);
-        rows.push([{ text: '🔙 Cambiar método', callback_data: `vip_country_${botonera.id}__${parsed.countryId}` }]);
-        await sendMessage(chatId, `*${botonera.plan_label || 'Elige tu plan'}*\n\n_Selecciona la suscripción para continuar._`, {
-          reply_markup: { inline_keyboard: rows },
-          parse_mode: 'Markdown'
-        });
-      }
+      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
     }
     return;
   }
@@ -2331,8 +2316,8 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_plan_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
-    if (parsed && parsed.kind === 'plan' && parsed.botoneraId && parsed.countryId && parsed.planId) {
-      await sendTelegramPlanConfirmation(chatId, parsed.botoneraId, parsed.countryId, parsed.planId);
+    if (parsed && parsed.kind === 'plan' && parsed.botoneraId && parsed.countryId) {
+      await sendTelegramPlanOptions(chatId, parsed.botoneraId, parsed.countryId);
     }
     return;
   }

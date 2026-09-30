@@ -809,9 +809,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     is_active: true,
     countries: buildTelegramCountriesFromPaymentMethods(methods),
     plans: [
-      { id: 'monthly', name: 'MENSUAL', plan_type: 'monthly', price: '', description: 'Acceso mensual.', order: 1, active: true },
-      { id: 'semester', name: 'SEMESTRAL', plan_type: 'semester', price: '', description: 'Acceso semestral.', order: 2, active: true },
-      { id: 'permanent', name: 'PERMANENTE', plan_type: 'permanent', price: '', description: 'Acceso permanente.', order: 3, active: true }
+      { id: 'monthly', name: 'MENSUAL', plan_type: 'monthly', price: '', description: 'Acceso mensual.', order: 1, active: true }
     ],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
