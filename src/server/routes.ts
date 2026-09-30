@@ -309,7 +309,6 @@ router.post('/telegram/access/verify', (req: Request, res: Response) => {
   res.json({ valid: true, user: verified.user });
 });
 
-
 // POST Generate Stars Invoice Link for Web App
 router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
   try {
@@ -371,6 +370,35 @@ export function isSpecialPlanRequest(notes: string): boolean {
   const text = (notes || '').trim();
   if (!text) return false;
   return /SUSCRIPCIÓN\s*SEMESTRAL|SEMESTRAL|SUSCRIPCIÓN\s*PERMANENTE|PERMANENTE/i.test(text);
+}
+
+/**
+ * Construye un enlace privado de Telegram a partir de un username, ID numérico
+ * o URL ya existente. Devuelve `undefined` si el valor no es utilizable.
+ */
+export function buildTelegramPrivateLink(target?: string | number | null): string | undefined {
+  if (target === undefined || target === null) return undefined;
+
+  const raw = String(target).trim();
+  if (!raw) return undefined;
+
+  // Ya viene como URL directa
+  if (raw.startsWith('https://t.me/') || raw.startsWith('tg://')) return raw;
+
+  // Quitar @ y prefijos sueltos
+  const clean = raw.replace(/^@/, '').replace(/^ID:/i, '').trim();
+
+  // Si el valor es un username de Telegram
+  if (/^[a-zA-Z0-9_]{5,32}$/.test(clean)) {
+    return `https://t.me/${clean}`;
+  }
+
+  // Si el valor es un ID numérico
+  if (/^\d+$/.test(clean)) {
+    return `tg://user?id=${clean}`;
+  }
+
+  return undefined;
 }
 
 export function resolveAutoReplyMethodId(notes: string, methods: Array<{ id: string; title: string }>): string | null {
@@ -530,11 +558,12 @@ router.post('/requests', async (req: Request, res: Response) => {
     let deliveredToAdmin = false;
     for (const adminId of adminIds) {
       if (adminId) {
-        const privateReplyUrl = safeUserId
-          ? (safeClientTelegram?.startsWith('@')
-              ? `https://t.me/${safeClientTelegram.slice(1)}`
-              : `tg://user?id=${safeUserId}`)
-          : undefined;
+        const directClientTarget = (safeClientTelegram && !safeClientTelegram.toLowerCase().startsWith('id:'))
+          ? safeClientTelegram
+          : safeUserId;
+
+        const privateReplyUrl = buildTelegramPrivateLink(directClientTarget);
+
         const firstRow = privateReplyUrl
           ? [{ text: '💬 Responder en privado', url: privateReplyUrl }]
           : [];
@@ -570,10 +599,20 @@ router.post('/requests', async (req: Request, res: Response) => {
       const publicName = getSystemSetting('model_display_name') || profile.name || 'IAM Danii';
       const brandTitle = `${publicName} • Espacio VIP (+18)`;
       const isSpecialPlan = isSpecialPlanRequest(purchaseMessage);
-      const planDetail = isSpecialPlan ? "" : ` (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs})`;
-      const adminUsername = getSystemSetting('admin_contact_username') || 'Danii_Catalogo_SCZ_bot';
-      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}*${planDetail}.\n\nSu mensaje se envío a la Administradora (@${adminUsername}) y se le responderá en breve.`;
-      await sendMessage(safeUserId, userConfirmText);
+      const planDetail = isSpecialPlan ? '' : ` (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs})`;
+      const adminUsername = String(getSystemSetting('admin_contact_username') || '').replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
+      const ownerPrivateUrl = buildTelegramPrivateLink(adminUsername);
+
+      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}*${planDetail}.\n\nSu mensaje se envió a la Administradora y se le responderá en breve.`;
+
+      await sendMessage(safeUserId, userConfirmText, {
+        parse_mode: undefined,
+        reply_markup: ownerPrivateUrl
+          ? {
+              inline_keyboard: [[{ text: '💬 Hablar con la administradora', url: ownerPrivateUrl }]]
+            }
+          : undefined
+      });
 
       if (!isSpecialPlan) {
         await scheduleAutoReply(request.id);
@@ -651,7 +690,6 @@ router.post('/admin/auth/login', (req: Request, res: Response) => {
     res.status(401).json({ valid: false, error: 'PIN o Telegram ID no coincide con las credenciales de Administradora.' });
   }
 });
-
 
 // GET All Profiles for Admin Panel
 router.get('/admin/profiles', requireAdminAuth, async (_req: Request, res: Response) => {
@@ -2170,8 +2208,6 @@ router.post('/admin/system/database-vacuum', requireAdminAuth, async (req: Reque
   }
 });
 
-
-
 // POST Migración B2 a Telegram (Una sola vez)
 router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, res: Response) => {
   try {
@@ -2257,7 +2293,6 @@ router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, r
     res.status(500).json({ error: 'Error general en migración', details: err?.message });
   }
 });
-
 
 // ==========================================
 // B2 Storage Manager Endpoints
@@ -2397,7 +2432,6 @@ router.post('/admin/b2/restore', requireAdminAuth, async (req: Request, res: Res
   }
 });
 
-
 router.delete('/admin/b2/files', requireAdminAuth, async (req: Request, res: Response) => {
   try {
     const { key } = req.body;
@@ -2415,13 +2449,11 @@ router.delete('/admin/b2/files', requireAdminAuth, async (req: Request, res: Res
 
 router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res: Response) => {
   try {
-    
       const profilesFiles = await listAllB2Files('tu-vip/profiles/');
       const qrFiles = await listAllB2Files('tu-vip/qr/');
       const botFiles = await listAllB2Files('tu-vip/bot/');
       const b2MediaFiles = [...profilesFiles, ...qrFiles, ...botFiles];
 
-    
     // Recopilar urls de BD
     const allProfiles = await getAllProfiles();
     const allPayments = await getAllPaymentMethods();
