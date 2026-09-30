@@ -5927,7 +5927,20 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               ? paymentMethods.filter(method => method.is_active && matchesCountryMethod(selectedCountry.name, method))
                               : [];
 
-                            return selectedCountry ? (
+                            if (!selectedCountry) {
+                              return (
+                                <div className="mt-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-3 text-center">
+                                  <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-bold">
+                                    Preview no disponible
+                                  </div>
+                                  <div className="mt-2 text-[9px] text-zinc-400 leading-relaxed">
+                                    No hay países activos en esta botonera todavía. Agrega al menos un país para ver los datos del flujo de pago.
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
                               <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
                                 <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300 font-bold">
                                   {selectedCountry.flag} {selectedCountry.name}
@@ -5965,7 +5978,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   )}
                                 </div>
                               </div>
-                            ) : null;
+                            );
                           })()}
                         </div>
                       </div>
