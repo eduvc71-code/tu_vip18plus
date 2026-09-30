@@ -81,6 +81,15 @@ export function getBotConfig() {
   return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl, appShortName };
 }
 
+export function getAdminContactUsername(): string {
+  const envValue = (process.env.ADMIN_CONTACT_USERNAME || '').trim();
+  const dbValue = (getSystemSetting('admin_contact_username') || '').trim();
+  const rawValue = envValue || dbValue || 'Danii_Catalogo_SCZ_bot';
+  const username = rawValue.replace(/^@/, '').trim();
+  if (!username) return 'Danii_Catalogo_SCZ_bot';
+  return username;
+}
+
 export function isAdminUser(telegramUserId: string | number): boolean {
   const { adminIds } = getBotConfig();
   if (adminIds.length === 0) {
@@ -1984,7 +1993,8 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
     return;
   }
 
-  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${(getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim()}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]];
+  const adminUsername = getAdminContactUsername();
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]];
 
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
@@ -2049,7 +2059,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
   const country = (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
   const plan = (botonera.plans || []).find((item: any) => String(item.id) === String(planId));
   const normalizedPlanType = String(plan?.plan_type || '').toLowerCase();
-  const adminUsername = (getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  const adminUsername = getAdminContactUsername();
   const adminUrl = `https://t.me/${adminUsername}`;
 
   if (normalizedPlanType === 'monthly') {
@@ -2104,11 +2114,7 @@ export async function showPaymentMethodDetail(
     return;
   }
 
-  let rawAdminUsername = getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot';
-  if (!rawAdminUsername || /ruti|flavia|iam_danii_vip_bot/i.test(rawAdminUsername)) {
-    rawAdminUsername = 'Danii_Catalogo_SCZ_bot';
-  }
-  const adminUsername = rawAdminUsername.replace(/^@/, '').trim();
+  const adminUsername = getAdminContactUsername();
   const adminContactUrl = `https://t.me/${adminUsername}`;
   const { baseUrl } = getBotConfig();
   const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
-import { getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
+import { getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
 
 const methods = [
   { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
@@ -44,6 +44,14 @@ test('public Telegram callback prefixes are allowed for all users', () => {
   assert.equal(isPublicTelegramCallbackData('vip_plan_123_bolivia_monthly'), true);
   assert.equal(isPublicTelegramCallbackData('pay_method_qr_bolivia'), true);
   assert.equal(isPublicTelegramCallbackData('admin_btn_list'), false);
+});
+
+test('payment details always resolve the configured admin contact username', () => {
+  const previous = process.env.ADMIN_CONTACT_USERNAME;
+  process.env.ADMIN_CONTACT_USERNAME = '@mi_admin_vip';
+  assert.equal(getAdminContactUsername(), 'mi_admin_vip');
+  if (previous === undefined) delete process.env.ADMIN_CONTACT_USERNAME;
+  else process.env.ADMIN_CONTACT_USERNAME = previous;
 });
 
 test('callback payloads tolerate underscores inside Telegram botonera ids', () => {
