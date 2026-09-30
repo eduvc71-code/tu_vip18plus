@@ -1977,15 +1977,18 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
 
   const country = (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
   const methods = await getRelevantPaymentMethodsForCountry(country?.name || '');
-  const rows: any[][] = methods.length > 0
-    ? methods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
-    : [[{ text: '📲 Hablar con administradora', url: `https://t.me/${(getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim()}` }]];
 
-  rows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
+  if (methods.length > 0) {
+    const preferredMethod = methods[0];
+    await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: preferredMethod.id === 'qr_bolivia' ? 450 : undefined });
+    return;
+  }
+
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${(getSystemSetting('admin_contact_username') || getBotConfig().username || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim()}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]];
 
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || 'Selección'}*\n\n` +
-    `*Métodos de pago disponibles para tu país*\n\n` +
-    `_Elige el método de pago que corresponde a tu país y continúa igual que en la mini app._`;
+    `*No hay un método de pago activo guardado para este país.*\n\n` +
+    `_Contacta a la administradora para coordinar la suscripción._`;
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows } });
 }
 
