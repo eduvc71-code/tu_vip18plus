@@ -1904,52 +1904,28 @@ export async function sendClientPrecios(chatId: string | number) {
 }
 
 export async function buildPaymentMethodsKeyboard(publicMethods?: PaymentMethod[]): Promise<any[][]> {
-  const methods = publicMethods || (await getPublicPaymentMethods());
-  const activeIds = new Set(methods.map(m => m.id));
+  const methods = (publicMethods || (await getPublicPaymentMethods()))
+    .filter((method) => method.is_active)
+    .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
 
   const rows: any[][] = [];
+  const featured = methods.filter(method => method.id === 'qr_bolivia' || method.category === 'national' || method.category === 'international');
+  const services = methods.filter(method => method.category === 'service');
 
-  // 1. Top full-width: QR Bolivia
-  if (activeIds.has('qr_bolivia')) {
-    const m = methods.find(x => x.id === 'qr_bolivia')!;
-    rows.push([{ text: m.title, callback_data: `pay_method_${m.id}` }]);
+  for (const method of featured) {
+    rows.push([{ text: method.title, callback_data: `pay_method_${method.id}` }]);
   }
 
-  // 2. 2-column grid pairs for countries
-  const pairs: [string, string][] = [
-    ['peru', 'chile'],
-    ['argentina', 'espana'],
-    ['mexico', 'paraguay'],
-    ['brasil', 'uruguay'],
-    ['colombia', 'rusia'],
-    ['ecuador', 'venezuela']
-  ];
-
-  for (const [id1, id2] of pairs) {
-    const row: any[] = [];
-    if (activeIds.has(id1)) {
-      const m1 = methods.find(x => x.id === id1)!;
-      row.push({ text: m1.title, callback_data: `pay_method_${m1.id}` });
-    }
-    if (activeIds.has(id2)) {
-      const m2 = methods.find(x => x.id === id2)!;
-      row.push({ text: m2.title, callback_data: `pay_method_${m2.id}` });
-    }
-    if (row.length > 0) rows.push(row);
+  const chunked = [] as PaymentMethod[][];
+  for (let i = 0; i < services.length; i += 2) {
+    chunked.push(services.slice(i, i + 2));
   }
 
-  // 3. Full-width payment services
-  const services = ['cripto', 'tigo_money', 'paypal', 'telegram_stars', 'western_remitly', 'zelle'];
-  for (const sId of services) {
-    if (activeIds.has(sId)) {
-      const m = methods.find(x => x.id === sId)!;
-      rows.push([{ text: m.title, callback_data: `pay_method_${m.id}` }]);
-    }
+  for (const chunk of chunked) {
+    rows.push(chunk.map(method => ({ text: method.title, callback_data: `pay_method_${method.id}` })));
   }
 
-  // 4. Back button
   rows.push([{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
-
   return rows;
 }
 
@@ -2163,7 +2139,7 @@ export async function showPaymentMethodDetail(
 
   const inlineKeyboard = [
     [
-      { text: `📲 Enviar Comprobante a @${adminUsername}`, url: adminContactUrl }
+      { text: '📲 Enviar Comprobante', url: adminContactUrl }
     ],
     [
       { text: '💳 Ver Todos los Métodos', callback_data: 'client_cmd_pagos' },

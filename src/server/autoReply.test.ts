@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
-import { getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
+import { buildPaymentMethodsKeyboard, getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
 
 const methods = [
   { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
@@ -69,4 +69,17 @@ test('legacy public Telegram payloads without botonera id still resolve the acti
   assert.deepEqual(parseTelegramBotoneraCallbackData('vip_country_bolivia'), { kind: 'country', countryId: 'bolivia' });
   assert.deepEqual(parseTelegramBotoneraCallbackData('vip_plan_menu_bolivia'), { kind: 'plan_menu', countryId: 'bolivia' });
   assert.deepEqual(parseTelegramBotoneraCallbackData('vip_plan_bolivia_monthly'), { kind: 'plan', countryId: 'bolivia', planId: 'monthly' });
+});
+
+test('payment keyboard is built from active methods and keeps real callback routing', async () => {
+  const methods = [
+    { id: 'wallet', title: 'Mi Wallet', category: 'service', image_url: null, description: 'Pago digital', price: '150', is_active: true, priority_order: 20 },
+    { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', category: 'national', image_url: 'https://example.com/qrcode.jpg', description: 'Paga por QR', price: null, is_active: true, priority_order: 10 },
+    { id: 'inactive', title: 'Método oculto', category: 'service', image_url: null, description: 'No visible', price: '999', is_active: false, priority_order: 5 }
+  ] as any[];
+
+  const keyboard = await buildPaymentMethodsKeyboard(methods);
+  assert.deepEqual(keyboard[0], [{ text: '🇧🇴 QR Bolivia', callback_data: 'pay_method_qr_bolivia' }]);
+  assert.deepEqual(keyboard[1], [{ text: 'Mi Wallet', callback_data: 'pay_method_wallet' }]);
+  assert.deepEqual(keyboard.at(-1), [{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
 });

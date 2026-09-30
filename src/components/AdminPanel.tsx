@@ -5935,10 +5935,30 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 <div className="mt-2 space-y-2">
                                   {selectedMethods.length > 0 ? selectedMethods.slice(0, 4).map((method, index) => (
                                     <div key={`${method.id}-${index}`} className="rounded-lg border border-emerald-500/20 bg-zinc-950/60 p-2">
-                                      <div className="text-[10px] font-bold text-emerald-200">{method.title}</div>
-                                      {method.description && (
-                                        <div className="mt-1 text-[9px] text-zinc-300 leading-relaxed">{method.description}</div>
-                                      )}
+                                      <div className="flex items-start gap-2">
+                                        {method.image_url ? (
+                                          <img
+                                            src={method.image_url}
+                                            alt={method.title}
+                                            className="w-12 h-12 object-cover rounded-md border border-emerald-500/20 bg-zinc-900"
+                                          />
+                                        ) : (
+                                          <div className="w-12 h-12 rounded-md border border-emerald-500/20 bg-zinc-900 flex items-center justify-center text-[10px] font-bold text-emerald-300">
+                                            QR
+                                          </div>
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="text-[10px] font-bold text-emerald-200">{method.title}</div>
+                                          {method.price && (
+                                            <div className="mt-1 text-[9px] font-black text-amber-300">
+                                              {method.price}
+                                            </div>
+                                          )}
+                                          {method.description && (
+                                            <div className="mt-1 text-[9px] text-zinc-300 leading-relaxed">{method.description}</div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
                                   )) : (
                                     <div className="text-[9px] text-zinc-300">Sin métodos activos para este país.</div>
