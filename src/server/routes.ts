@@ -2122,7 +2122,7 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
     rows.push([{ text: 'Solicitar Información a mi privado', url: `https://t.me/${botUser}` }]);
     rows.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }]);
 
-    const resolvedTitle = 'HOLI MIS AMORES..APROVECHEN LA PROMOCION, SUSCRIPCIONES ESPECIALES. ULTIMAS PLAZAS..';
+    const resolvedTitle = 'HOLI MIS AMORES HOLI 💖🔥APROVECHEN LA PROMOCION, SUSCRIPCIONES MENSUAL, ULTIMAS PLAZAS..';
     const resolvedIntro = 'Selecciona tu país para continuar con tu suscripción VIP.';
     const messageText = `${resolvedTitle}\n\n${resolvedIntro}`;
     const reply_markup = { inline_keyboard: rows };
