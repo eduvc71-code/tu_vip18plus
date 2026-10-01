@@ -730,7 +730,7 @@ export default function App() {
         }}
         adminContactUsername={adminContactUsername}
         paymentMethods={paymentMethods}
-        boliviaRateBs={requestProfile?.rate_bs || selectedProfile?.rate_bs || profiles[0]?.rate_bs || 450}
+        boliviaRateBs={requestProfile?.rate_bs ?? selectedProfile?.rate_bs ?? profiles[0]?.rate_bs}
       />
 
     </div>

@@ -22,6 +22,10 @@ test('getOfficialFeeText uses the profile rate for Bolivia', () => {
   assert.equal(getOfficialFeeText(methods[0], 450), 'Bs. 450 / mes');
 });
 
+test('getOfficialFeeText does not invent a Bolivia price when no live rate is available', () => {
+  assert.equal(getOfficialFeeText(methods[0], undefined), 'Consultar con Administradora');
+});
+
 test('getOfficialFeeText uses the configured method price for other countries', () => {
   assert.equal(getOfficialFeeText(methods[1], undefined), '120 / mes');
 });

@@ -15,7 +15,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
   onClose,
   adminContactUsername = 'Danii_Catalogo_SCZ_bot',
   paymentMethods,
-  boliviaRateBs = 450
+  boliviaRateBs
 }) => {
   const [selectedMethodId, setSelectedMethodId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -177,7 +177,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[11px] font-black shrink-0">
                       {ephemeralMethod.id === 'qr_bolivia' || ephemeralMethod.category === 'national'
-                        ? `Bs. ${boliviaRateBs || 450}`
+                        ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs}` : 'Consultar')
                         : (ephemeralMethod.price || 'VIP')}
                     </span>
                     <button
@@ -262,7 +262,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                 </span>
                 <span className="text-xs sm:text-sm font-black text-amber-400">
                   {selectedMethod.id === 'qr_bolivia' || selectedMethod.category === 'national'
-                    ? `Bs. ${boliviaRateBs || 450} / mes`
+                    ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs} / mes` : 'Consultar con Administradora')
                     : (selectedMethod.price ? `${selectedMethod.price} / mes` : 'Consultar con Administradora')}
                 </span>
               </div>
@@ -417,7 +417,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                             <div className="flex items-center gap-2">
                               <span className="text-[10px] font-black text-amber-400">
                                 {method.id === 'qr_bolivia' || method.category === 'national'
-                                  ? `Bs. ${boliviaRateBs || 450} / mes`
+                                  ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs} / mes` : 'Consultar con Administradora')
                                   : (method.price ? `${method.price} / mes` : 'Consultar con Administradora')}
                               </span>
                               <span className="text-[9px] font-semibold text-emerald-400">
@@ -457,7 +457,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                         {method.price && (
                           <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
                             {method.id === 'qr_bolivia' || method.category === 'national'
-                              ? `Bs. ${boliviaRateBs || 450}`
+                              ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs}` : 'Consultar')
                               : method.price}
                           </span>
                         )}

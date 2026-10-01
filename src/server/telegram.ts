@@ -1895,6 +1895,8 @@ export async function sendClientCanal(chatId: string | number) {
 export async function sendClientPrecios(chatId: string | number) {
   const { baseUrl } = getBotConfig();
   const btnInfo = await getBotCommandText('info', 'ℹ️ Información y Seguridad', 'ℹ️');
+  const boliviaRate = await getBoliviaOfficialRateFromServer();
+  const boliviaRateText = boliviaRate !== null ? `Bs. ${boliviaRate} / mes` : 'Consultar con Administradora';
 
   const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP* 💰\n\n` +
     `✨ *¿Qué incluye la Suscripción VIP?*\n` +
@@ -1902,7 +1904,7 @@ export async function sendClientPrecios(chatId: string | number) {
     `• Contenido sugestivo y exclusivo sin censura.\n` +
     `• Novedades y actualizaciones continuas.\n` +
     `• Trato confidencial y atención directa 1 a 1.\n\n` +
-    `💵 *Tarifa Oficial:* Bs. 450 / mes (o pack promocional)\n\n` +
+    `💵 *Tarifa Oficial:* ${boliviaRateText}\n\n` +
     `🔒 *Forma de Pago Segura:* La Administradora entrega el *QR oficial de pago* de forma 100% privada. Tras validar tu comprobante, recibirás el link privado y confidencial para unirte al Grupo/Canal VIP.\n\n` +
     `_Explora el contenido en la Mini App y pulsa en Ver lo Exclusivo._`;
 
@@ -2020,7 +2022,8 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
 
   if (methods.length > 0) {
     const preferredMethod = methods[0];
-    await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: preferredMethod.id === 'qr_bolivia' ? 450 : undefined });
+    const boliviaRate = preferredMethod.id === 'qr_bolivia' ? await getBoliviaOfficialRateFromServer() : null;
+    await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: boliviaRate ?? undefined });
     return;
   }
 
@@ -2123,12 +2126,27 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
 }
 
+function parsePositiveCurrencyNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const numericValue = typeof value === 'string' ? Number(value.replace(/[^0-9.]/g, '')) : Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+export async function getBoliviaOfficialRateFromServer(): Promise<number | null> {
+  const profiles = await getAllProfiles();
+  for (const profile of profiles) {
+    const rate = parsePositiveCurrencyNumber(profile?.rate_bs);
+    if (rate !== null) return rate;
+  }
+  return null;
+}
+
 export function getOfficialFeeText(method: { id: string; title: string; price?: string | null; category?: string }, profileRateBs?: number | string): string {
   const isBoliviaMethod = method.id === 'qr_bolivia' || /bolivia/i.test(method.title) || method.category === 'national';
 
   if (isBoliviaMethod) {
-    const rate = Number(profileRateBs ?? 0);
-    return Number.isFinite(rate) && rate > 0 ? `Bs. ${rate} / mes` : 'Bs. 450 / mes';
+    const rate = parsePositiveCurrencyNumber(profileRateBs) ?? parsePositiveCurrencyNumber(method.price);
+    return rate !== null ? `Bs. ${rate} / mes` : 'Consultar con Administradora';
   }
 
   return method.price ? `${method.price} / mes` : 'Consultar con Administradora';
