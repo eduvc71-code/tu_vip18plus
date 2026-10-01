@@ -1061,6 +1061,25 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
+  // Deep Link desde la botonera publicada en el CANAL: /start vipc_<idPais>
+  if (text.startsWith('/start vipc_')) {
+    if (!isPrivateChat(message.chat)) {
+      await sendMessage(chatId, '🔒 Abre el chat privado para ver los métodos de pago.');
+      return;
+    }
+    if (fromId) {
+      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
+    }
+    const vipCountryId = text.replace('/start vipc_', '').trim();
+    const vipBotonera = await getActiveTelegramBotoneraFlow();
+    if (!vipBotonera || !vipCountryId) {
+      await sendClientPagos(chatId);
+      return;
+    }
+    await sendTelegramPlanOptions(chatId, vipBotonera.id, vipCountryId);
+    return;
+  }
+
   // Deep Link Pagos / Métodos de Pago
   if (text.startsWith('/start pagos') || text.startsWith('/start métodos')) {
     if (!isPrivateChat(message.chat)) {
@@ -2275,6 +2294,30 @@ async function handleCallbackQuery(cb: any) {
     messageChatType: cb.message?.chat?.type,
     isAdmin: isAdminUser(fromId)
   });
+
+  // 0. Botones públicos pulsados FUERA del chat privado (p. ej. posts viejos del canal con callback_data).
+  // Telegram no permite mostrar datos de pago ni botones web_app dentro de un canal, así que se abre
+  // el bot en privado con un deep link (answerCallbackQuery + url acepta enlaces t.me/<bot>?start=...).
+  const callbackChatType = cb.message?.chat?.type;
+  if (callbackChatType && callbackChatType !== 'private' && isPublicTelegramCallbackData(data)) {
+    const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
+    const parsedPublic = parseTelegramBotoneraCallbackData(data);
+    const safeCountry = String(parsedPublic?.countryId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
+    const startParam = safeCountry ? `vipc_${safeCountry}` : 'pagos';
+    const deepLink = `https://t.me/${botUser}?start=${startParam}`;
+    const redirectRes = botUser
+      ? await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, url: deepLink })
+      : { ok: false, description: 'bot username vacío' };
+    if (!redirectRes?.ok) {
+      console.error('[TelegramCallback] No se pudo redirigir al chat privado:', redirectRes?.description);
+      await callTelegramApi('answerCallbackQuery', {
+        callback_query_id: cb.id,
+        text: `Abre @${botUser || 'el bot'} y pulsa Start para ver los métodos de pago.`,
+        show_alert: true
+      });
+    }
+    return;
+  }
 
   // 1. Client Callbacks (accessible to everyone)
   if (data.startsWith('client_')) {

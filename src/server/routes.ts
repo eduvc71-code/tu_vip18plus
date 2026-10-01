@@ -2092,30 +2092,56 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
       return;
     }
 
-    const { channelId } = getBotConfig();
+    const { channelId, username } = getBotConfig();
     if (!channelId) {
       res.status(400).json({ error: 'No hay canal Telegram configurado para publicar la botonera.' });
       return;
     }
+    const botUser = String(username || '').replace(/^@/, '').trim();
+    if (!botUser) {
+      res.status(400).json({ error: 'No hay username del bot configurado (BOT_USERNAME).' });
+      return;
+    }
+
+    // En un CANAL los botones deben ser de tipo url: abren el bot en privado (t.me/<bot>?start=...)
+    // y allí se muestran los datos de pago. Un callback_data en un canal no puede responder en privado.
+    const startUrl = (param: string) => `https://t.me/${botUser}?start=${param}`;
+    const safeId = (value: any) => String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
 
     const visibleCountries = (botonera.countries || []).filter(item => item.active);
-    const visiblePlans = (botonera.plans || []).filter(item => item.active);
     const rows: any[][] = [];
     for (let i = 0; i < visibleCountries.length; i += 2) {
       const row: any[] = [];
       for (const country of visibleCountries.slice(i, i + 2)) {
-        row.push({ text: `${country.flag} ${country.name}`, callback_data: `vip_country_${botonera.id}__${country.id}` });
+        row.push({ text: `${country.flag} ${country.name}`, url: startUrl(`vipc_${safeId(country.id)}`) });
       }
       rows.push(row);
     }
-    if (visiblePlans.length > 0) {
-      rows.push([{ text: `🚀 ${botonera.title}`, callback_data: `vip_country_${botonera.id}__${visibleCountries[0]?.id || 'country'}` }]);
-    }
+    rows.push([{ text: '💳 Ver todos los métodos de pago', url: startUrl('pagos') }]);
 
     const messageText = `*${botonera.title}*\n\n${botonera.intro}\n\n_${botonera.country_label}_`;
-    const result = await sendMessage(channelId, messageText, {
-      reply_markup: { inline_keyboard: rows }
-    });
+    const reply_markup = { inline_keyboard: rows };
+
+    // Si ya hay un mensaje publicado se EDITA (evita duplicados y arregla el post viejo); si falla, se envía uno nuevo.
+    let result: any = null;
+    if (botonera.published_message_id) {
+      const edited = await callTelegramApi('editMessageText', {
+        chat_id: channelId,
+        message_id: botonera.published_message_id,
+        text: messageText,
+        parse_mode: 'Markdown',
+        reply_markup
+      });
+      if (edited?.ok || /not modified/i.test(String(edited?.description || ''))) {
+        result = { ok: true, result: { message_id: botonera.published_message_id } };
+      }
+    }
+    if (!result) {
+      result = await sendMessage(channelId, messageText, { reply_markup });
+      if (!result?.ok && /parse entities/i.test(String(result?.description || ''))) {
+        result = await sendMessage(channelId, messageText, { reply_markup, parse_mode: undefined });
+      }
+    }
 
     if (!result || !result.ok) {
       res.status(400).json({ error: result?.description || 'No se pudo publicar la botonera en Telegram.' });
