@@ -2092,7 +2092,7 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
       return;
     }
 
-    const { channelId, username } = getBotConfig();
+    const { channelId, username, appShortName } = getBotConfig();
     if (!channelId) {
       res.status(400).json({ error: 'No hay canal Telegram configurado para publicar la botonera.' });
       return;
@@ -2106,6 +2106,7 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
     // En un CANAL los botones deben ser de tipo url: abren el bot en privado (t.me/<bot>?start=...)
     // y allí se muestran los datos de pago. Un callback_data en un canal no puede responder en privado.
     const startUrl = (param: string) => `https://t.me/${botUser}?start=${param}`;
+    const directMiniAppUrl = `https://t.me/${botUser}/${appShortName || 'canalVipFreeIamDanii'}`;
     const safeId = (value: any) => String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
 
     const visibleCountries = (botonera.countries || []).filter(item => item.active);
@@ -2118,8 +2119,12 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
       rows.push(row);
     }
     rows.push([{ text: '💳 Ver todos los métodos de pago', url: startUrl('pagos') }]);
+    rows.push([{ text: 'Solicitar Información a mi privado', url: `https://t.me/${botUser}` }]);
+    rows.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }]);
 
-    const messageText = `*${botonera.title}*\n\n${botonera.intro}\n\n_${botonera.country_label}_`;
+    const resolvedTitle = 'HOLI MIS AMORES..APROVECHEN LA PROMOCION, SUSCRIPCIONES ESPECIALES. ULTIMAS PLAZAS..';
+    const resolvedIntro = 'Selecciona tu país para continuar con tu suscripción VIP.';
+    const messageText = `${resolvedTitle}\n\n${resolvedIntro}`;
     const reply_markup = { inline_keyboard: rows };
 
     // Si ya hay un mensaje publicado se EDITA (evita duplicados y arregla el post viejo); si falla, se envía uno nuevo.
