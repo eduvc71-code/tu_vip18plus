@@ -70,43 +70,47 @@ export function markdownToMarkdownV2(text: string): string {
 // Edición en el sitio: los menús de la botonera nativa se actualizan sobre el mismo mensaje
 // (como la Mini App) en lugar de acumular mensajes nuevos en el chat del cliente.
 async function editMessageContent(chatId: string | number, messageId: number, text: string, inlineKeyboard?: any[][], mediaType?: 'photo' | 'video', mediaUrlValue?: string): Promise<boolean> {
-  const useCaption = Boolean(mediaType && mediaUrlValue);
-  const method = useCaption
-    ? 'editMessageCaption'
+  const markup = inlineKeyboard ? { inline_keyboard: inlineKeyboard } : undefined;
+  const hasMediaTarget = Boolean(mediaType && mediaUrlValue);
+  // Orden de intentos: primero el método que corresponde al contenido nuevo; si el mensaje
+  // anterior tenía media, editMessageText falla y hay que editar el caption. Si lo que falla
+  // es el parseo de MarkdownV2, se reintenta en texto plano para que un detalle de formato
+  // nunca rompa la navegación del cliente.
+  const methods = hasMediaTarget
+    ? ['editMessageCaption']
     : (mediaType || mediaUrlValue)
-      ? 'editMessageMedia'
-      : 'editMessageText';
-  const payload: any = { chat_id: chatId, message_id: messageId };
-  if (useCaption) {
-    payload.caption = text;
-    payload.parse_mode = 'MarkdownV2';
-  } else if (method === 'editMessageMedia') {
-    payload.media = {
-      type: mediaType === 'video' ? 'video' : 'photo',
-      media: mediaUrlValue,
-      caption: text,
-      parse_mode: 'MarkdownV2'
-    };
-  } else {
-    payload.text = text;
-    payload.parse_mode = 'MarkdownV2';
+      ? ['editMessageMedia']
+      : ['editMessageText', 'editMessageCaption'];
+
+  const buildPayload = (method: string, parseMode?: string) => {
+    const payload: any = { chat_id: chatId, message_id: messageId };
+    if (parseMode) payload.parse_mode = parseMode;
+    if (markup) payload.reply_markup = markup;
+    if (method === 'editMessageCaption') {
+      payload.caption = text;
+    } else if (method === 'editMessageMedia') {
+      payload.media = {
+        type: mediaType === 'video' ? 'video' : 'photo',
+        media: mediaUrlValue,
+        caption: text,
+        ...(parseMode ? { parse_mode: parseMode } : {})
+      };
+    } else {
+      payload.text = text;
+    }
+    return payload;
+  };
+
+  let lastError = '';
+  for (const method of methods) {
+    for (const parseMode of ['MarkdownV2', undefined] as const) {
+      const res = await callTelegramApi(method, buildPayload(method, parseMode));
+      if (res?.ok) return true;
+      lastError = res?.description || 'sin respuesta de Telegram';
+      if (!/parse|entities/i.test(lastError)) break;
+    }
   }
-  if (inlineKeyboard) payload.reply_markup = { inline_keyboard: inlineKeyboard };
-  const res = await callTelegramApi(method, payload);
-  if (res?.ok) return true;
-  // El mensaje anterior podía tener media: editMessageText falla ahí y la única
-  // forma de reemplazar el contenido es editando el caption.
-  if (method === 'editMessageText') {
-    const retry = await callTelegramApi('editMessageCaption', {
-      chat_id: chatId,
-      message_id: messageId,
-      caption: text,
-      parse_mode: 'MarkdownV2',
-      ...(inlineKeyboard ? { reply_markup: { inline_keyboard: inlineKeyboard } } : {})
-    });
-    if (retry?.ok) return true;
-  }
-  console.warn(`[EditNav] No se pudo editar mensaje ${messageId}: ${res?.description}`);
+  console.warn(`[EditNav] No se pudo editar mensaje ${messageId}: ${lastError}`);
   return false;
 }
 
@@ -179,7 +183,7 @@ async function renderNavProfileView(chatId: string | number, messageId: number, 
   const profile = await getProfileById(profileId, true);
   if (!profile) {
     return await editMessageContent(chatId, messageId,
-      '⚠️ Este contenido ya no está disponible.\nPulsa el botón para volver al catálogo.',
+      '⚠️ Este contenido ya no está disponible\\.\nPulsa el botón para volver al catálogo\\.',
       [[{ text: '🔙 Volver al Catálogo', callback_data: listCallback }]]);
   }
   const { rows, safePage } = buildGalleryPageRows(profile, page);
@@ -430,11 +434,28 @@ function buildAcqCountryKeyboard(plan: string, profileId: string): any[][] {
   return rows;
 }
 
+// Texto del menú de planes (MarkdownV2 estricto: Telegram rechaza el mensaje entero si
+// queda un carácter reservado sin escapar, y el cliente ve "contenido no disponible").
+export function buildNavPlansMenuText(profileName: string, rateBs: number | string, hasStars: boolean): string {
+  return [
+    `💳 *MÉTODOS DE PAGO*`,
+    '',
+    `Elige tu *Plan VIP* para *${escapeMarkdownV2(profileName)}*:`,
+    '',
+    `💵 Tarifa de referencia: *Bs\\. ${escapeMarkdownV2(String(rateBs || 0))}* / mes`,
+    ...(hasStars ? ['', `⭐ También puedes desbloquear fotos sueltas pagando con Telegram Stars desde su ficha\\.`] : []),
+    '',
+    '_La atención y los pagos continúan 100\\% privados por Telegram_',
+    '',
+    '⚡ _¿Prefieres la experiencia visual completa? Toca_ *Ver lo Exclusivo* _abajo\\._'
+  ].join('\n');
+}
+
 async function renderNavAcquireMenu(chatId: string | number, messageId: number, profileId: string): Promise<boolean> {
   const profile = await getProfileById(profileId, true);
   if (!profile) {
     return await editMessageContent(chatId, messageId,
-      '⚠️ Este contenido ya no está disponible.\\nPulsa el botón para volver al catálogo.',
+      '⚠️ Este contenido ya no está disponible\\.\nPulsa el botón para volver al catálogo\\.',
       [[{ text: '🔙 Volver al Catálogo', callback_data: 'nav_catalog' }]]);
   }
   const methods = await getPublicPaymentMethods();
@@ -444,18 +465,7 @@ async function renderNavAcquireMenu(chatId: string | number, messageId: number, 
   const { baseUrl: navBaseUrl } = getBotConfig();
   const exclusiveButton = { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: `${navBaseUrl}/#profile-${profileId}` } };
 
-  const text = [
-    `💳 *MÉTODOS DE PAGO*`,
-    '',
-    `Elige tu *Plan VIP* para *${escapeMarkdownV2(profile.name)}*:`,
-    '',
-    `💵 Tarifa de referencia: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}* / mes`,
-    ...(hasStars ? ['', `⭐ También puedes desbloquear fotos sueltas pagando con Telegram Stars desde su ficha.`] : []),
-    '',
-    '_La atención y los pagos continúan 100% privados por Telegram_',
-    '',
-    '⚡ _¿Prefieres la experiencia visual completa? Toca_ *Ver lo Exclusivo* _abajo._'
-  ].join('\n');
+  const text = buildNavPlansMenuText(profile.name, profile.rate_bs, hasStars);
   const keyboard = [
     [{ text: '🧸 SUSCRIPCIÓN MENSUAL', callback_data: `nav_acqp_mensual__${profileId}` }],
     [{ text: '💎 SUSCRIPCIÓN 6 MESES', callback_data: `nav_acqp_semestral__${profileId}` }],
