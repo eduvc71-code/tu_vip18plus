@@ -72,7 +72,7 @@ import {
   getTelegramFilePath,
   uploadBufferToTelegram,
   showPaymentMethodDetail,
-  callTelegramApi, buildChannelPostMarkup, isPublicTelegramCallbackData } from './telegram.js';
+  callTelegramApi, buildChannelPostMarkup, formatTelegramCaptionForMarkdown, isPublicTelegramCallbackData } from './telegram.js';
 
 export const router = express.Router();
 
@@ -1285,15 +1285,16 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];
     for (const media of mediaToPublish) {
       const caption = mediaDescriptions[media.url] || comment;
+      const safeCaption = formatTelegramCaptionForMarkdown(caption);
       const method = media.isVideo ? 'sendVideo' : 'sendPhoto';
       const field = media.isVideo ? 'video' : 'photo';
       const mediaTarget = media.fileId || media.url;
       const sendResult = await callTelegramApi(method, {
         chat_id: config.channelId,
         [field]: mediaTarget,
-        caption,
+        caption: safeCaption,
         has_spoiler: true,
-        parse_mode: 'Markdown',
+        parse_mode: 'MarkdownV2',
         reply_markup: replyMarkup
       });
       if (sendResult.ok && sendResult.result?.message_id) {
@@ -1534,6 +1535,7 @@ router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req
     }
 
     const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
+    const safeCaption = formatTelegramCaptionForMarkdown(captionText);
 
     res.json({ success: true, message: 'Compartido exitosamente en el Canal VIP.' });
 
@@ -1549,9 +1551,9 @@ router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req
         await callTelegramApi(method, {
           chat_id: channelId,
           [field]: mediaTarget,
-          caption: captionText,
+          caption: safeCaption,
           has_spoiler: true,
-          parse_mode: 'Markdown',
+          parse_mode: 'MarkdownV2',
           reply_markup: replyMarkup
         });
         console.log("Compartido en Canal Híbrido finalizado con éxito.");

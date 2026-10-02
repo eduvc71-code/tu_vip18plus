@@ -50,6 +50,12 @@ export function escapeMarkdownV2(text: string): string {
 
 // Convierte Markdown clásico (*negrita*, `código`) a MarkdownV2 escapando el resto del texto.
 // Útil para reutilizar plantillas existentes en flujos editables sin perder formato.
+export function formatTelegramCaptionForMarkdown(text: string): string {
+  const value = String(text ?? '');
+  if (!value.trim()) return '';
+  return markdownToMarkdownV2(value);
+}
+
 export function markdownToMarkdownV2(text: string): string {
   const segments = String(text ?? '').split(/(\*[^*\n]+\*|`[^`\n]+`)/g).filter(Boolean);
   return segments
@@ -1371,13 +1377,15 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
 }
 
 export async function sendPhotoToUser(chatId: string | number, photoUrl: string, caption?: string) {
+  const safeCaption = formatTelegramCaptionForMarkdown(caption || '');
   return await callTelegramApi('sendPhoto', {
     chat_id: chatId,
     photo: photoUrl,
-    caption: caption || '',
-    parse_mode: 'Markdown'
+    caption: safeCaption,
+    parse_mode: safeCaption ? 'MarkdownV2' : undefined
   });
 }
+
 
 // Generate Admin Web Magic Link
 export function generateAdminMagicToken(telegramUserId: string | number): string {
@@ -1453,9 +1461,10 @@ export async function uploadBufferToTelegram(
   const formData = new FormData();
   formData.append('chat_id', String(targetChatId));
   formData.append('disable_notification', 'true');
-  if (caption) {
-      formData.append('caption', caption);
-      formData.append('parse_mode', 'Markdown');
+  const safeCaption = caption ? formatTelegramCaptionForMarkdown(caption) : '';
+  if (safeCaption) {
+      formData.append('caption', safeCaption);
+      formData.append('parse_mode', 'MarkdownV2');
     }
     
     // Si el destino es el canal público (fallback) y no es el chat privado del admin, SIEMPRE blindar con spoiler
@@ -2972,11 +2981,12 @@ export async function showPaymentMethodDetail(
     const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
     const apiMethod = isVideo ? 'sendVideo' : 'sendPhoto';
     const payloadKey = isVideo ? 'video' : 'photo';
+    const safeCaption = formatTelegramCaptionForMarkdown(caption);
     const res = await callTelegramApi(apiMethod, {
       chat_id: chatId,
       [payloadKey]: method.image_url,
-      caption: caption,
-      parse_mode: 'Markdown',
+      caption: safeCaption,
+      parse_mode: 'MarkdownV2',
       reply_markup: { inline_keyboard: inlineKeyboard }
     });
     if (res && res.ok) return res;
