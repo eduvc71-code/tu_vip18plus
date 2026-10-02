@@ -5,9 +5,9 @@ import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMe
 import { buildPaymentMethodsKeyboard, formatTelegramCaptionForMarkdown, getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
 
 const methods = [
-  { id: 'qr_bolivia', title: 'ðŸ‡§ðŸ‡´ QR Bolivia', price: null },
-  { id: 'peru', title: 'ðŸ‡µðŸ‡ª PerÃº', price: '120' },
-  { id: 'argentina', title: 'ðŸ‡¦ðŸ‡· Argentina', price: '80' },
+  { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
+  { id: 'peru', title: '🇵🇪 Perú', price: '120' },
+  { id: 'argentina', title: '🇦🇷 Argentina', price: '80' },
 ];
 
 test('resolveAutoReplyMethodId matches Bolivia from payment method name', () => {
@@ -15,7 +15,7 @@ test('resolveAutoReplyMethodId matches Bolivia from payment method name', () => 
 });
 
 test('resolveAutoReplyMethodId matches non-Bolivia country from payment method title', () => {
-  assert.equal(resolveAutoReplyMethodId('Pago desde PerÃº', methods), 'peru');
+  assert.equal(resolveAutoReplyMethodId('Pago desde Perú', methods), 'peru');
 });
 
 test('getOfficialFeeText uses the profile rate for Bolivia', () => {
@@ -31,15 +31,15 @@ test('getOfficialFeeText uses the configured method price for other countries', 
 });
 
 test('special plans are excluded from the auto-reply payment flow', () => {
-  assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÃ“N SEMESTRAL. Soy de Bolivia.'), true);
-  assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÃ“N PERMANENTE. Soy de PerÃº.'), true);
-  assert.equal(isSpecialPlanRequest('Quiero pagar desde PerÃº'), false);
+  assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÓN SEMESTRAL. Soy de Bolivia.'), true);
+  assert.equal(isSpecialPlanRequest('Hola, estoy interesado en la SUSCRIPCIÓN PERMANENTE. Soy de Perú.'), true);
+  assert.equal(isSpecialPlanRequest('Quiero pagar desde Perú'), false);
 });
 
 test('extractCountryFromRequestText keeps the country in the client message', () => {
-  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÃ“N SEMESTRAL. Soy de Bolivia. Solicito informaciÃ³n VIP.'), 'Bolivia');
-  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÃ“N PERMANENTE. Soy de PerÃº.'), 'PerÃº');
-  assert.equal(extractCountryFromRequestText('Requiero informaciÃ³n VIP.'), 'No especificado');
+  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN SEMESTRAL. Soy de Bolivia. Solicito información VIP.'), 'Bolivia');
+  assert.equal(extractCountryFromRequestText('Hola, estoy interesado en la SUSCRIPCIÓN PERMANENTE. Soy de Perú.'), 'Perú');
+  assert.equal(extractCountryFromRequestText('Requiero información VIP.'), 'No especificado');
 });
 
 test('public Telegram callback prefixes are allowed for all users', () => {
@@ -52,7 +52,7 @@ test('public Telegram callback prefixes are allowed for all users', () => {
 
 test('formatTelegramCaptionForMarkdown escapes user text before Telegram publishes it', () => {
   assert.equal(formatTelegramCaptionForMarkdown('Hola _mundo_ [VIP] - 50%'), 'Hola \\_mundo\\_ \\[VIP\\] \\- 50%');
-  assert.equal(formatTelegramCaptionForMarkdown('Con *fortaleza* y `cÃ³digo`'), 'Con *fortaleza* y cÃ³digo');
+  assert.equal(formatTelegramCaptionForMarkdown('Con *fortaleza* y `código`'), 'Con *fortaleza* y `código`');
 });
 
 test('payment details always resolve the configured admin contact username', () => {
@@ -83,13 +83,12 @@ test('legacy public Telegram payloads without botonera id still resolve the acti
 test('payment keyboard is built from active methods and keeps real callback routing', async () => {
   const methods = [
     { id: 'wallet', title: 'Mi Wallet', category: 'service', image_url: null, description: 'Pago digital', price: '150', is_active: true, priority_order: 20 },
-    { id: 'qr_bolivia', title: 'ðŸ‡§ðŸ‡´ QR Bolivia', category: 'national', image_url: 'https://example.com/qrcode.jpg', description: 'Paga por QR', price: null, is_active: true, priority_order: 10 },
-    { id: 'inactive', title: 'MÃ©todo oculto', category: 'service', image_url: null, description: 'No visible', price: '999', is_active: false, priority_order: 5 }
+    { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', category: 'national', image_url: 'https://example.com/qrcode.jpg', description: 'Paga por QR', price: null, is_active: true, priority_order: 10 },
+    { id: 'inactive', title: 'Método oculto', category: 'service', image_url: null, description: 'No visible', price: '999', is_active: false, priority_order: 5 }
   ] as any[];
 
   const keyboard = await buildPaymentMethodsKeyboard(methods);
-  assert.deepEqual(keyboard[0], [{ text: 'ðŸ‡§ðŸ‡´ QR Bolivia', callback_data: 'pay_method_qr_bolivia' }]);
+  assert.deepEqual(keyboard[0], [{ text: '🇧🇴 QR Bolivia', callback_data: 'pay_method_qr_bolivia' }]);
   assert.deepEqual(keyboard[1], [{ text: 'Mi Wallet', callback_data: 'pay_method_wallet' }]);
-  assert.deepEqual(keyboard.at(-1), [{ text: 'ðŸ”™ Volver al MenÃº', callback_data: 'client_cmd_menu' }]);
+  assert.deepEqual(keyboard.at(-1), [{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
 });
-

@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+﻿import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';
@@ -195,7 +195,7 @@ async function renderNavProfileList(chatId: string | number, messageId: number, 
   const profiles = await getPublicProfiles();
   const totalPages = Math.max(1, Math.ceil(profiles.length / pageSize));
   const safePage = Math.min(Math.max(page, 1), totalPages);
-  const first = profiles[(safePage - 1) * pageSize]?.[0];
+  const first = profiles[(safePage - 1) * pageSize];
   const last = profiles[Math.min(safePage * pageSize, profiles.length) - 1];
   const baseLines = [
     `${title}`,
@@ -295,7 +295,7 @@ function navFilterSummary(f: NavFilterState): string {
 
 function applyNavFilters(profiles: Profile[], f: NavFilterState): Profile[] {
   let list = [...profiles];
-  if (f.zone) list = list.filter(p => (p.zone || '').toLowerCase() === f.zone.toLowerCase());
+  if (f.zone) list = list.filter(p => (p.zone || '').toLowerCase() === (f.zone || '').toLowerCase());
   if (f.q) {
     const q = f.q.toLowerCase();
     list = list.filter(p =>
@@ -1341,13 +1341,18 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
   let customButtonRows: any[] = [];
   try {
     const customButtons = await getPublicCustomButtons('channel');
-    customButtonRows = customButtons.map(btn => [{ text: btn.label, url: btn.url }]);
+    // Telegram rechaza botones sin URL válida ("Text buttons are not allowed") y hace
+    // caer el post completo: solo se renderizan custom buttons con enlace real. Los de
+    // tipo subscription sin URL siguen funcionando únicamente en la Mini App.
+    customButtonRows = customButtons
+      .filter(btn => /^(https?:\/\/|tg:\/\/)/i.test(String(btn.url || '').trim()))
+      .map(btn => [{ text: btn.label, url: String(btn.url).trim() }]);
   } catch (err) {
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
-  let mode = String(getSystemSetting('post_button_mode') || 'miniapp').toLowerCase();
-  if (!['miniapp', 'nativo', 'ambos'].includes(mode)) mode = 'miniapp';
+  let mode = String(getSystemSetting('post_button_mode') || 'ambos').toLowerCase();
+  if (!['miniapp', 'nativo', 'ambos'].includes(mode)) mode = 'ambos';
 
   // Telegram-native reactions are configured in the channel settings.
   const keyboard: any[][] = [];
@@ -1355,14 +1360,11 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
     keyboard.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }]);
   }
   if ((mode === 'nativo' || mode === 'ambos') && cleanBotUser) {
-    // Deep links nativos: abren el bot en privado y ejecutan el paso exacto del flujo nav_*.
+    // Botonera nativa del canal: SOLO Métodos de Pago. El deep link abre el bot en
+    // privado (nav_pay_<perfil>) donde el cliente ve métodos, envía comprobante y la
+    // coordinación continúa manual entre admin y cliente.
     keyboard.push([
-      { text: '🗂 Catálogo', url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent('nav_catalog')}` },
-      { text: `💃 Ficha de ${profile.name}`, url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(`nav_prof_${profile.id}`)}` }
-    ]);
-    keyboard.push([
-      { text: '💳 Métodos de Pago', url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(`nav_pay_${profile.id}`)}` },
-      { text: '🆕 Novedades', url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent('nav_new')}` }
+      { text: '💳 Métodos de Pago', url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(`nav_pay_${profile.id}`)}` }
     ]);
   }
   if (keyboard.length === 0) {
@@ -3275,14 +3277,14 @@ async function handleCallbackQuery(cb: any) {
         await addAuditLog('CONFIG', userIdStr, `Modo de botones en posts del canal → ${labels[chosen]}`);
       }
     }
-    const current = String(getSystemSetting('post_button_mode') || 'miniapp');
+    const current = String(getSystemSetting('post_button_mode') || 'ambos');
     const keyboard = modes.map(m => [{ text: `${current === m ? '✅ ' : ''}${labels[m]}`, callback_data: `admin_postmode_${m}` }]);
     keyboard.push([{ text: '🔙 Volver al Menú', callback_data: 'admin_btn_help' }]);
     await sendMessage(chatId,
       '🎛 *MODO DE BOTONES EN POSTS DEL CANAL*\\n\\n' +
       'Define qué botones se generan al publicar contenido:\\n' +
       '• *Solo Mini App:* botón "Ver lo Exclusivo" (comportamiento clásico).\\n' +
-      '• *Solo Nativa:* deep links que abren el bot en privado con el flujo nav_* (Catálogo/Ficha/Pagos/Novedades), sin escribir en BD.\\n' +
+      '• *Solo Nativa:* deep link que abre el bot en privado con los Métodos de Pago (nav_pay), sin escribir en BD.\\n' +
       '• *Ambos:* Mini App + botonera nativa en cada post.\\n\\n' +
       `_Afecta a nuevas publicaciones y ediciones._`,
       { reply_markup: { inline_keyboard: keyboard } });
@@ -3791,3 +3793,4 @@ export async function createStarsInvoiceLink(title: string, description: string,
   }
   return null;
 }
+

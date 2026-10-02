@@ -1278,6 +1278,8 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
           }
           return null;
         }
+        // Telegram tumba el post completo si llega un botón sin url ni callback_data.
+        if (!button || (!button.url && !button.callback_data)) return null;
         return button;
       }).filter(Boolean));
       replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.filter((row: any[]) => row.length > 0);
