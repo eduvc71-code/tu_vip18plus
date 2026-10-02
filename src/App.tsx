@@ -137,11 +137,6 @@ export default function App() {
           try { tgWebApp.setBackgroundColor('#09090b'); } catch {}
         }
 
-        // Desactivar deslizamiento vertical accidental que cierra la Mini App
-        if (typeof tgWebApp.disableVerticalSwipes === 'function') {
-          try { tgWebApp.disableVerticalSwipes(); } catch {}
-        }
-
         // Forzar primer plano, pantalla única y grande continua
         if (typeof tgWebApp.onEvent === 'function') {
           try {

@@ -467,9 +467,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (tg) {
         tg.ready();
         if (!tg.isExpanded) tg.expand();
-        if (typeof tg.disableVerticalSwipes === 'function') {
-          tg.disableVerticalSwipes();
-        }
         if (typeof tg.setHeaderColor === 'function') {
           tg.setHeaderColor('#09090b');
         }
