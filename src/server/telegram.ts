@@ -122,7 +122,7 @@ async function sendNavPostView(chatId: string | number, profileId: string): Prom
   const keyboard = {
     inline_keyboard: [
       [{ text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: `${baseUrl}/#profile-${profile.id}` } }],
-      [{ text: '💳 Métodos de Pago', callback_data: `nav_pay_${profile.id}` }]
+      [{ text: '💎 Suscripción VIP', callback_data: `nav_pay_${profile.id}` }]
     ]
   };
   const escapedCaption = formatTelegramCaptionForMarkdown(caption);
