@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildNavPlansMenuText, isPublicTelegramCallbackData } from './telegram.ts';
+import { buildNavPlansMenuText, isPublicTelegramCallbackData, parseNavAcqFlowData } from './telegram.ts';
 
 // Telegram rechaza el mensaje completo si queda un carácter reservado de MarkdownV2 sin
 // escapar (incluso dentro de cursivas/negritas); el cliente entonces ve el fallback
@@ -53,4 +53,13 @@ test('the plans menu text is valid MarkdownV2 for any profile name', () => {
   assertValidMarkdownV2(text);
   assert.ok(text.includes('*Bs\\. 450*'));
   assertValidMarkdownV2(buildNavPlansMenuText('Ana', 0, false));
+});
+
+test('country/confirm callbacks keep working with underscored profile ids', () => {
+  const profileId = 'prof_1789716070134';
+  for (const step of ['acqs', 'acqc', 'acqok'] as const) {
+    const parsed = parseNavAcqFlowData(`nav_${step}_semestral__${profileId}__${encodeURIComponent('Estados Unidos')}`);
+    assert.deepEqual(parsed, { step, plan: 'semestral', profileId, country: 'Estados Unidos' });
+  }
+  assert.equal(parseNavAcqFlowData('nav_acqp_semestral__prof_1'), null);
 });
