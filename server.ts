@@ -1,0 +1,128 @@
+import dotenv from 'dotenv';
+dotenv.config();
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer } from 'vite';
+import { router as apiRouter, startAutoReplyWorker } from './src/server/routes.js';
+import { getDb } from './src/server/db.js';
+import { updateBotMenuButton, registerBotWebhook, getBotConfig } from './src/server/telegram.js';
+
+async function startServer() {
+  // Ensure DB initialized
+  await getDb();
+
+  const app = express();
+  const PORT = Number(process.env.PORT) || 3001;
+  const HOST = process.env.HOST || '0.0.0.0';
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.PROD === 'true' || process.env.npm_lifecycle_event === 'start';
+
+  // Middlewares
+  app.use(cors());
+  app.use(express.json({ limit: '60mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '60mb' }));
+
+  // Ensure data/uploads exists (important for persistent volumes like Fly.io where public/uploads is a symlink to data/uploads)
+  const dataUploadsPath = path.join(process.cwd(), 'data', 'uploads');
+  if (!fs.existsSync(dataUploadsPath)) {
+    fs.mkdirSync(dataUploadsPath, { recursive: true });
+  }
+
+  // Static folder for uploaded image assets
+  const uploadsPath = path.join(process.cwd(), 'public', 'uploads');
+  if (!fs.existsSync(uploadsPath)) {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsPath, {
+    setHeaders: (res) => {
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'private, no-store');
+    }
+  }));
+  // Lightweight health check endpoint (para servicios anti-sleep / UptimeRobot)
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+  });
+
+  // API routes FIRST
+  app.use('/api', apiRouter);
+
+  // Vite middleware for development vs static serve for production
+  if (!isProduction) {
+    const vite = await createViteServer({
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: {
+          port: Number(process.env.VITE_HMR_PORT || 24679)
+        }
+      },
+      appType: 'spa'
+    });
+    app.use(vite.middlewares);
+  } else {
+    // Standalone Demo PWA route
+    const demoDistPath = path.join(process.cwd(), 'demo', 'dist');
+    if (fs.existsSync(demoDistPath)) {
+      app.use('/demo', express.static(demoDistPath));
+      app.get(['/demo', '/demo/*'], (_req, res) => {
+        res.sendFile(path.join(demoDistPath, 'index.html'));
+      });
+    }
+
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, HOST, () => {
+    startAutoReplyWorker();
+    console.log(`[Telegram Bot] Bot Token ID: ${getBotConfig().token.split(':')[0]}`);
+    console.log(`[Telegram Bot] Administradoras configuradas: ${getBotConfig().adminIds.length}`);
+    console.log(`[Tú • Espacio VIP (+18)] =============================================`);
+    console.log(`[Tú • Espacio VIP (+18)] 🌐 Servidor activo en: http://localhost:${PORT}`);
+    console.log(`[Tú • Espacio VIP (+18)]    (Contenido privado para mayores de edad)`);
+    console.log(`[Tú • Espacio VIP (+18)] =============================================`);
+    updateBotMenuButton().then(res => {
+      console.log('[Telegram Bot] Bot menu button updated:', res);
+    }).catch(err => {
+      console.error('[Telegram Bot] Error updating menu button:', err);
+    });
+    registerBotWebhook().then(res => {
+      console.log('[Telegram Bot] Webhook registered:', res);
+    }).catch(err => {
+      console.error('[Telegram Bot] Error registering webhook:', err);
+    });
+  });
+}
+
+startServer().catch(err => {
+  console.error('Error al iniciar el servidor Express:', err);
+});
+
+
+// Graceful shutdown: Ensure DB is synced before exiting
+import { syncDbToB2Now } from './src/server/db.js';
+
+let isShuttingDown = false;
+async function gracefulShutdown(signal: string) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`
+[${signal}] Recibido. Guardando base de datos en Backblaze B2 antes de salir...`);
+  try {
+    await syncDbToB2Now();
+    console.log('✅ Base de datos respaldada exitosamente. Saliendo...');
+    process.exit(0);
+  } catch (err) {
+    console.error('❌ Error al respaldar base de datos durante el apagado:', err);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

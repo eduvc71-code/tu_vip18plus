@@ -1,0 +1,2733 @@
+import express, { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { Readable } from 'stream';
+import { listAllB2Files, listB2ObjectsForAudit, deleteB2Backup, obliterateB2MediaObject,
+  restoreDatabaseFromB2,
+  isB2Configured,
+  mediaUrl,
+  streamB2Object,
+  uploadToB2,
+  deleteB2Media
+} from './b2Storage.js';
+import {
+  getPublicProfiles, getAllProfiles,
+  getAllSubscribers,
+  getProfileById,
+  saveProfile,
+  deleteProfile,
+  removeMediaFromProfile,
+  createCustomerRequest,
+  findRecentDuplicateCustomerRequest,
+  getCustomerRequests,
+  getCustomerRequestById,
+  getDueCustomerRequests,
+  markCustomerRequestScheduled,
+  updateCustomerRequestStatus,
+  getAuditLogs,
+  getSyncErrors,
+  addAuditLog,
+  getSystemSetting,
+  saveSystemSetting,
+  getAllCustomButtons,
+  getPublicCustomButtons,
+  saveCustomButton,
+  deleteCustomButton,
+  getAllTelegramBotoneras,
+  saveTelegramBotonera,
+  deleteTelegramBotonera,
+  getAllPolls,
+  getActivePolls,
+  savePoll,
+  votePoll,
+  deletePoll,
+  syncDbToB2Now,
+  getAllPaymentMethods,
+  getPublicPaymentMethods,
+  getPaymentMethodById,
+  savePaymentMethod,
+  getBotMediaQueue,
+  addBotMediaItem,
+  deleteBotMediaItem,
+  updateBotMediaItem,
+  getDatabaseStats,
+  vacuumAndCompactDb
+} from './db.js';
+import { 
+  processTelegramUpdate,
+  syncProfileToChannel,
+  verifyAdminToken,
+  generateAdminMagicToken,
+  isAdminUser,
+  getBotConfig,
+  verifyTelegramWebAppData,
+  sendMessage,
+  sendPhotoToUser,
+  verifyChannel,
+  sendChannelPoll,
+  publishPaymentMethodsToChannel,
+  sendPaidMediaToChannel,
+  createStarsInvoiceLink,
+  getTelegramFilePath,
+  uploadBufferToTelegram,
+  showPaymentMethodDetail,
+  callTelegramApi, buildChannelPostMarkup, isPublicTelegramCallbackData } from './telegram.js';
+
+export const router = express.Router();
+
+// SSE (Server-Sent Events) event emitter setup for live real-time sync
+const sseClients = new Set<Response>();
+
+export function broadcastEvent(eventType: string, data: any) {
+  const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
+// Multer storage configuration for photo uploads
+const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+function saveLocalUpload(file: Express.Multer.File, baseUrl: string) {
+  const ext = path.extname(file.originalname) || (file.mimetype.startsWith('video/') ? '.mp4' : '.jpg');
+  const filename = `media_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+  fs.writeFileSync(path.join(uploadDir, filename), file.buffer);
+  return `${baseUrl}/uploads/${filename}`;
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // up to 50 MB per image/video
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Solo se permiten imágenes o videos (MP4, WebM, MOV)'));
+    }
+  }
+});
+
+function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const verified = verifyAdminToken(token);
+    if (verified.valid) {
+      (req as any).adminUserId = verified.userId;
+      return next();
+    }
+  }
+  res.status(401).json({ error: 'Acceso administrativo no autorizado. Solicita un enlace nuevo con /admin en el bot.' });
+}
+
+// PUBLIC ENDPOINTS
+
+// Private Backblaze B2 media proxy. Keeps credentials and the bucket private.
+router.get('/media', (req: Request, res: Response) => {
+  const objectKey = typeof req.query.key === 'string' ? req.query.key : '';
+  if (objectKey.startsWith('tu-vip/backups/')) {
+    const authHeader = req.headers.authorization;
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : '';
+    const queryToken = typeof req.query.admin_token === 'string' ? req.query.admin_token : typeof req.query.token === 'string' ? req.query.token : '';
+    const tokenToVerify = bearerToken || queryToken;
+    const verified = verifyAdminToken(tokenToVerify);
+    if (!verified.valid) {
+      res.status(403).json({ error: 'Acceso denegado: solo administradoras pueden ver archivos de respaldo.' });
+      return;
+    }
+  }
+  return streamB2Object(req, res);
+});
+
+const TG_CACHE_DIR = path.join(process.cwd(), 'public', 'uploads', 'tg_cache');
+if (!fs.existsSync(TG_CACHE_DIR)) {
+  try {
+    fs.mkdirSync(TG_CACHE_DIR, { recursive: true });
+  } catch {}
+}
+
+// Telegram Media Streaming Proxy with High-Speed Disk Cache & HTTP Range support
+router.get('/telegram-media/:fileIdWithExt', async (req: Request, res: Response) => {
+  try {
+    const fileIdWithExt = req.params.fileIdWithExt;
+    const dotIdx = fileIdWithExt.lastIndexOf('.');
+    const fileId = dotIdx !== -1 ? fileIdWithExt.substring(0, dotIdx) : fileIdWithExt;
+    const ext = dotIdx !== -1 ? fileIdWithExt.substring(dotIdx).toLowerCase() : '';
+    const safeExt = ext || (fileIdWithExt.includes('.mp4') ? '.mp4' : '.jpg');
+    const cachedFile = path.join(TG_CACHE_DIR, `${fileId}${safeExt}`);
+
+    let contentType = 'image/jpeg';
+    if (safeExt === '.mp4') contentType = 'video/mp4';
+    else if (safeExt === '.webm') contentType = 'video/webm';
+    else if (safeExt === '.mov') contentType = 'video/quicktime';
+    else if (safeExt === '.png') contentType = 'image/png';
+    else if (safeExt === '.webp') contentType = 'image/webp';
+    else if (safeExt === '.gif') contentType = 'image/gif';
+
+    // 1. Si ya existe en caché local de disco, servir directamente (< 5ms)
+    if (fs.existsSync(cachedFile)) {
+      const stat = fs.statSync(cachedFile);
+      const fileSize = stat.size;
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Accept-Ranges', 'bytes');
+
+      const range = req.headers.range;
+      if (range) {
+        const parts = range.replace(/bytes=/, '').split('-');
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = end - start + 1;
+
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+        res.setHeader('Content-Length', chunksize);
+        fs.createReadStream(cachedFile, { start, end }).pipe(res);
+        return;
+      } else {
+        res.setHeader('Content-Length', fileSize);
+        res.status(200);
+        fs.createReadStream(cachedFile).pipe(res);
+        return;
+      }
+    }
+
+    // 2. Si no está en caché, resolver ruta en Telegram
+    const filePath = await getTelegramFilePath(fileId);
+    if (!filePath) {
+      res.status(404).json({ error: 'Archivo no encontrado en Telegram' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const token = config.token || process.env.TELEGRAM_BOT_TOKEN;
+    if (!token) {
+      res.status(500).json({ error: 'Telegram BOT_TOKEN no configurado' });
+      return;
+    }
+
+    const tgUrl = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    const tgRes = await fetch(tgUrl);
+    if (!tgRes.ok) {
+      res.status(tgRes.status).send('Error al obtener archivo de Telegram');
+      return;
+    }
+
+    const arrayBuf = await tgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
+
+    // Guardar en disco para futuros accesos instantáneos
+    try {
+      fs.writeFileSync(cachedFile, buffer);
+    } catch (writeErr) {
+      console.warn('[Telegram Media Cache Write Warning]:', writeErr);
+    }
+
+    const tgContentType = tgRes.headers.get('content-type');
+    if (tgContentType && tgContentType !== 'application/octet-stream') {
+      contentType = tgContentType;
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Length', buffer.length);
+    res.status(200).send(buffer);
+  } catch (err: any) {
+    console.error('Error in /telegram-media proxy:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Error al transmitir archivo de Telegram' });
+    }
+  }
+});
+
+// SSE Live Events Stream
+router.get('/events', (req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  sseClients.add(res);
+
+  req.on('close', () => {
+    sseClients.delete(res);
+  });
+});
+
+// GET Public Info & Bot Status
+router.get('/info', (_req: Request, res: Response) => {
+  const config = getBotConfig();
+  const tgVal = getSystemSetting('telegram_only_access');
+  const telegramOnly = tgVal === null ? true : (tgVal === 'true');
+  const autoReplyDelay = getSystemSetting('auto_reply_delay_minutes') || '10';
+  res.json({
+    app_name: 'Canal VIP Free',
+    brand_name: config.brandName || 'IAM DANII VIP',
+    bot_username: config.username,
+    bot_configured: Boolean(config.token),
+    channel_id: config.channelId,
+    channel_title: getSystemSetting('channel_title') || '',
+    telegram_only_access: telegramOnly,
+    auto_reply_delay_minutes: autoReplyDelay,
+    qr_image_url: getSystemSetting('qr_image_url') || '',
+    admin_contact_username: getSystemSetting('admin_contact_username') || config.username || 'Danii_Catalogo_SCZ_bot',
+    pinned_message_text: getSystemSetting('pinned_message_text') || '',
+    pinned_message_active: getSystemSetting('pinned_message_active') === 'true',
+    model_display_name: getSystemSetting('model_display_name') || 'IAM Danii',
+    model_vip_link: getSystemSetting('model_vip_link') || '',
+    welcome_media_url: getSystemSetting('welcome_media_url') || '',
+    welcome_media_type: getSystemSetting('welcome_media_type') || '',
+    splash_description: getSystemSetting('splash_description') || '',
+    operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
+    legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
+  });
+});
+
+// GET Public Profiles
+router.get('/profiles', async (_req: Request, res: Response) => {
+  try {
+    const profiles = await getPublicProfiles();
+    res.json(profiles);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener perfiles', details: err?.message });
+  }
+});
+
+// POST Verify that the Mini App was opened from Telegram.
+router.post('/telegram/access/verify', (req: Request, res: Response) => {
+  const verified = verifyTelegramWebAppData(String(req.body?.init_data || ''));
+  if (!verified.valid || !verified.user?.id) {
+    res.status(401).json({ valid: false, error: 'Abre la Mini App desde el bot oficial de Telegram.' });
+    return;
+  }
+  res.json({ valid: true, user: verified.user });
+});
+
+// POST Generate Stars Invoice Link for Web App
+router.post('/telegram/stars-invoice', async (req: Request, res: Response) => {
+  try {
+    const { profileId, mediaUrl, stars } = req.body;
+    const profile = await getProfileById(profileId);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+    // [Seguridad V6] Validar precio desde BD para evitar falsificación de Stars
+      const dbPrice = mediaUrl ? profile.media_stars?.[mediaUrl] : null;
+      if (!dbPrice || dbPrice <= 0) {
+        res.status(400).json({ error: 'Este contenido no tiene un precio válido configurado.' });
+        return;
+      }
+      const starCount = dbPrice;
+    const title = `⭐ ${profile.name} VIP`;
+    const invoiceLink = await createStarsInvoiceLink(
+      title,
+      `Acceso a contenido VIP exclusivo (${starCount} Estrellas Telegram)`,
+      `stars_${profile.id}_${Date.now()}`,
+      starCount
+    );
+    if (invoiceLink) {
+      res.json({ ok: true, invoiceLink });
+    } else {
+      res.status(500).json({ error: 'No se pudo generar la factura de Telegram Stars' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al procesar estrellas' });
+  }
+});
+
+// GET Public Profile Detail
+router.get('/profiles/:id', async (req: Request, res: Response) => {
+  try {
+    const profile = await getProfileById(req.params.id, true);
+    if (!profile || profile.status === 'retirada' || profile.status === 'borrador') {
+      res.status(404).json({ error: 'Perfil no encontrado o no disponible' });
+      return;
+    }
+    res.json(profile);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al consultar perfil' });
+  }
+});
+
+export async function scheduleAutoReply(requestId: string) {
+  const delayMinutesStr = getSystemSetting('auto_reply_delay_minutes') || '10';
+  const delayMinutes = Number(delayMinutesStr) || 10;
+  const now = new Date();
+  const dueAt = new Date(now.getTime() + delayMinutes * 60 * 1000);
+  await markCustomerRequestScheduled(requestId, now.toISOString(), dueAt.toISOString());
+}
+
+let autoReplyWorkerRunning = false;
+
+export function isSpecialPlanRequest(notes: string): boolean {
+  const text = (notes || '').trim();
+  if (!text) return false;
+  return /SUSCRIPCIÓN\s*SEMESTRAL|SEMESTRAL|SUSCRIPCIÓN\s*PERMANENTE|PERMANENTE/i.test(text);
+}
+
+export function extractCountryFromRequestText(notes: string): string {
+  const text = (notes || '').trim();
+  if (!text) return 'No especificado';
+
+  const countries = [
+    { label: 'Bolivia', pattern: /bolivia/i },
+    { label: 'Perú', pattern: /perú|peru/i },
+    { label: 'Chile', pattern: /chile/i },
+    { label: 'Argentina', pattern: /argentina/i },
+    { label: 'España', pattern: /españa|espana/i },
+    { label: 'México', pattern: /méxico|mexico/i },
+    { label: 'Paraguay', pattern: /paraguay/i },
+    { label: 'Brasil', pattern: /brasil|brazil/i },
+    { label: 'Uruguay', pattern: /uruguay/i },
+    { label: 'Colombia', pattern: /colombia/i },
+    { label: 'Rusia', pattern: /rusia|russia/i },
+    { label: 'Ecuador', pattern: /ecuador/i },
+    { label: 'Venezuela', pattern: /venezuela/i }
+  ];
+
+  for (const country of countries) {
+    if (country.pattern.test(text)) return country.label;
+  }
+
+  return 'No especificado';
+}
+
+/**
+ * Construye un enlace privado de Telegram a partir de un username, ID numérico
+ * o URL ya existente. Devuelve `undefined` si el valor no es utilizable.
+ */
+export function buildTelegramPrivateLink(target?: string | number | null): string | undefined {
+  if (target === undefined || target === null) return undefined;
+
+  const raw = String(target).trim();
+  if (!raw) return undefined;
+
+  // Ya viene como URL directa
+  if (raw.startsWith('https://t.me/') || raw.startsWith('tg://')) return raw;
+
+  // Quitar @ y prefijos sueltos
+  const clean = raw.replace(/^@/, '').replace(/^ID:/i, '').trim();
+
+  // Si el valor es un username de Telegram
+  if (/^[a-zA-Z0-9_]{5,32}$/.test(clean)) {
+    return `https://t.me/${clean}`;
+  }
+
+  // Si el valor es un ID numérico
+  if (/^\d+$/.test(clean)) {
+    return `tg://user?id=${clean}`;
+  }
+
+  return undefined;
+}
+
+export function resolveAutoReplyMethodId(notes: string, methods: Array<{ id: string; title: string }>): string | null {
+  const text = (notes || '').trim();
+  if (!text || isSpecialPlanRequest(text)) return null;
+
+  const normalized = text.toLowerCase();
+  const emojiRegex = /[\u2700-\u27BF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g;
+
+  const boliviaMethod = methods.find(m => m.id === 'qr_bolivia' || /bolivia/i.test(m.title));
+  if (boliviaMethod && /bolivia/i.test(normalized)) {
+    return boliviaMethod.id;
+  }
+
+  for (const method of methods) {
+    const cleanTitle = method.title.replace(emojiRegex, '').trim();
+    if (!cleanTitle) continue;
+
+    if (normalized.includes(cleanTitle.toLowerCase())) return method.id;
+    if (normalized.includes(method.id.toLowerCase())) return method.id;
+  }
+
+  return null;
+}
+
+export async function processDueAutoReplies(): Promise<void> {
+  if (autoReplyWorkerRunning) return;
+  autoReplyWorkerRunning = true;
+  try {
+    const dueRequests = await getDueCustomerRequests(new Date().toISOString());
+    for (const request of dueRequests) {
+      const notes = request.notes || '';
+      if (isSpecialPlanRequest(notes)) {
+        console.log(`[AutoReply] Se omite respuesta automática para solicitud ${request.id}: plan especial semestral/permanente.`);
+        continue;
+      }
+
+      if (!request.telegram_user_id) {
+        await updateCustomerRequestStatus(request.id, 'fallida');
+        continue;
+      }
+
+      const brandTitle = getSystemSetting('model_display_name') || getBotConfig().brandName || 'IAM Danii VIP';
+      const allMethods = await getPublicPaymentMethods();
+      const matchedMethodId = resolveAutoReplyMethodId(notes, allMethods);
+
+      let delivery: { ok: boolean; description?: string };
+
+      if (matchedMethodId) {
+        // Enviar el detalle del método de pago correspondiente
+        const introText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responderte personalmente. Te enviamos los datos de pago para continuar:\n`;
+        await sendMessage(request.telegram_user_id, introText);
+
+        const profile = request.profile_id ? await getProfileById(request.profile_id) : null;
+        const isBoliviaMethod = matchedMethodId === 'qr_bolivia' || /bolivia/i.test((allMethods.find(m => m.id === matchedMethodId)?.title || ''));
+        const priceOverride = isBoliviaMethod ? profile?.rate_bs : undefined;
+        await showPaymentMethodDetail(request.telegram_user_id, matchedMethodId, { profileRateBs: priceOverride });
+        delivery = { ok: true };
+      } else {
+        // Fallback: QR genérico o mensaje simple
+        const qrUrl = getSystemSetting('qr_image_url');
+        const autoReplyText = `✨ *${brandTitle}* ✨\n\n¡Hola ${request.telegram_first_name || 'Estimado/a'}!\n\nLa Administradora aún no pudo responder personalmente tu solicitud para *${request.profile_name}*.\n\n${qrUrl ? '📲 Mientras tanto, el bot te envía el QR oficial de pago. La Administradora se comunicará contigo por privado para validar el comprobante.' : 'La Administradora se comunicará contigo por privado en cuanto esté disponible.'}\n\n🔒 La validación es privada. Este bot no publica comprobantes ni entrega accesos a grupos.`;
+        delivery = qrUrl
+          ? await sendPhotoToUser(request.telegram_user_id, qrUrl, autoReplyText)
+          : await sendMessage(request.telegram_user_id, autoReplyText);
+      }
+
+      if (delivery.ok) {
+        await updateCustomerRequestStatus(request.id, 'auto_respondida');
+        await addAuditLog('AUTO_REPLY_PRIVATE', 'Telegram Bot', `Respuesta privada automática para solicitud ${request.id}`, request.id);
+        console.log(`[AutoReply] Entrega privada confirmada para solicitud ${request.id}`);
+      } else {
+        console.error(`[AutoReply] Telegram rechazó la solicitud ${request.id}: ${delivery.description || 'respuesta desconocida'}`);
+      }
+    }
+  } catch (error) {
+    console.error('[AutoReply] Error al procesar vencimientos:', error);
+  } finally {
+    autoReplyWorkerRunning = false;
+  }
+}
+
+export function startAutoReplyWorker(): NodeJS.Timeout {
+  void processDueAutoReplies();
+  return setInterval(() => void processDueAutoReplies(), 30_000);
+}
+
+// POST Customer Availability Request
+router.post('/requests', async (req: Request, res: Response) => {
+  try {
+    const { profile_id, client_name, client_telegram, tg_user_id, telegram_init_data, notes } = req.body;
+    const purchaseMessage = notes || 'Hola estoy interesado en tu Contenido VIP. Información por favor.';
+
+    const verifiedTelegram = verifyTelegramWebAppData(String(telegram_init_data || ''));
+    if (tg_user_id && !verifiedTelegram.valid) {
+      res.status(401).json({ error: 'No fue posible validar tu sesión privada de Telegram. Cierra y vuelve a abrir la mini app desde el bot.' });
+      return;
+    }
+    const verifiedUser = verifiedTelegram.user;
+    const safeUserId = verifiedUser?.id ? String(verifiedUser.id) : undefined;
+    const safeClientName = verifiedUser?.first_name || client_name || 'Cliente Telegram/Web';
+    const safeClientTelegram = verifiedUser?.username ? `@${verifiedUser.username}` : client_telegram;
+
+    if (!profile_id) {
+      res.status(400).json({ error: 'El ID del perfil es requerido' });
+      return;
+    }
+
+    const profile = await getProfileById(profile_id);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    // Prevent repeated submissions from creating duplicate admin notifications.
+    if (safeUserId) {
+      const duplicate = await findRecentDuplicateCustomerRequest(safeUserId, profile.id, purchaseMessage, 10);
+      if (duplicate) {
+        res.json({
+          success: true,
+          duplicate: true,
+          message: 'Ya recibimos tu solicitud reciente. La Administradora responderá por privado.',
+          request: duplicate
+        });
+        return;
+      }
+    }
+
+    const request = await createCustomerRequest({
+      profile_id: profile.id,
+      profile_name: profile.name,
+      telegram_user_id: safeUserId,
+      telegram_first_name: safeClientName,
+      telegram_username: safeClientTelegram ? safeClientTelegram.replace('@', '') : undefined,
+      notes: purchaseMessage,
+      status: 'pendiente'
+    });
+
+    // Send alert to Telegram Admins
+    const { adminIds } = getBotConfig();
+    const clientHandle = safeClientTelegram
+      ? (safeClientTelegram.startsWith('@') || safeClientTelegram.startsWith('ID:') ? safeClientTelegram : `@${safeClientTelegram}`)
+      : '';
+    const adminNotice = `
+🔔 *NUEVA SOLICITUD DE ACCESO VIP* 🔔
+
+👤 *Cliente*: ${safeClientName || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
+🆔 *Telegram ID*: \`${safeUserId || 'No detectado'}\`
+👠 *Perfil*: ${profile.name} (PRECIO VIP: Bs. ${profile.rate_bs})
+📍 *Zona*: ${profile.zone}
+💬 *Mensaje*: ${purchaseMessage}
+📅 *Fecha*: ${new Date().toLocaleString()}
+
+🔒 _Toda respuesta, envío de QR y validación debe realizarse por privado. El acceso al Grupo VIP no forma parte de este sistema._
+    `;
+
+    let deliveredToAdmin = false;
+    for (const adminId of adminIds) {
+      if (adminId) {
+        const directClientTarget = (safeClientTelegram && !safeClientTelegram.toLowerCase().startsWith('id:'))
+          ? safeClientTelegram
+          : safeUserId;
+
+        const privateReplyUrl = buildTelegramPrivateLink(directClientTarget);
+
+        const firstRow = privateReplyUrl
+          ? [{ text: '💬 Responder en privado', url: privateReplyUrl }]
+          : [];
+        const delivery = await sendMessage(adminId, adminNotice, {
+          // Client names and usernames may contain Markdown control characters.
+          // Send the notification as plain text so Telegram never rejects it.
+          parse_mode: undefined,
+          reply_markup: {
+            inline_keyboard: [
+              firstRow,
+              [
+                { text: '📲 Enviar QR privado', callback_data: `request_qr_${request.id}` },
+                { text: '✅ Marcar atendida', callback_data: `request_done_${request.id}` }
+              ]
+            ].filter(row => row.length > 0)
+          }
+        });
+        if (!delivery.ok) {
+          console.error(`[Telegram Delivery] Administradora ${String(adminId).slice(-4)}: ${delivery.description || 'respuesta desconocida'}`);
+        }
+        deliveredToAdmin = deliveredToAdmin || Boolean(delivery.ok);
+      }
+    }
+
+    if (!deliveredToAdmin) {
+      await updateCustomerRequestStatus(request.id, 'fallida');
+      res.status(503).json({ error: 'No fue posible notificar a la Administradora. Intenta nuevamente.' });
+      return;
+    }
+
+    // Confirm only after the administrator has received the request.
+    if (safeUserId) {
+      const publicName = getSystemSetting('model_display_name') || profile.name || 'IAM Danii';
+      const brandTitle = `${publicName} • Espacio VIP (+18)`;
+      const isSpecialPlan = isSpecialPlanRequest(purchaseMessage);
+      const planDetail = isSpecialPlan ? '' : ` (SUSCRIPCIÓN VIP / ACCESO: Bs. ${profile.rate_bs})`;
+      const adminUsername = String(getSystemSetting('admin_contact_username') || '').replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
+      const ownerPrivateUrl = buildTelegramPrivateLink(adminUsername);
+
+      const userConfirmText = `✨ *${brandTitle}* ✨\n\n¡Hola ${safeClientName || 'Estimado/a'}!\n\nHemos recibido tu solicitud para *${profile.name}*${planDetail}.\n\nSu mensaje se envió a la Administradora y se le responderá en breve.`;
+
+      await sendMessage(safeUserId, userConfirmText, {
+        parse_mode: undefined,
+        reply_markup: ownerPrivateUrl
+          ? {
+              inline_keyboard: [[{ text: '💬 Hablar con la administradora', url: ownerPrivateUrl }]]
+            }
+          : undefined
+      });
+
+      if (!isSpecialPlan) {
+        await scheduleAutoReply(request.id);
+      }
+    } else {
+      await markCustomerRequestScheduled(request.id, new Date().toISOString());
+    }
+
+    broadcastEvent('NEW_REQUEST', request);
+
+    res.json({
+      success: true,
+      message: 'Solicitud enviada con éxito. La Administradora responderá a la brevedad por privado.',
+      request
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar la solicitud', details: err?.message });
+  }
+});
+
+// TELEGRAM WEBHOOK ENDPOINT
+router.post('/telegram/webhook', async (req: Request, res: Response) => {
+  const { secret } = getBotConfig();
+  const incomingSecret = req.headers['x-telegram-bot-api-secret-token'];
+
+  if (!incomingSecret || incomingSecret !== secret) {
+    res.status(403).json({ error: 'Secret token inválido' });
+    return;
+  }
+
+  try {
+    await processTelegramUpdate(req.body);
+    broadcastEvent('TELEGRAM_UPDATE', { timestamp: new Date().toISOString() });
+    res.status(200).send('OK');
+  } catch (err: any) {
+    console.error('Error in webhook handler:', err);
+    res.status(200).send('OK'); // Always return 200 OK to Telegram
+  }
+});
+
+// ADMIN ENDPOINTS (PROTECTED)
+
+// POST Verify Admin Token
+router.post('/admin/auth/verify', (req: Request, res: Response) => {
+  const { token } = req.body;
+  if (!token) {
+    res.status(400).json({ error: 'Token no proporcionado' });
+    return;
+  }
+  const verified = verifyAdminToken(token);
+  if (verified.valid) {
+    res.json({ valid: true, userId: verified.userId });
+  } else {
+    res.status(401).json({ valid: false, error: 'Token inválido o expirado' });
+  }
+});
+
+// POST Direct Login for Admin Panel via PIN or Telegram ID
+router.post('/admin/auth/login', (req: Request, res: Response) => {
+  const { pin, userId } = req.body;
+  const config = getBotConfig();
+  const validPin = process.env.ADMIN_PIN;
+  const cleanPin = String(pin || '').trim();
+  const cleanUser = String(userId || '').trim();
+
+  const isPinMatch = cleanPin && (cleanPin === validPin);
+  const isAdminIdMatch = (cleanUser && isAdminUser(cleanUser)) || (cleanPin && isAdminUser(cleanPin));
+  const isDefaultAccess = config.adminIds.length === 0 && (cleanPin === validPin);
+
+  if (isPinMatch || isAdminIdMatch || isDefaultAccess) {
+    const effectiveUserId = isAdminIdMatch ? (cleanUser || cleanPin) : (config.adminIds[0] || 'admin');
+    const token = generateAdminMagicToken(effectiveUserId);
+    res.json({ valid: true, token, userId: effectiveUserId });
+  } else {
+    res.status(401).json({ valid: false, error: 'PIN o Telegram ID no coincide con las credenciales de Administradora.' });
+  }
+});
+
+// GET All Profiles for Admin Panel
+router.get('/admin/profiles', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const profiles = await getAllProfiles();
+    res.json(profiles);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener perfiles administrativos' });
+  }
+});
+
+// POST Create Profile from Web Admin Panel
+router.post('/admin/profiles', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { name, age, zone, description, rate_bs, photos, status, priority_order, ephemeral_config } = req.body;
+
+    if (!name) {
+      res.status(400).json({ error: 'El nombre es obligatorio.' });
+      return;
+    }
+
+    const newId = `prof_${Date.now()}`;
+    const profile = await saveProfile({
+      id: newId,
+      name,
+      age: age !== undefined ? Number(age) : 18,
+      zone: zone || 'Contenido +18 VIP',
+      description: description || '',
+      rate_bs: Number(rate_bs) || 0,
+      commission_bs: 0,
+      photos: Array.isArray(photos) ? photos : [],
+      ephemeral_config: ephemeral_config || {},
+      status: status || 'borrador',
+      priority_order: Number(priority_order) || 0
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CREATE_PROFILE', adminId, `Perfil ${profile.name} creado desde panel web`, newId);
+
+    // Sync if published directly
+    if (profile.status === 'disponible' || profile.status === 'ocupada') {
+      await syncProfileToChannel(newId, adminId);
+    }
+
+    broadcastEvent('PROFILE_UPDATED', profile);
+    res.json({ success: true, profile });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al crear perfil' });
+  }
+});
+
+// PUT Update Profile
+router.put('/admin/profiles/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const existing = await getProfileById(profileId);
+    if (!existing) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const { name, age, zone, description, rate_bs, commission_bs, photos, status, priority_order, ephemeral_config } = req.body;
+
+    if (age !== undefined && Number(age) < 18) {
+      res.status(400).json({ error: 'La edad debe ser mayor o igual a 18 años.' });
+      return;
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      name: name ?? existing.name,
+      age: age !== undefined ? Number(age) : existing.age,
+      zone: zone ?? existing.zone,
+      description: description ?? existing.description,
+      rate_bs: rate_bs !== undefined ? Number(rate_bs) : existing.rate_bs,
+      commission_bs: commission_bs !== undefined ? Number(commission_bs) : existing.commission_bs,
+      photos: Array.isArray(photos) ? photos : existing.photos,
+      ephemeral_config: ephemeral_config ?? existing.ephemeral_config,
+      status: status ?? existing.status,
+      priority_order: priority_order !== undefined ? Number(priority_order) : existing.priority_order
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_PROFILE', adminId, `Perfil ${updated.name} actualizado`, profileId);
+
+    let syncMessage = 'Perfil actualizado en base de datos';
+    if (req.body.publish_to_channel === true) {
+      const syncRes = await syncProfileToChannel(profileId, adminId);
+      syncMessage = syncRes.message;
+    }
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, sync_message: syncMessage });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al actualizar perfil' });
+  }
+});
+
+// DELETE Profile
+router.delete('/admin/profiles/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await saveProfile({ id: profileId, status: 'retirada' });
+    await syncProfileToChannel(profileId, adminId);
+    await deleteProfile(profileId);
+    await addAuditLog('DELETE_PROFILE', adminId, `Perfil ${profile.name} eliminado`, profileId);
+
+    broadcastEvent('PROFILE_DELETED', { id: profileId });
+    res.json({ success: true, message: `Perfil ${profile.name} eliminado.` });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar perfil' });
+  }
+});
+
+// POST Trigger Channel Sync (Explicitly publishes to Telegram VIP Channel)
+router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    const profile = await getProfileById(profileId, false);
+    if (profile && profile.photos) {
+      const currentStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+      if (Array.isArray(req.body.photo_urls) && req.body.photo_urls.length > 0) {
+        req.body.photo_urls.forEach((u: string) => {
+          currentStatus[u] = 1;
+        });
+      } else {
+        profile.photos.forEach(u => {
+          currentStatus[u] = 1;
+        });
+      }
+      await saveProfile({ id: profileId, media_status: currentStatus });
+    }
+    const result = await syncProfileToChannel(profileId, adminId);
+    broadcastEvent('PROFILE_UPDATED', { id: profileId });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al sincronizar canal', details: err?.message });
+  }
+});
+
+// POST Upload gallery media (images and videos) - Saves to B2 and local DB without auto-publishing
+router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos', 8), async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const files = req.files as Express.Multer.File[];
+    const uploadedUrls: string[] = [];
+
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype);
+        if (tgRes.ok && tgRes.fileId) {
+          const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+          uploadedUrls.push(`${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`);
+        } else if (isB2Configured()) {
+          const objectKey = await uploadToB2(file, 'profiles');
+          uploadedUrls.push(mediaUrl(config.baseUrl, objectKey));
+        } else {
+          uploadedUrls.push(saveLocalUpload(file, config.baseUrl));
+        }
+      }
+    }
+
+    // The latest upload is always the cover/first item and pushes older media back.
+    const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
+
+    // Merge media descriptions if provided
+    let mediaDescriptions = { ...(profile.media_descriptions || {}) };
+    const comment = req.body.description || req.body.comment;
+    if (comment && uploadedUrls.length > 0) {
+      for (const url of uploadedUrls) {
+        mediaDescriptions[url] = String(comment).trim();
+      }
+    }
+    if (req.body.descriptions) {
+      try {
+        const parsed = typeof req.body.descriptions === 'string' ? JSON.parse(req.body.descriptions) : req.body.descriptions;
+        mediaDescriptions = { ...mediaDescriptions, ...parsed };
+      } catch {}
+    }
+
+    // Merge ephemeral config if provided
+    let ephemeralConfig = { ...(profile.ephemeral_config || {}) };
+    if (req.body.is_ephemeral === 'true' || req.body.is_ephemeral === true) {
+      const dur = Number(req.body.ephemeral_duration) || 10;
+      for (const url of uploadedUrls) {
+        ephemeralConfig[url] = { enabled: true, duration: dur, duration_seconds: dur };
+      }
+    }
+
+    // Determinar estatus inicial: 1 (Publicada) o 2 (Para Publicar / Borrador) según elección del admin
+    const chosenStatus: 1 | 2 = 1;
+    let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    for (const url of uploadedUrls) {
+      mediaStatus[url] = chosenStatus;
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      media_descriptions: mediaDescriptions,
+      ephemeral_config: ephemeralConfig,
+      media_status: mediaStatus
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPLOAD_MEDIA', adminId, `${uploadedUrls.length} archivos multimedia guardados en B2 para ${profile.name} (Status = ${chosenStatus === 1 ? '1: Publicada' : '2: Borrador'})`, profileId);
+
+    // No auto-sync to channel: Content is stored safely in B2 until admin clicks publish
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, new_media: uploadedUrls });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al subir imágenes o videos', details: err?.message });
+  }
+});
+
+// DELETE Media from server (B2/local disk and database)
+router.delete('/admin/profiles/:id/media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url } = req.body;
+    if (!media_url) {
+      res.status(400).json({ error: 'URL de archivo no proporcionada' });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+
+    // 1. Borrar físicamente de Backblaze B2 si aplica
+    try {
+      await deleteB2Media(media_url);
+    } catch (b2Err) {
+      console.warn('Advertencia al borrar de B2:', b2Err);
+    }
+
+    // 2. Borrar de disco local si aplica
+    if (media_url.includes('/uploads/')) {
+      try {
+        const filename = media_url.split('/uploads/').pop();
+        if (filename) {
+          const localPath = path.join(process.cwd(), 'public', 'uploads', filename);
+          if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        }
+      } catch (fsErr) {
+        console.warn('Advertencia al borrar archivo local:', fsErr);
+      }
+    }
+
+    // 3. Eliminar de la base de datos
+    const updated = await removeMediaFromProfile(profileId, media_url);
+      if (!updated) {
+        res.status(404).json({ error: 'Perfil no encontrado' });
+        return;
+      }
+
+      try { await syncDbToB2Now(); } catch (e) { console.error(e); }
+
+    await addAuditLog('DELETE_MEDIA', adminId, `Archivo multimedia eliminado físicamente del servidor para ${updated.name}`, profileId);
+    broadcastEvent('PROFILE_UPDATED', updated);
+
+    res.json({ success: true, profile: updated, message: 'Archivo eliminado físicamente del servidor con éxito.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al borrar archivo del servidor', details: err?.message });
+  }
+});
+
+// PUT Update media status (1=Activa, 2=Para Publicar)
+router.put('/admin/profiles/:id/media-status', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { photo_url, photo_urls, status } = req.body;
+    const numStatus: 1 | 2 = Number(status) === 1 ? 1 : 2;
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const currentStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    if (Array.isArray(photo_urls)) {
+      photo_urls.forEach((url: string) => {
+        currentStatus[url] = numStatus;
+      });
+    } else if (photo_url) {
+      currentStatus[photo_url] = numStatus;
+    } else if (req.body.all === true) {
+      (profile.photos || []).forEach((url: string) => {
+        currentStatus[url] = numStatus;
+      });
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_status: currentStatus
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog(
+      'UPDATE_MEDIA_STATUS',
+      adminId,
+      `Multimedia actualizada a Status ${numStatus} (${numStatus === 1 ? 'Activa' : 'Para Publicar'})`,
+      profileId
+    );
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, media_status: updated.media_status });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar status de multimedia', details: err?.message });
+  }
+});
+
+// POST Publish Paid Media with Telegram Stars
+router.post('/admin/profiles/:id/publish-paid-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count, caption } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo multimedia es requerida' });
+      return;
+    }
+
+    const stars = Math.max(1, Math.min(2500, Math.round(Number(star_count) || 1)));
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+
+    // 1. Enviar a Telegram vía sendPaidMedia
+    const telegramRes = await sendPaidMediaToChannel({
+      mediaUrl: media_url,
+      starCount: stars,
+      caption: caption || (profile.media_descriptions?.[media_url] || '')
+    });
+
+    if (!telegramRes.ok) {
+      res.status(400).json({ error: telegramRes.error || 'Error al publicar contenido de pago en Telegram' });
+      return;
+    }
+
+    // 2. Guardar en perfil: actualizar media_stars y fijar media_status en 1 (activa/publicada)
+    const updatedStars: Record<string, number> = { ...(profile.media_stars || {}) };
+    updatedStars[media_url] = stars;
+
+    const updatedStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    updatedStatus[media_url] = 1;
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars,
+      media_status: updatedStatus
+    });
+
+    await addAuditLog(
+      'PUBLISH_PAID_MEDIA',
+      adminId,
+      `Contenido de pago publicado en Canal VIP por ⭐ ${stars} Estrellas (Mensaje #${telegramRes.messageId})`,
+      profileId
+    );
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+
+    res.json({
+      success: true,
+      message: `🎉 Contenido publicado exitosamente en el Canal VIP por ⭐ ${stars} Estrellas.`,
+      telegramMessageId: telegramRes.messageId,
+      profile: updated
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar la publicación con estrellas', details: err?.message });
+  }
+});
+
+// PUT Update media stars price
+router.put('/admin/profiles/:id/media-stars', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo es requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const updatedStars: Record<string, number> = { ...(profile.media_stars || {}) };
+    if (star_count === null || Number(star_count) <= 0) {
+      delete updatedStars[media_url];
+    } else {
+      updatedStars[media_url] = Math.max(1, Math.min(2500, Math.round(Number(star_count))));
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars
+    });
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated, media_stars: updated.media_stars });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al actualizar precio en estrellas', details: err?.message });
+  }
+});
+
+// POST Subir Contenido Free (Guarda en Telegram y en la base de datos)
+router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('photos', 10), async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+    if (operatingMode !== 'bot_and_channel' || !config.channelId) {
+      return res.status(409).json({ error: 'Activa Híbrido (Bot + Canal) y configura el Canal Free antes de publicar.' });
+    }
+    if (!isB2Configured()) {
+      return res.status(503).json({ error: 'B2 no está configurado; no se publicó para evitar perder la URL del medio al desplegar.' });
+    }
+    if (profile.age && profile.age < 18) {
+      return res.status(400).json({ error: 'No se permite publicar en el canal un perfil menor de 18 años.' });
+    }
+
+    const files = req.files as Express.Multer.File[];
+    if (!files?.length) return res.status(400).json({ error: 'Selecciona al menos una foto o video Free.' });
+    const comment = String(req.body.description || req.body.comment || '').trim();
+    if (!comment) return res.status(400).json({ error: 'La descripción de la publicación es obligatoria.' });
+    const uploadedUrls: string[] = [];
+    const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
+    const mediaToPublish: Array<{ url: string; fileId: string | null; isVideo: boolean }> = [];
+
+    const bodegaChatId = getSystemSetting('bodega_channel_id');
+    const privateAdminChatId = config.adminIds?.[0];
+    const telegramStorageChatId = bodegaChatId || privateAdminChatId;
+    if (!telegramStorageChatId || String(telegramStorageChatId) === String(config.channelId)) {
+      return res.status(409).json({ error: 'Configura un chat privado de almacenamiento para Telegram. El archivo no se enviará al Canal Free como paso de guardado.' });
+    }
+
+    for (const file of files) {
+      let tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, telegramStorageChatId, comment);
+      let finalUrl: string;
+      let fileId: string | null = null;
+      const isVideo = file.mimetype.startsWith('video/') || /\.(mp4|webm|mov|m4v|mkv)$/i.test(file.originalname);
+      if (!tgRes.ok && bodegaChatId && privateAdminChatId && String(bodegaChatId) !== String(privateAdminChatId)) {
+        tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, privateAdminChatId, comment);
+      }
+      if (tgRes.ok && tgRes.fileId) {
+        fileId = tgRes.fileId;
+        const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+        finalUrl = `${config.baseUrl}/api/telegram-media/${fileId}${ext}`;
+        tgFileIds[finalUrl] = fileId;
+      } else {
+        return res.status(502).json({
+          error: `No se pudo guardar “${file.originalname}” en el chat privado de Telegram: ${tgRes.error || 'error de Telegram'}. No se guardó ni publicó el contenido.`
+        });
+      }
+      uploadedUrls.push(finalUrl);
+      mediaToPublish.push({ url: finalUrl, fileId, isVideo });
+    }
+
+    const updatedPhotos = [...uploadedUrls].reverse().concat(profile.photos || []);
+
+    // Merge descriptions
+    let mediaDescriptions = { ...(profile.media_descriptions || {}) };
+    if (comment && uploadedUrls.length > 0) {
+      for (const url of uploadedUrls) {
+        mediaDescriptions[url] = String(comment).trim();
+      }
+    }
+
+    // Merge ephemeral config
+    let ephemeralConfig = { ...(profile.ephemeral_config || {}) };
+    if (req.body.is_ephemeral === 'true' || req.body.is_ephemeral === true) {
+      const dur = Number(req.body.ephemeral_duration) || 10;
+      for (const url of uploadedUrls) {
+        ephemeralConfig[url] = { enabled: true, duration: dur, duration_seconds: dur };
+      }
+    }
+
+    // Initial status (1: Activa/Publicada, 2: Borrador/Para Publicar)
+    const chosenStatus: 1 | 2 = 1;
+    let mediaStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    for (const url of uploadedUrls) {
+      mediaStatus[url] = chosenStatus;
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      status: 'disponible',
+      media_descriptions: mediaDescriptions,
+      ephemeral_config: ephemeralConfig,
+      media_status: mediaStatus,
+      telegram_media_file_ids: tgFileIds
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog(
+      'UPLOAD_CONTENT_FREE',
+      adminId,
+      `${uploadedUrls.length} archivo(s) Free guardados en Telegram para ${profile.name} (Status = ${chosenStatus === 1 ? '1: Publicada' : '2: Borrador'})`,
+      profileId
+    );
+
+    let snapshotKey: string;
+    try {
+      snapshotKey = await syncDbToB2Now();
+    } catch (snapshotError: any) {
+      return res.status(503).json({
+        success: false,
+        saved: true,
+        profile: updated,
+        publishedCount: 0,
+        error: `El contenido quedó guardado, pero B2 no confirmó la base de datos; no se publicó. ${snapshotError?.message || ''}`.trim()
+      });
+    }
+
+    const replyMarkup = await buildChannelPostMarkup(updated, config.baseUrl, config.username);
+    if (replyMarkup.inline_keyboard?.length) {
+      // Fase 3: en canales solo se permiten botones URL; los callback_data de posts antiguos se
+      // convierten a deep links t.me/<bot>?start=<data> que reabren el paso exacto en privado.
+      const cleanBotUser = String(config.username || '').replace(/^@/, '').trim();
+      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.map((row: any[]) => row.map((button: any) => {
+        if (button && button.callback_data && !button.url) {
+          const cd = String(button.callback_data);
+          if (cleanBotUser && isPublicTelegramCallbackData(cd)) {
+            const { callback_data, ...rest } = button;
+            return { ...rest, url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(cd)}` };
+          }
+          return null;
+        }
+        return button;
+      }).filter(Boolean));
+      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.filter((row: any[]) => row.length > 0);
+    }
+    const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];
+    for (const media of mediaToPublish) {
+      const caption = mediaDescriptions[media.url] || comment;
+      const method = media.isVideo ? 'sendVideo' : 'sendPhoto';
+      const field = media.isVideo ? 'video' : 'photo';
+      const mediaTarget = media.fileId || media.url;
+      const sendResult = await callTelegramApi(method, {
+        chat_id: config.channelId,
+        [field]: mediaTarget,
+        caption,
+        has_spoiler: true,
+        parse_mode: 'Markdown',
+        reply_markup: replyMarkup
+      });
+      if (sendResult.ok && sendResult.result?.message_id) {
+        const messageId = Number(sendResult.result.message_id);
+        publishResults.push({ url: media.url, messageId });
+        await addAuditLog('PUBLISH_FREE_MEDIA', adminId,
+          `Medio Free ${media.url} publicado en Canal Free (mensaje #${messageId}).`, profileId);
+      } else {
+        const error = sendResult.description || 'Telegram no confirmó la publicación.';
+        publishResults.push({ url: media.url, error });
+        await addAuditLog('PUBLISH_FREE_MEDIA_FAILED', adminId,
+          `Falló la publicación de ${media.url} en Canal Free: ${error}`, profileId);
+      }
+    }
+
+    try {
+      snapshotKey = await syncDbToB2Now();
+      await addAuditLog('PUBLISH_FREE_MEDIA', adminId,
+        `${publishResults.filter(result => result.messageId).length} de ${files.length} medios Free publicados en Canal Free para ${profile.name}.`, profileId);
+    } catch (snapshotError: any) {
+      console.error('[Free Publish] No se pudo respaldar la auditoría posterior a publicación:', snapshotError);
+    }
+    broadcastEvent('PROFILE_UPDATED', updated);
+    const publishedCount = publishResults.filter(result => result.messageId).length;
+    const channelUsername = String(getSystemSetting('channel_username') || '').replace(/^@/, '');
+    const channelIdMatch = String(config.channelId).match(/^-100(\d+)$/);
+    const publishedPosts = publishResults.flatMap(result => {
+      if (!result.messageId) return [];
+      const url = channelUsername
+        ? `https://t.me/${channelUsername}/${result.messageId}`
+        : channelIdMatch
+          ? `https://t.me/c/${channelIdMatch[1]}/${result.messageId}`
+          : null;
+      return url ? [{ messageId: result.messageId, url }] : [];
+    });
+    const failed = publishResults.filter(result => result.error);
+    if (failed.length > 0) {
+      return res.status(502).json({
+        success: false,
+        saved: true,
+        profile: updated,
+        new_media: uploadedUrls,
+        publishedCount,
+        publishedPosts,
+        publishErrors: failed,
+        error: `${publishedCount} de ${files.length} archivo(s) se publicaron. ${failed.length} fallaron; revisa Auditoría antes de reintentar.`
+      });
+    }
+    res.json({
+      success: true,
+      profile: updated,
+      new_media: uploadedUrls,
+      publishedCount,
+      publishedPosts,
+      snapshotKey
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al subir contenido Free a Telegram', details: err?.message });
+  }
+});
+
+// POST Subir Contenido VIP (Guarda en Telegram y en la base de datos con Estrellas)
+router.post('/admin/profiles/:id/content/vip', requireAdminAuth, upload.single('photo'), async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'Debes seleccionar una foto o video para el contenido VIP' });
+      return;
+    }
+
+    const stars = Math.max(1, Math.min(2500, Math.round(Number(req.body.star_count) || 50)));
+    const caption = req.body.caption || req.body.description || '';
+    const publishNow = req.body.publish_now === 'true' || req.body.publish_now === true;
+
+    const config = getBotConfig();
+    const tgFileIds: Record<string, string> = { ...(profile.telegram_media_file_ids || {}) };
+
+    // Subir a Telegram
+    const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, caption);
+    let finalUrl = '';
+    if (tgRes.ok && tgRes.fileId) {
+      const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+      finalUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+      tgFileIds[finalUrl] = tgRes.fileId;
+    } else {
+      if (isB2Configured()) {
+        const objectKey = await uploadToB2(file, 'profiles');
+        finalUrl = mediaUrl(config.baseUrl, objectKey);
+      } else {
+        finalUrl = saveLocalUpload(file, config.baseUrl);
+      }
+    }
+
+    // Actualizar fotos, estrellas, descripciones y estado
+    const updatedPhotos = [finalUrl, ...(profile.photos || [])];
+    const updatedStars = { ...(profile.media_stars || {}) };
+    updatedStars[finalUrl] = stars;
+
+    const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+    if (caption) {
+      updatedDescriptions[finalUrl] = caption.trim();
+    }
+
+    const updatedStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    updatedStatus[finalUrl] = publishNow ? 1 : 2;
+
+    const updated = await saveProfile({
+      id: profileId,
+      photos: updatedPhotos,
+      media_stars: updatedStars,
+      media_descriptions: updatedDescriptions,
+      media_status: updatedStatus,
+      telegram_media_file_ids: tgFileIds
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    let telegramMessageId: number | undefined;
+
+    if (publishNow) {
+      const publishRes = await sendPaidMediaToChannel({
+        mediaUrl: finalUrl,
+        starCount: stars,
+        caption: caption
+      });
+      if (publishRes.ok) {
+        telegramMessageId = publishRes.messageId;
+        await addAuditLog(
+          'PUBLISH_PAID_MEDIA',
+          adminId,
+          `Contenido VIP publicado inmediatamente en Canal VIP por ⭐ ${stars} Estrellas (Mensaje #${publishRes.messageId})`,
+          profileId
+        );
+      }
+    } else {
+      await addAuditLog(
+        'UPLOAD_CONTENT_VIP_DRAFT',
+        adminId,
+        `Contenido VIP guardado en Telegram para ${profile.name} (⭐ ${stars} Estrellas, Borrador)`,
+        profileId
+      );
+    }
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({
+      success: true,
+      profile: updated,
+      media_url: finalUrl,
+      file_id: tgFileIds[finalUrl] || null,
+      star_count: stars,
+      telegramMessageId
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar contenido VIP', details: err?.message });
+  }
+});
+
+// PUT Editar contenido VIP (Actualiza Estrellas y Descripción)
+router.put('/admin/profiles/:id/content/vip', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url, star_count, caption } = req.body;
+
+    if (!media_url) {
+      res.status(400).json({ error: 'URL del archivo multimedia es requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const updatedStars = { ...(profile.media_stars || {}) };
+    if (star_count !== undefined) {
+      updatedStars[media_url] = Math.max(1, Math.min(2500, Math.round(Number(star_count) || 1)));
+    }
+
+    const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+    if (caption !== undefined) {
+      if (caption.trim()) {
+        updatedDescriptions[media_url] = caption.trim();
+      } else {
+        delete updatedDescriptions[media_url];
+      }
+    }
+
+    const updated = await saveProfile({
+      id: profileId,
+      media_stars: updatedStars,
+      media_descriptions: updatedDescriptions
+    });
+
+    broadcastEvent('PROFILE_UPDATED', updated);
+    res.json({ success: true, profile: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al editar contenido VIP', details: err?.message });
+  }
+});
+
+// BOT MEDIA QUEUE ENDPOINTS (/admin/bot-queue)
+
+// POST Difusión Masiva a Suscriptores
+router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const { media_url } = req.body;
+    if (!media_url) {
+      res.status(400).json({ error: 'URL multimedia requerida' });
+      return;
+    }
+
+    const profile = await getProfileById(profileId, false);
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil no encontrado' });
+      return;
+    }
+
+    const operatingMode = getSystemSetting('operating_mode') || 'solo_bot';
+    const { baseUrl, username, channelId } = getBotConfig();
+
+    if (operatingMode !== 'bot_and_channel' || !channelId) {
+      res.status(400).json({ error: 'Modo Híbrido: No hay un ID de canal configurado para compartir.' });
+      return;
+    }
+
+    const isPaid = profile.media_stars && profile.media_stars[media_url] && profile.media_stars[media_url] > 0;
+    if (isPaid) {
+      res.status(400).json({ error: 'El contenido de pago debe publicarse usando su botón amarillo correspondiente.' });
+      return;
+    }
+
+    const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
+
+    res.json({ success: true, message: 'Compartido exitosamente en el Canal VIP.' });
+
+    (async () => {
+      try {
+        const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
+        const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media_url) || media_url.includes('/video');
+        const tgMatch = media_url.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+        const mediaTarget = tgMatch ? tgMatch[1] : media_url;
+
+        const method = isVideo ? 'sendVideo' : 'sendPhoto';
+        const field = isVideo ? 'video' : 'photo';
+        await callTelegramApi(method, {
+          chat_id: channelId,
+          [field]: mediaTarget,
+          caption: captionText,
+          has_spoiler: true,
+          parse_mode: 'Markdown',
+          reply_markup: replyMarkup
+        });
+        console.log("Compartido en Canal Híbrido finalizado con éxito.");
+      } catch (e) {
+        console.error('Error publicando en canal híbrido:', e);
+      }
+    })();
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al intentar compartir en el canal', details: err?.message });
+  }
+});
+router.get('/admin/bot-queue', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const queue = await getBotMediaQueue();
+    res.json(queue);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener cola de multimedia del bot', details: err?.message });
+  }
+});
+
+router.post('/admin/bot-queue', requireAdminAuth, upload.single('media'), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'Debes seleccionar una foto o video para el bot' });
+      return;
+    }
+
+    const caption = req.body.caption || '';
+    const category = req.body.category || 'general';
+
+    const config = getBotConfig();
+    let mediaUrlVal = '';
+    let tgFileId = '';
+
+    const tgRes = await uploadBufferToTelegram(file.buffer, file.originalname, file.mimetype, undefined, caption);
+    if (tgRes.ok && tgRes.fileId) {
+      tgFileId = tgRes.fileId;
+      const ext = tgRes.isVideo ? '.mp4' : (path.extname(file.originalname) || '.jpg');
+      mediaUrlVal = `${config.baseUrl}/api/telegram-media/${tgFileId}${ext}`;
+    } else {
+      if (isB2Configured()) {
+        const objectKey = await uploadToB2(file, 'bot');
+        mediaUrlVal = mediaUrl(config.baseUrl, objectKey);
+      } else {
+        mediaUrlVal = saveLocalUpload(file, config.baseUrl);
+      }
+    }
+
+    const item = await addBotMediaItem({
+      media_url: mediaUrlVal,
+      telegram_file_id: tgFileId || undefined,
+      caption: caption.trim() || undefined,
+      category,
+      is_published: false
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('ADD_BOT_MEDIA', adminId, `Multimedia añadida a biblioteca del Bot (Categoría: ${category})`);
+
+    res.json({ success: true, item });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar multimedia del bot', details: err?.message });
+  }
+});
+
+router.delete('/admin/bot-queue/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    await deleteBotMediaItem(id);
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_BOT_MEDIA', adminId, `Multimedia eliminada de biblioteca del bot (${id})`);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar multimedia del bot', details: err?.message });
+  }
+});
+
+// GET Customer Requests
+router.get('/admin/requests', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const requests = await getCustomerRequests();
+    res.json(requests);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener solicitudes de clientes' });
+  }
+});
+
+// POST Reply to Customer Request & Send Direct Telegram Message
+router.post('/admin/requests/:id/reply', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const requestId = req.params.id;
+    const { reply_message, status } = req.body;
+
+    const request = await getCustomerRequestById(requestId);
+    if (!request) {
+      res.status(404).json({ error: 'Solicitud no encontrada' });
+      return;
+    }
+
+    const newStatus = status || 'confirmado';
+
+    let sentToTelegram = false;
+    const targetUserId = request.telegram_user_id;
+
+    if (targetUserId) {
+      const qrUrl = getSystemSetting('qr_image_url');
+      const msgText = `✨ *RESPUESTA PRIVADA DE LA ADMINISTRADORA* ✨\n\n📌 *Contenido*: ${request.profile_name}\n\n💬 ${reply_message || 'Hola, tu solicitud ha sido atendida.'}\n\n📲 La coordinación y validación de la compra se realizan únicamente en privado. Este sistema no entrega accesos ni enlaces a grupos.\n\n*Estado*: ${newStatus.toUpperCase()}`;
+      let sent;
+      if (qrUrl) {
+        sent = await sendPhotoToUser(targetUserId, qrUrl, msgText);
+      } else {
+        sent = await sendMessage(targetUserId, msgText);
+      }
+      sentToTelegram = sent.ok;
+      if (sentToTelegram) {
+        await updateCustomerRequestStatus(requestId, qrUrl ? 'qr_enviado' : newStatus);
+      }
+    } else {
+      await updateCustomerRequestStatus(requestId, newStatus);
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('REPLY_REQUEST', adminId, `${sentToTelegram ? 'Respuesta privada enviada' : 'Intento de respuesta'} para solicitud de ${request.profile_name} (Cliente: ${request.telegram_first_name || 'Anónimo'})`, requestId);
+
+    broadcastEvent('REQUEST_UPDATED', { id: requestId, status: newStatus });
+
+    res.json({
+      success: true,
+      sent_to_telegram: sentToTelegram,
+      message: sentToTelegram
+        ? 'Respuesta enviada directamente al chat de Telegram del cliente.'
+        : 'Estado de la solicitud actualizado.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar la respuesta a la solicitud' });
+  }
+});
+
+// GET Audit Logs & Sync Errors
+router.get('/admin/logs', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const auditLogs = await getAuditLogs();
+    const syncErrors = await getSyncErrors();
+    res.json({ audit_logs: auditLogs, sync_errors: syncErrors });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener registros de auditoría' });
+  }
+});
+
+// POST Setup Telegram Webhook Helper
+router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res: Response) => {
+  const { token, secret, baseUrl } = getBotConfig();
+  if (!token) {
+    res.status(400).json({ error: 'BOT_TOKEN no configurado en las variables de entorno' });
+    return;
+  }
+
+  const webhookUrl = `${baseUrl}/api/telegram/webhook`;
+  const tgUrl = `https://api.telegram.org/bot${token}/setWebhook`;
+
+  try {
+    const response = await fetch(tgUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        secret_token: secret,
+        allowed_updates: ['message', 'callback_query']
+      })
+    });
+    const result = await response.json();
+    res.json({ webhook_url: webhookUrl, telegram_response: result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al registrar webhook', details: err?.message });
+  }
+});
+
+// POST Update Bot Settings
+router.post('/admin/settings', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { bot_username, telegram_only_access, auto_reply_delay_minutes, model_display_name, model_vip_link, channel_id, operating_mode, admin_contact_username, splash_description } = req.body;
+    if (bot_username !== undefined) {
+      const cleanUsername = String(bot_username).replace(/^@/, '').trim();
+      saveSystemSetting('bot_username', cleanUsername);
+    }
+    if (admin_contact_username !== undefined) {
+      const cleanAdminContact = String(admin_contact_username).replace(/^@/, '').trim();
+      saveSystemSetting('admin_contact_username', cleanAdminContact);
+    }
+    if (channel_id !== undefined) {
+      const cleanChannel = String(channel_id).trim();
+      saveSystemSetting('channel_id', cleanChannel);
+    }
+    if (operating_mode !== undefined) {
+      const cleanMode = operating_mode === 'bot_and_channel' ? 'bot_and_channel' : 'solo_bot';
+      saveSystemSetting('operating_mode', cleanMode);
+    }
+    if (telegram_only_access !== undefined) {
+      saveSystemSetting('telegram_only_access', telegram_only_access ? 'true' : 'false');
+    }
+    if (auto_reply_delay_minutes !== undefined) {
+      saveSystemSetting('auto_reply_delay_minutes', String(auto_reply_delay_minutes));
+    }
+    if (model_display_name !== undefined) {
+      const cleanDisplayName = String(model_display_name).trim() || 'Tú';
+      saveSystemSetting('model_display_name', cleanDisplayName);
+      const creatorProfiles = await getAllProfiles();
+      if (creatorProfiles[0]) {
+        await saveProfile({ id: creatorProfiles[0].id, name: cleanDisplayName });
+      }
+    }
+    if (model_vip_link !== undefined) {
+      saveSystemSetting('model_vip_link', String(model_vip_link).trim());
+    }
+    if (splash_description !== undefined) {
+      saveSystemSetting('splash_description', String(splash_description).trim());
+    }
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, 'Configuración de modo y parámetros actualizada');
+    const updatedConfig = getBotConfig();
+    const isTelegramOnly = getSystemSetting('telegram_only_access') === 'true';
+    const autoReplyDelay = getSystemSetting('auto_reply_delay_minutes') || '10';
+    res.json({
+      success: true,
+      bot_username: updatedConfig.username,
+      channel_id: updatedConfig.channelId,
+      channel_title: getSystemSetting('channel_title') || '',
+      operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
+      telegram_only_access: isTelegramOnly,
+      auto_reply_delay_minutes: autoReplyDelay,
+      qr_image_url: getSystemSetting('qr_image_url') || '',
+      admin_contact_username: getSystemSetting('admin_contact_username') || updatedConfig.username || 'Danii_Catalogo_SCZ_bot',
+      model_display_name: getSystemSetting('model_display_name') || 'Tú',
+      model_vip_link: getSystemSetting('model_vip_link') || '',
+      splash_description: getSystemSetting('splash_description') || ''
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar configuración' });
+  }
+});
+
+// GET Status of configured Telegram Channel
+router.get('/admin/settings/channel', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const { channelId, username } = getBotConfig();
+    const storedTitle = getSystemSetting('channel_title') || '';
+    const verify = await verifyChannel(channelId);
+    res.json({
+      channel_id: channelId,
+      verified: verify.ok,
+      title: verify.title || storedTitle,
+      username: verify.username,
+      error: verify.error,
+      bot_username: username
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al consultar estado del canal' });
+  }
+});
+
+// POST Save & Verify Telegram Channel
+router.post('/admin/settings/channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { channel_id } = req.body;
+    if (!channel_id || typeof channel_id !== 'string') {
+      res.status(400).json({ error: 'Debes proporcionar un ID numérico (-100...) o @usuario del canal.' });
+      return;
+    }
+    const cleanChannel = channel_id.trim();
+    const verify = await verifyChannel(cleanChannel);
+    if (!verify.ok) {
+      res.status(400).json({
+        error: verify.error,
+        details: 'Asegúrate de agregar al bot como Administrador en tu canal con permiso para publicar mensajes.'
+      });
+      return;
+    }
+
+    const savedId = String(verify.id || cleanChannel);
+    saveSystemSetting('channel_id', savedId);
+    if (verify.title) saveSystemSetting('channel_title', verify.title);
+    if (verify.username) saveSystemSetting('channel_username', verify.username);
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_CHANNEL', adminId, `Canal vinculado: "${verify.title || cleanChannel}" (${savedId})`);
+
+    res.json({
+      success: true,
+      channel_id: savedId,
+      channel_title: verify.title,
+      channel_username: verify.username,
+      message: `¡Canal "${verify.title || savedId}" verificado y vinculado exitosamente!`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al verificar canal', details: err?.message });
+  }
+});
+
+// POST Upload QR Image Setting
+router.post('/admin/settings/qr', requireAdminAuth, upload.single('qr_image'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No se envió ninguna imagen QR' });
+      return;
+    }
+    const config = getBotConfig();
+    const qrUrl = isB2Configured()
+      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'qr'))
+      : saveLocalUpload(req.file, config.baseUrl);
+    saveSystemSetting('qr_image_url', qrUrl);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, 'QR de Pago VIP actualizado');
+    res.json({ success: true, qr_image_url: qrUrl });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar imagen QR' });
+  }
+});
+
+// POST Save Pinned Message Setting
+router.post('/admin/settings/pinned', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { pinned_message_text, pinned_message_active } = req.body;
+    saveSystemSetting('pinned_message_text', pinned_message_text || '');
+    saveSystemSetting('pinned_message_active', String(Boolean(pinned_message_active)));
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, `Mensaje fijado actualizado (Activo: ${pinned_message_active})`);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar mensaje fijado' });
+  }
+});
+
+// POST Upload Welcome Media (Photo or Video for Bot onboarding)
+router.post('/admin/settings/welcome-media', requireAdminAuth, upload.single('welcome_media'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No se envió ningún archivo de foto o video' });
+      return;
+    }
+    const config = getBotConfig();
+    const isVideo = req.file.mimetype.startsWith('video/');
+    const mediaType = isVideo ? 'video' : 'photo';
+    
+    let mediaFileUrl = '';
+    const tgRes = await uploadBufferToTelegram(req.file.buffer, req.file.originalname, req.file.mimetype);
+    if (tgRes.ok && tgRes.fileId) {
+      const ext = tgRes.isVideo ? '.mp4' : (require('path').extname(req.file.originalname) || '.jpg');
+      mediaFileUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+    } else {
+      mediaFileUrl = isB2Configured()
+        ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'profiles'))
+        : saveLocalUpload(req.file, config.baseUrl);
+    }
+
+
+    saveSystemSetting('welcome_media_url', mediaFileUrl);
+    saveSystemSetting('welcome_media_type', mediaType);
+
+    if (req.body.splash_description !== undefined) {
+      saveSystemSetting('splash_description', String(req.body.splash_description).trim());
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, `Foto/Video de bienvenida actualizado (${mediaType})`);
+    res.json({
+      success: true,
+      welcome_media_url: mediaFileUrl,
+      welcome_media_type: mediaType,
+      splash_description: getSystemSetting('splash_description') || ''
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar foto/video de bienvenida', details: err?.message });
+  }
+});
+
+// DELETE Welcome Media
+router.delete('/admin/settings/welcome-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    saveSystemSetting('welcome_media_url', '');
+    saveSystemSetting('welcome_media_type', '');
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_SETTINGS', adminId, 'Foto/Video de bienvenida eliminado');
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar foto/video de bienvenida' });
+  }
+});
+
+// ==========================================
+// CUSTOM BUTTONS ENDPOINTS
+// ==========================================
+
+// GET All custom buttons (admin)
+router.get('/admin/buttons', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const buttons = await getAllCustomButtons();
+    res.json(buttons);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener botones personalizados' });
+  }
+});
+
+// POST Create or update custom button (admin)
+router.post('/admin/buttons', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id, label, url, type, visible_channel, visible_miniapp, is_active, priority_order } = req.body;
+    const buttonType = type === 'telegram' || type === 'subscription' ? type : 'url';
+    const normalizedUrl = String(url || '').trim();
+    if (!label || !String(label).trim()) {
+      res.status(400).json({ error: 'La etiqueta es requerida' });
+      return;
+    }
+    if (buttonType !== 'subscription' && !normalizedUrl) {
+      res.status(400).json({ error: 'La URL o deep-link es requerida para este tipo de botón' });
+      return;
+    }
+    const saved = await saveCustomButton({
+      id,
+      label: String(label).trim(),
+      url: normalizedUrl,
+      type: buttonType,
+      visible_channel: visible_channel !== undefined ? Boolean(visible_channel) : true,
+      visible_miniapp: visible_miniapp !== undefined ? Boolean(visible_miniapp) : true,
+      is_active: is_active !== undefined ? Boolean(is_active) : true,
+      priority_order: priority_order !== undefined ? Number(priority_order) : 0
+    });
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CUSTOM_BUTTON', adminId, `Botón personalizado guardado: "${saved.label}"`);
+    broadcastEvent('BUTTONS_UPDATED', saved);
+    res.json({ success: true, button: saved });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar botón personalizado', details: err?.message });
+  }
+});
+
+// DELETE Custom button (admin)
+router.delete('/admin/buttons/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await deleteCustomButton(id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CUSTOM_BUTTON_DELETE', adminId, `Botón personalizado eliminado: ${id}`);
+    broadcastEvent('BUTTONS_UPDATED', { deleted: id });
+    res.json({ success: true, message: 'Botón eliminado correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar botón personalizado' });
+  }
+});
+
+// GET Public buttons (Mini App / Channel)
+router.get('/buttons/public', async (req: Request, res: Response) => {
+  try {
+    const target = req.query.target === 'channel' ? 'channel' : 'miniapp';
+    const buttons = await getPublicCustomButtons(target);
+    res.json(buttons);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cargar botones públicos' });
+  }
+});
+
+// ==========================================
+// TELEGRAM RAPID BOTONERA ENDPOINTS
+// ==========================================
+
+router.get('/admin/telegram-botoneras', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const items = await getAllTelegramBotoneras();
+    res.json(items);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener la botonera VIP', details: err?.message });
+  }
+});
+
+router.post('/admin/telegram-botoneras', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const payload = req.body || {};
+    if (!payload.name || !String(payload.name).trim()) {
+      res.status(400).json({ error: 'El nombre de la botonera es requerido' });
+      return;
+    }
+    if (!payload.title || !String(payload.title).trim()) {
+      res.status(400).json({ error: 'El título principal es requerido' });
+      return;
+    }
+    if (!Array.isArray(payload.countries) || payload.countries.length === 0) {
+      res.status(400).json({ error: 'Debes definir al menos un país o bandera' });
+      return;
+    }
+    if (!Array.isArray(payload.plans) || payload.plans.length === 0) {
+      res.status(400).json({ error: 'Debes definir al menos un plan de suscripción' });
+      return;
+    }
+
+    const sanitizedCountries = Array.isArray(payload.countries)
+      ? payload.countries.filter((country: any) => country && country.active !== false)
+      : [];
+    const sanitizedPlans = Array.isArray(payload.plans)
+      ? payload.plans.filter((plan: any) => plan && plan.active !== false)
+      : [];
+
+    const saved = await saveTelegramBotonera({
+      id: payload.id,
+      name: String(payload.name).trim(),
+      status: payload.status || 'draft',
+      target: payload.target || 'channel',
+      title: String(payload.title).trim(),
+      intro: String(payload.intro || 'Selecciona tu país para continuar.').trim(),
+      country_label: String(payload.country_label || 'País / Bandera').trim(),
+      plan_label: String(payload.plan_label || 'Elige tu plan').trim(),
+      confirmation_title: String(payload.confirmation_title || 'Confirmar suscripción').trim(),
+      confirmation_text: String(payload.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
+      contact_text: String(payload.contact_text || 'Escríbenos por Telegram en privado para validar tu comprobante.').trim(),
+      is_active: payload.is_active !== undefined ? Boolean(payload.is_active) : true,
+      countries: sanitizedCountries,
+      plans: sanitizedPlans,
+      created_at: payload.created_at,
+      updated_at: payload.updated_at
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CREATE_TELEGRAM_BOTONERA', adminId, `Botonera creada/actualizada: ${saved.name}`);
+    broadcastEvent('TELEGRAM_BOTONERA_UPDATED', saved);
+    res.json({ success: true, botonera: saved });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar la botonera VIP', details: err?.message });
+  }
+});
+
+router.delete('/admin/telegram-botoneras/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    await deleteTelegramBotonera(req.params.id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_TELEGRAM_BOTONERA', adminId, `Botonera eliminada: ${req.params.id}`);
+    broadcastEvent('TELEGRAM_BOTONERA_UPDATED', { deleted: req.params.id });
+    res.json({ success: true, message: 'Botonera eliminada correctamente.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar la botonera VIP', details: err?.message });
+  }
+});
+
+router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const all = await getAllTelegramBotoneras();
+    const botonera = all.find(item => item.id === id);
+    if (!botonera) {
+      res.status(404).json({ error: 'Botonera no encontrada' });
+      return;
+    }
+
+    const { channelId, username, appShortName } = getBotConfig();
+    if (!channelId) {
+      res.status(400).json({ error: 'No hay canal Telegram configurado para publicar la botonera.' });
+      return;
+    }
+    const botUser = String(username || '').replace(/^@/, '').trim();
+    if (!botUser) {
+      res.status(400).json({ error: 'No hay username del bot configurado (BOT_USERNAME).' });
+      return;
+    }
+
+    // En un CANAL los botones deben ser de tipo url: abren el bot en privado (t.me/<bot>?start=...)
+    // y allí se muestran los datos de pago. Un callback_data en un canal no puede responder en privado.
+    const startUrl = (param: string) => `https://t.me/${botUser}?start=${param}`;
+    const directMiniAppUrl = `https://t.me/${botUser}/${appShortName || 'canalVipFreeIamDanii'}`;
+    const safeId = (value: any) => String(value || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
+
+    const visibleCountries = (botonera.countries || []).filter(item => item.active);
+    const rows: any[][] = [];
+    for (let i = 0; i < visibleCountries.length; i += 2) {
+      const row: any[] = [];
+      for (const country of visibleCountries.slice(i, i + 2)) {
+        row.push({ text: `${country.flag} ${country.name}`, url: startUrl(`vipc_${safeId(country.id)}`) });
+      }
+      rows.push(row);
+    }
+    rows.push([{ text: '💳 Ver todos los métodos de pago', url: startUrl('pagos') }]);
+    rows.push([{ text: 'Solicitar Información a mi privado', url: `https://t.me/${botUser}` }]);
+    rows.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }]);
+
+    const resolvedTitle = 'HOLI MIS AMORES HOLI 💖🔥APROVECHEN LA PROMOCION, SUSCRIPCIONES MENSUAL, ULTIMAS PLAZAS..';
+    const resolvedIntro = 'Selecciona tu país para continuar con tu suscripción VIP.';
+    const messageText = `${resolvedTitle}\n\n${resolvedIntro}`;
+    const reply_markup = { inline_keyboard: rows };
+
+    // Si ya hay un mensaje publicado se EDITA (evita duplicados y arregla el post viejo); si falla, se envía uno nuevo.
+    let result: any = null;
+    if (botonera.published_message_id) {
+      const edited = await callTelegramApi('editMessageText', {
+        chat_id: channelId,
+        message_id: botonera.published_message_id,
+        text: messageText,
+        parse_mode: 'Markdown',
+        reply_markup
+      });
+      if (edited?.ok || /not modified/i.test(String(edited?.description || ''))) {
+        result = { ok: true, result: { message_id: botonera.published_message_id } };
+      }
+    }
+    if (!result) {
+      result = await sendMessage(channelId, messageText, { reply_markup });
+      if (!result?.ok && /parse entities/i.test(String(result?.description || ''))) {
+        result = await sendMessage(channelId, messageText, { reply_markup, parse_mode: undefined });
+      }
+    }
+
+    if (!result || !result.ok) {
+      res.status(400).json({ error: result?.description || 'No se pudo publicar la botonera en Telegram.' });
+      return;
+    }
+
+    const updated = await saveTelegramBotonera({
+      ...botonera,
+      id: botonera.id,
+      status: 'published',
+      published_message_id: result.result?.message_id || botonera.published_message_id || null
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('PUBLISH_TELEGRAM_BOTONERA', adminId, `Botonera publicada: ${updated.name}`);
+    res.json({ success: true, botonera: updated, published_message_id: result.result?.message_id || null });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al publicar la botonera VIP', details: err?.message });
+  }
+});
+
+// ==========================================
+// DYNAMIC POLLS ENDPOINTS
+// ==========================================
+
+// GET All polls (admin)
+router.get('/admin/polls', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const polls = await getAllPolls();
+    res.json(polls);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener encuestas' });
+  }
+});
+
+// POST Create or update poll (admin)
+router.post('/admin/polls', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id, question, options, visible_channel, visible_miniapp, is_active, publish_telegram } = req.body;
+    if (!question || !Array.isArray(options) || options.length < 2) {
+      res.status(400).json({ error: 'La encuesta requiere una pregunta y al menos 2 opciones' });
+      return;
+    }
+
+    let tgPollId: string | undefined;
+    let tgMsgId: number | undefined;
+
+    if (publish_telegram) {
+      const tgRes = await sendChannelPoll(question, options);
+      if (tgRes.ok && tgRes.result) {
+        tgPollId = tgRes.result.poll?.id;
+        tgMsgId = tgRes.result.message_id;
+      }
+    }
+
+    const saved = await savePoll({
+      id,
+      question: String(question).trim(),
+      options: options.map((o: any) => String(o).trim()).filter(Boolean),
+      visible_channel: visible_channel !== undefined ? Boolean(visible_channel) : true,
+      visible_miniapp: visible_miniapp !== undefined ? Boolean(visible_miniapp) : true,
+      is_active: is_active !== undefined ? Boolean(is_active) : true,
+      telegram_poll_id: tgPollId,
+      telegram_message_id: tgMsgId
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CREATE_POLL', adminId, `Encuesta/Dinámica creada: "${saved.question}"`);
+    broadcastEvent('POLLS_UPDATED', saved);
+    res.json({ success: true, poll: saved, telegram_published: Boolean(tgPollId) });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar encuesta', details: err?.message });
+  }
+});
+
+// DELETE Poll (admin)
+router.delete('/admin/polls/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await deletePoll(id);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_POLL', adminId, `Encuesta eliminada: ${id}`);
+    broadcastEvent('POLLS_UPDATED', { deleted: id });
+    res.json({ success: true, message: 'Encuesta eliminada correctamente' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar encuesta' });
+  }
+});
+
+// GET Active polls (Mini App)
+router.get('/polls/active', async (_req: Request, res: Response) => {
+  try {
+    const polls = await getActivePolls();
+    res.json(polls);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cargar encuestas activas' });
+  }
+});
+
+// POST Vote on poll (Mini App)
+router.post('/polls/:id/vote', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { user_id, option_index } = req.body;
+    if (option_index === undefined || Number.isNaN(Number(option_index))) {
+      res.status(400).json({ error: 'Debe seleccionar una opción válida' });
+      return;
+    }
+    const voterId = String(user_id || req.ip || 'anon');
+    const result = await votePoll(id, voterId, Number(option_index));
+    broadcastEvent('POLL_VOTED', result.poll);
+    res.json({ success: true, poll: result.poll, already_voted: result.alreadyVoted });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Error al registrar voto' });
+  }
+});
+
+// POST Force Sync Database Snapshot to Backblaze B2 (admin)
+router.post('/admin/sync-db', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const objectKey = await syncDbToB2Now();
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('SYNC_DB_B2', adminId, 'Base de datos SQLite respaldada en Backblaze B2');
+    res.json({ success: true, message: 'Base de datos respaldada exitosamente en Backblaze B2', key: objectKey });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al respaldar base de datos en B2', details: err?.message });
+  }
+});
+
+// ==========================================
+// Payment Methods Endpoints
+// ==========================================
+
+// GET Public Active Payment Methods (Mini App & Clients)
+router.get('/payment-methods', async (_req: Request, res: Response) => {
+  try {
+    const methods = await getPublicPaymentMethods();
+    res.json(methods);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener métodos de pago', details: err?.message });
+  }
+});
+
+// GET All Payment Methods (Admin)
+router.get('/admin/payment-methods', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const methods = await getAllPaymentMethods();
+    res.json(methods);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener métodos de pago para administración', details: err?.message });
+  }
+});
+
+// PUT Update Payment Method (Admin)
+router.put('/admin/payment-methods/:id', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await getPaymentMethodById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Método de pago no encontrado' });
+      return;
+    }
+
+    const { title, description, price, is_active, priority_order, image_url, category } = req.body;
+    const updated = await savePaymentMethod({
+      id,
+      title,
+      description,
+      price,
+      is_active,
+      priority_order,
+      image_url,
+      category
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_PAYMENT_METHOD', adminId, `Método de pago actualizado: ${updated.title}`, id);
+    broadcastEvent('PAYMENT_METHOD_UPDATED', updated);
+    res.json({ success: true, payment_method: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al guardar método de pago', details: err?.message });
+  }
+});
+
+// POST Upload Image/QR for Payment Method (Admin)
+router.post('/admin/payment-methods/:id/image', requireAdminAuth, upload.single('image'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = await getPaymentMethodById(id);
+    if (!existing) {
+      res.status(404).json({ error: 'Método de pago no encontrado' });
+      return;
+    }
+
+    if (!req.file) {
+      res.status(400).json({ error: 'No se envió ninguna imagen' });
+      return;
+    }
+
+    const config = getBotConfig();
+    const imageUrl = isB2Configured()
+      ? mediaUrl(config.baseUrl, await uploadToB2(req.file, 'qr'))
+      : saveLocalUpload(req.file, config.baseUrl);
+
+    const updated = await savePaymentMethod({
+      id,
+      image_url: imageUrl
+    });
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_PAYMENT_METHOD_IMAGE', adminId, `Imagen/QR subida para método: ${updated.title}`, id);
+    broadcastEvent('PAYMENT_METHOD_UPDATED', updated);
+    res.json({ success: true, payment_method: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al subir imagen del método de pago', details: err?.message });
+  }
+});
+
+// POST Publish Payment Methods to VIP Telegram Channel (Admin)
+router.post('/admin/payment-methods/publish-channel', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await publishPaymentMethodsToChannel();
+    if (!result.ok) {
+      res.status(400).json({ error: result.message });
+      return;
+    }
+
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('PUBLISH_PAYMENT_METHODS', adminId, 'Menú interactivo de métodos de pago publicado en el canal Telegram');
+    res.json({ success: true, message: result.message });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al publicar métodos de pago en el canal', details: err?.message });
+  }
+});
+
+// GET Database Statistics and Size Breakdown (Admin)
+router.get('/admin/system/database-stats', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const stats = await getDatabaseStats();
+    res.json({ ok: true, stats });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener estadísticas de la base de datos', details: err?.message });
+  }
+});
+
+// POST Vacuum and Compact Database (Admin)
+router.post('/admin/system/database-vacuum', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await vacuumAndCompactDb();
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DATABASE_VACUUM', adminId, `Compactación y VACUUM ejecutado. Tamaño: ${result.before} -> ${result.after}. Logs purgados: ${result.purgedLogs}`);
+    res.json({ ok: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al compactar la base de datos', details: err?.message });
+  }
+});
+
+// POST Migración B2 a Telegram (Una sola vez)
+router.post('/admin/system/migrate-b2', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profiles = await getAllProfiles(); // from db.ts
+    const config = getBotConfig();
+    let migratedCount = 0;
+    let skipCount = 0;
+    const errors: string[] = [];
+
+    for (const profile of profiles) {
+      if (!profile.photos || profile.photos.length === 0) continue;
+      
+      const newPhotos: string[] = [];
+      let changed = false;
+      const newStars = { ...(profile.media_stars || {}) };
+      const newDescs = { ...(profile.media_descriptions || {}) };
+      const newStatus = { ...(profile.media_status || {}) };
+      const newEphem = { ...(profile.ephemeral_config || {}) };
+      const tgFileIds = { ...(profile.telegram_media_file_ids || {}) };
+
+      for (const oldUrl of profile.photos) {
+        if (oldUrl.includes('/api/telegram-media/')) {
+          newPhotos.push(oldUrl);
+          skipCount++;
+          continue;
+        }
+
+        try {
+          console.log(`Migrando: ${oldUrl}`);
+          const fetchUrl = oldUrl.startsWith('/') ? config.baseUrl + oldUrl : oldUrl;
+          const fetchRes = await fetch(fetchUrl);
+          if (!fetchRes.ok) throw new Error(`Fetch failed: ${fetchRes.statusText}`);
+          const arrayBuffer = await fetchRes.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          
+          const ext = path.extname(oldUrl).toLowerCase() || '.jpg';
+          let mimeType = 'image/jpeg';
+          if (ext === '.mp4') mimeType = 'video/mp4';
+          else if (ext === '.webm') mimeType = 'video/webm';
+          else if (ext === '.png') mimeType = 'image/png';
+          else if (ext === '.gif') mimeType = 'image/gif';
+
+          const tgRes = await uploadBufferToTelegram(buffer, `mig_${Date.now()}${ext}`, mimeType);
+          
+          if (tgRes.ok && tgRes.fileId) {
+            const finalUrl = `${config.baseUrl}/api/telegram-media/${tgRes.fileId}${ext}`;
+            newPhotos.push(finalUrl);
+            tgFileIds[finalUrl] = tgRes.fileId;
+            
+            if (newStars[oldUrl]) { newStars[finalUrl] = newStars[oldUrl]; delete newStars[oldUrl]; }
+            if (newDescs[oldUrl]) { newDescs[finalUrl] = newDescs[oldUrl]; delete newDescs[oldUrl]; }
+            if (newStatus[oldUrl]) { newStatus[finalUrl] = newStatus[oldUrl]; delete newStatus[oldUrl]; }
+            if (newEphem[oldUrl]) { newEphem[finalUrl] = newEphem[oldUrl]; delete newEphem[oldUrl]; }
+            
+            changed = true;
+            migratedCount++;
+            console.log(`Éxito -> ${finalUrl}`);
+          } else {
+            errors.push(`Telegram rechazó ${oldUrl}: ${tgRes.error}`);
+            newPhotos.push(oldUrl);
+          }
+        } catch (err: any) {
+          errors.push(`Error descargando ${oldUrl}: ${err.message}`);
+          newPhotos.push(oldUrl);
+        }
+      }
+
+      if (changed) {
+        await saveProfile({
+          id: profile.id,
+          photos: newPhotos,
+          media_stars: newStars,
+          media_descriptions: newDescs,
+          media_status: newStatus,
+          ephemeral_config: newEphem,
+          telegram_media_file_ids: tgFileIds
+        });
+      }
+    }
+
+    res.json({ success: true, migratedCount, skipCount, errors });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error general en migración', details: err?.message });
+  }
+});
+
+// ==========================================
+// B2 Storage Manager Endpoints
+// ==========================================
+
+router.get('/admin/b2/files', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const prefix = typeof req.query.prefix === 'string' ? req.query.prefix : 'tu-vip/';
+    const files = await listAllB2Files(prefix);
+    res.json({ success: true, files });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al listar archivos B2', details: err?.message });
+  }
+});
+
+// Auditing and targeted deletion of profile media from B2.
+router.get('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    if ((req as any).adminUserId !== '6461788392') return res.status(403).json({ error: 'Acceso reservado al administrador principal.' });
+    const [files, profiles] = await Promise.all([
+      listB2ObjectsForAudit(),
+      getAllProfiles()
+    ]);
+    const media = files.map(file => {
+      const references = profiles.flatMap(profile =>
+        (profile.photos || []).filter(url => {
+          if (!url.includes('key=')) return false;
+          try { return decodeURIComponent(url.split('key=')[1].split('&')[0]) === file.key; } catch { return false; }
+        }).map(url => ({ profileId: profile.id, profileName: profile.name, url, status: profile.media_status?.[url] ?? null }))
+      );
+      return { ...file, references };
+    });
+    const gallery = profiles.flatMap(profile => (profile.photos || []).map(url => {
+      let b2Key: string | null = null;
+      if (url.includes('key=')) {
+        try { b2Key = decodeURIComponent(url.split('key=')[1].split('&')[0]); } catch { b2Key = null; }
+      }
+      const source = b2Key ? 'b2'
+        : url.includes('/api/telegram-media/') ? 'telegram'
+          : url.includes('/uploads/') ? 'local' : 'external';
+      return {
+        profileId: profile.id,
+        profileName: profile.name,
+        url,
+        source,
+        b2Key,
+        b2ObjectExists: Boolean(b2Key && files.some(file => file.key === b2Key)),
+        b2ObjectDeletable: Boolean(b2Key && files.some(file => file.key === b2Key) && b2Key.startsWith('tu-vip/') && !b2Key.startsWith('tu-vip/db/') && !b2Key.startsWith('tu-vip/backups/')),
+        status: profile.media_status?.[url] ?? null,
+        description: profile.media_descriptions?.[url] || ''
+      };
+    }));
+    res.json({ success: true, files: media, gallery });
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo auditar los medios en B2', details: err?.message });
+  }
+});
+
+router.delete('/admin/audit/b2-profile-media', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { key, url } = req.body;
+    const adminId = (req as any).adminUserId || '';
+    if (adminId !== '6461788392') return res.status(403).json({ error: 'Acción reservada al administrador principal.' });
+
+    if (typeof url === 'string') {
+      if (!url.includes('/api/telegram-media/')) return res.status(400).json({ error: 'La URL no corresponde a un medio de Telegram.' });
+      const profiles = await getAllProfiles();
+      const matches = profiles.flatMap(profile => (profile.photos || [])
+        .filter(photoUrl => photoUrl === url)
+        .map(photoUrl => ({ profile, url: photoUrl })));
+      if (matches.length === 0) return res.status(404).json({ error: 'La referencia ya no está en la galería.' });
+
+      for (const match of matches) {
+        const updated = await removeMediaFromProfile(match.profile.id, match.url);
+        if (!updated) throw new Error(`No se pudo quitar la referencia del perfil ${match.profile.name}`);
+      }
+      await addAuditLog('AUDIT_REMOVE_TELEGRAM_MEDIA_REF', adminId,
+        `Referencia de medio Telegram retirada de ${matches.length} perfil(es); archivo Telegram conservado; sincronizando snapshot.`,
+        matches[0]?.profile.id);
+      const dbKey = await syncDbToB2Now();
+      for (const match of matches) broadcastEvent('PROFILE_UPDATED', { id: match.profile.id });
+      return res.json({ success: true, source: 'telegram', removedReferences: matches.length, snapshotKey: dbKey });
+    }
+
+    if (typeof key !== 'string' || !key.startsWith('tu-vip/') || key.includes('..') || key.startsWith('tu-vip/db/') || key.startsWith('tu-vip/backups/')) {
+      return res.status(400).json({ error: 'Clave de medio B2 inválida.' });
+    }
+
+    const profiles = await getAllProfiles();
+    const matches = profiles.flatMap(profile =>
+      (profile.photos || []).filter(url => {
+        if (!url.includes('key=')) return false;
+        try { return decodeURIComponent(url.split('key=')[1].split('&')[0]) === key; } catch { return false; }
+      }).map(url => ({ profile, url }))
+    );
+    if (matches.length === 0) return res.status(404).json({ error: 'Ese objeto B2 no está vinculado a ningún medio de la galería; no se eliminó.' });
+
+    // Remove the object first; preserve DB references if B2 deletion fails.
+    await obliterateB2MediaObject(key);
+    for (const match of matches) {
+      const updated = await removeMediaFromProfile(match.profile.id, match.url);
+      if (!updated) throw new Error(`No se pudo quitar la referencia del perfil ${match.profile.name}`);
+    }
+    await addAuditLog('AUDIT_DELETE_B2_MEDIA', adminId,
+      `Objeto ${key} eliminado de B2; referencias removidas: ${matches.length}; sincronización de snapshot solicitada.`,
+      matches[0]?.profile.id);
+    const dbKey = await syncDbToB2Now();
+    if (matches.length) broadcastEvent('PROFILE_UPDATED', { id: matches[0].profile.id });
+    res.json({ success: true, key, removedReferences: matches.length, snapshotKey: dbKey });
+  } catch (err: any) {
+    res.status(500).json({ error: 'No se pudo completar la eliminación y persistencia en B2', details: err?.message });
+  }
+});
+
+router.post('/admin/b2/restore', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { key } = req.body;
+    if (!key || !key.startsWith('tu-vip/backups/')) {
+      return res.status(400).json({ error: 'Clave de backup inválida' });
+    }
+    const buffer = await restoreDatabaseFromB2(key);
+    if (!buffer) {
+      return res.status(404).json({ error: 'No se encontró el backup en B2' });
+    }
+    
+    // Save to disk and restart server magically
+    fs.writeFileSync(require('path').join(process.cwd(), 'data', 'catalogo.sqlite'), buffer);
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('RESTORE_DB', adminId, `Base de datos restaurada desde B2: ${key}`);
+    
+    setTimeout(() => process.exit(0), 1000); 
+    
+    res.json({ success: true, message: 'Base de datos restaurada. El servidor se está reiniciando...' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al restaurar backup', details: err?.message });
+  }
+});
+
+router.delete('/admin/b2/files', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { key } = req.body;
+    if (!key) return res.status(400).json({ error: 'Falta key' });
+    await deleteB2Backup(key);
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('DELETE_B2_BACKUP', adminId, `Eliminado backup B2: ${key}`);
+    
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar', details: err?.message });
+  }
+});
+
+router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+      const profilesFiles = await listAllB2Files('tu-vip/profiles/');
+      const qrFiles = await listAllB2Files('tu-vip/qr/');
+      const botFiles = await listAllB2Files('tu-vip/bot/');
+      const b2MediaFiles = [...profilesFiles, ...qrFiles, ...botFiles];
+
+    // Recopilar urls de BD
+    const allProfiles = await getAllProfiles();
+    const allPayments = await getAllPaymentMethods();
+    const allQueue = await getBotMediaQueue();
+    
+    const dbUrls = new Set<string>();
+    for (const p of allProfiles) {
+      if (Array.isArray(p.photos)) {
+        p.photos.forEach(u => {
+          if (u.includes('key=')) {
+              const key = decodeURIComponent(u.split('key=')[1].split('&')[0]);
+              if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
+            }
+        });
+      }
+    }
+    for (const p of allPayments) {
+      if (p.image_url && p.image_url.includes('key=')) {
+          const key = decodeURIComponent(p.image_url.split('key=')[1].split('&')[0]);
+          if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
+        }
+    }
+    for (const q of allQueue) {
+      if (q.media_url && q.media_url.includes('key=')) {
+          const key = decodeURIComponent(q.media_url.split('key=')[1].split('&')[0]);
+          if (key.startsWith('tu-vip/profiles/') || key.startsWith('tu-vip/qr/') || key.startsWith('tu-vip/bot/')) dbUrls.add(key);
+        }
+    }
+    
+    const orphans = [];
+    let orphanSize = 0;
+    
+    for (const f of b2MediaFiles) {
+      // f.key es 'tu-vip/media/xxxxx.jpg'
+      if (!dbUrls.has(f.key)) {
+        orphans.push(f);
+        orphanSize += f.size;
+      }
+    }
+    
+    res.json({ success: true, orphans, orphanSize });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error escaneando huérfanos', details: err?.message });
+  }
+});
+
+router.post('/admin/b2/clean-orphans', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { keys } = req.body; // array of strings (b2 object keys)
+    if (!Array.isArray(keys) || keys.length === 0) {
+      return res.status(400).json({ error: 'No se enviaron archivos para eliminar' });
+    }
+    
+    let deletedCount = 0;
+    for (const k of keys) {
+      // deleteB2Media takes URL or key. But wait, deleteB2Media deletes if key starts with tu-vip/media/
+      await deleteB2Media(k);
+      deletedCount++;
+    }
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('CLEAN_B2_ORPHANS', adminId, `Purgados ${deletedCount} archivos huérfanos de B2`);
+    
+    res.json({ success: true, deletedCount });
+  } catch(err: any) {
+    res.status(500).json({ error: 'Error purgando huérfanos', details: err?.message });
+  }
+});

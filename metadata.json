@@ -1,0 +1,6 @@
+{
+  "name": "Tú • Espacio VIP",
+  "description": "Mini App privada y genérica para creadoras de contenido, administrada mediante un bot de Telegram.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

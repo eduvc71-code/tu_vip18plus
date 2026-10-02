@@ -1,0 +1,25 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+demo/dist/
+
+# Base de datos y backups (NUNCA subas esto)
+/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+backups/
+
+# Variables de entorno (SECRETOS)
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

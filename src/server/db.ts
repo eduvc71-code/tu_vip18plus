@@ -1,0 +1,1884 @@
+import Database from 'better-sqlite3';
+import fs from 'fs';
+import path from 'path';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, ConversationState, CustomButton, TelegramBotonera, DynamicPoll, PaymentMethod, BotMediaItem } from '../types.js';
+import { backupDatabaseToB2, downloadDatabaseFromB2, isB2Configured } from './b2Storage.js';
+
+const DATA_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'catalogo.sqlite');
+
+class SqlJsCompatibleDatabase {
+  db: any;
+  constructor(bufferOrFile?: any) {
+    if (typeof bufferOrFile === 'string') {
+      this.db = new Database(bufferOrFile);
+    } else if (bufferOrFile && typeof bufferOrFile === 'object') {
+      fs.writeFileSync(DB_FILE, bufferOrFile);
+      this.db = new Database(DB_FILE);
+    } else {
+      this.db = new Database(DB_FILE);
+    }
+    this.db.pragma('journal_mode = WAL');
+  }
+
+  exec(sql: string, params?: any[]) {
+    try {
+      if (sql.trim().toUpperCase().startsWith('SELECT') || sql.trim().toUpperCase().startsWith('PRAGMA')) {
+        const stmt = this.db.prepare(sql);
+        const rows = params ? stmt.all(...params) : stmt.all();
+        if (rows.length === 0) return [];
+        const columns = Object.keys(rows[0] as object);
+        const values = rows.map((r: any) => columns.map(c => r[c]));
+        return [{ columns, values }];
+      } else {
+        if (params) {
+          this.db.prepare(sql).run(...params);
+        } else {
+          this.db.exec(sql);
+        }
+        return [];
+      }
+    } catch(e) {
+      if (sql.includes('sqlite_master')) {
+         const rows = this.db.prepare(sql).all();
+         if (rows.length === 0) return [];
+         const columns = Object.keys(rows[0] as object);
+         const values = rows.map((r: any) => columns.map(c => r[c]));
+         return [{ columns, values }];
+      }
+      return [];
+    }
+  }
+
+  run(sql: string, params?: any[]) {
+    if (params && params.length > 0) {
+      this.db.prepare(sql).run(...params);
+    } else {
+      if (sql.includes(';') && sql.trim().split(';').length > 2) {
+         this.db.exec(sql);
+      } else {
+         try {
+           this.db.prepare(sql).run();
+         } catch(e) {
+           this.db.exec(sql);
+         }
+      }
+    }
+  }
+
+  prepare(sql: string) {
+    const stmt = this.db.prepare(sql);
+    let boundParams: any[] = [];
+    let iterator: any = null;
+    let currentRow: any = null;
+    return {
+      bind: (params: any[]) => { boundParams = params; },
+      // Compatibilidad sql.js: run() sobre un statement preparado.
+      // Acepta los parámetros como array ([a,b,c]) o sueltos (a,b,c).
+      run: (params?: any[] | any, ...rest: any[]) => {
+        const args = Array.isArray(params) ? params : (params !== undefined ? [params, ...rest] : boundParams);
+        return stmt.run(...args);
+      },
+      step: () => {
+        if (!iterator) {
+           try {
+             iterator = stmt.iterate(...boundParams);
+           } catch(e) {
+             const rows = stmt.all(...boundParams);
+             iterator = rows[Symbol.iterator]();
+           }
+        }
+        const res = iterator.next();
+        if (res.done) return false;
+        currentRow = res.value;
+        return true;
+      },
+      getAsObject: () => currentRow,
+      free: () => {
+        if (iterator && iterator.return) iterator.return();
+      }
+    };
+  }
+
+  export() {
+    const checkpoint = this.db.pragma('wal_checkpoint(TRUNCATE)')[0];
+    if (checkpoint?.busy) {
+      throw new Error('No se pudo consolidar el WAL de SQLite antes de exportar la base.');
+    }
+    return fs.readFileSync(DB_FILE);
+  }
+}
+
+
+let db: any | null = null;
+let b2SyncTimer: NodeJS.Timeout | null = null;
+let b2SyncQueue: Promise<unknown> = Promise.resolve();
+
+function queueDatabaseSnapshot(buffer: Buffer): Promise<string> {
+  const sync = b2SyncQueue.then(() => backupDatabaseToB2(buffer));
+  b2SyncQueue = sync.catch(() => undefined);
+  return sync;
+}
+
+export async function getDb(): Promise<any> {
+  if (db) return db;
+
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  
+
+  let loadedFromB2 = false;
+  // If B2 is configured, ALWAYS check B2 first on startup so fresh deploys on Render retain production data!
+  if (isB2Configured()) {
+    try {
+      console.log('[Database] Verificando y sincronizando con Backblaze B2...');
+      const b2Buf = await downloadDatabaseFromB2();
+      if (b2Buf && b2Buf.length > 0) {
+        fs.writeFileSync(DB_FILE, b2Buf);
+        db = new SqlJsCompatibleDatabase(b2Buf);
+        loadedFromB2 = true;
+        console.log('[Database] ✅ Base de datos de producción restaurada exitosamente desde Backblaze B2');
+      } else {
+        console.log('[Database] No se encontró base previa en B2.');
+      }
+    } catch (err: any) {
+      console.warn('[Database] No se pudo restaurar desde B2, usando copia local o inicial:', err?.message || err);
+    }
+  }
+
+  if (!db) {
+    if (fs.existsSync(DB_FILE) && fs.statSync(DB_FILE).size > 0) {
+      const filebuffer = fs.readFileSync(DB_FILE);
+      db = new SqlJsCompatibleDatabase(filebuffer);
+      console.log('[Database] Cargada base local existente.');
+    } else {
+      db = new SqlJsCompatibleDatabase();
+      console.log('[Database] Inicializando base vacía.');
+    }
+  }
+
+  initTables(db);
+  if (!loadedFromB2) {
+    seedInitialData(db);
+  }
+  ensureDefaultSettings(db);
+  saveDb();
+
+  return db;
+}
+
+function ensureDefaultSettings(database: any): void {
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_only_access', 'true')`);
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('auto_reply_delay_minutes', '10')`);
+  const defaultModelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM Danii';
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('model_display_name', ?)`, [defaultModelName]);
+  let defaultBotUsername = (process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim();
+  if (!defaultBotUsername || /ruti|flavia|iam_danii_vip_bot/i.test(defaultBotUsername)) {
+    defaultBotUsername = 'Danii_Catalogo_SCZ_bot';
+  }
+  database.run(`UPDATE system_settings SET value = ? WHERE key = 'bot_username'`, [defaultBotUsername]);
+  // Nota: el fallback del contacto de administradora es el BOT mismo (siempre puede recibir mensajes).
+  // El username personal de la admin (p.ej. @danii001) se configura desde el Panel Admin
+  // (campo "Usuario de contacto de la Administradora") y/o vía env var ADMIN_CONTACT_USERNAME.
+  let defaultAdminUsername = (process.env.ADMIN_CONTACT_USERNAME || process.env.ADMIN_TELEGRAM_USERNAME || '').replace(/^@/, '').trim();
+  if (!defaultAdminUsername || /ruti|flavia|iam_danii_vip_bot/i.test(defaultAdminUsername)) {
+    defaultAdminUsername = (process.env.BOT_USERNAME || 'Danii_Catalogo_SCZ_bot').replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
+  }
+  // Solo corregir valores heredados/incorrectos; preservar lo que la admin configure en el panel.
+  database.run(`UPDATE system_settings SET value = ? WHERE key = 'admin_contact_username' AND (value = 'IAM_Danii_VIP_bot' OR value LIKE '%flavia%' OR value LIKE '%ruti%')`, [defaultAdminUsername]);
+  database.run(`UPDATE profiles SET description = '' WHERE description LIKE '%Holis%' OR description LIKE '%bienvenida%' OR description LIKE '%opciones que te salen abajo%'`);
+  database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_app_short_name', 'canalVipFreeIamDanii')`);
+  database.run(`UPDATE system_settings SET value = 'canalVipFreeIamDanii' WHERE key = 'telegram_app_short_name'`);
+  database.run(`UPDATE profiles SET ephemeral_config = '{}' WHERE ephemeral_config IS NOT NULL AND ephemeral_config != ''`);
+  seedPaymentMethods(database);
+}
+
+function consolidateToSingleVipProfile(database: any): void {
+  const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
+  if (!res || res.length === 0 || !res[0].values || res[0].values.length <= 1) return;
+
+  const cols = res[0].columns as string[];
+  const rows = res[0].values.map((v: any[]) => Object.fromEntries(cols.map((c: string, i: number) => [c, v[i]])));
+  const target = rows.find((r: Record<string, any>) => String(r.name).includes('🧾') || String(r.name).toLowerCase().includes('dani')) || rows[0];
+
+  const allPhotosSet = new Set<string>();
+  const mergedStatus: Record<string, number> = {};
+  const mergedDescriptions: Record<string, string> = {};
+  const mergedEphemeral: Record<string, any> = {};
+
+  for (const r of rows) {
+    let pPhotos: string[] = [];
+    try { pPhotos = JSON.parse(String(r.photos || '[]')); } catch {}
+    for (const url of pPhotos) {
+      allPhotosSet.add(url);
+      if (mergedStatus[url] === undefined) mergedStatus[url] = 2;
+    }
+    try { Object.assign(mergedDescriptions, JSON.parse(String(r.media_descriptions || '{}'))); } catch {}
+    try { Object.assign(mergedStatus, JSON.parse(String(r.media_status || '{}'))); } catch {}
+    try { Object.assign(mergedEphemeral, JSON.parse(String(r.ephemeral_config || '{}'))); } catch {}
+  }
+
+  const finalPhotos = Array.from(allPhotosSet);
+  for (const url of finalPhotos) {
+    if (mergedStatus[url] === undefined) mergedStatus[url] = 2;
+  }
+
+  const now = new Date().toISOString();
+  database.run(
+    "UPDATE profiles SET photos = ?, media_status = ?, media_descriptions = ?, ephemeral_config = ?, updated_at = ? WHERE id = ?",
+    [
+      JSON.stringify(finalPhotos),
+      JSON.stringify(mergedStatus),
+      JSON.stringify(mergedDescriptions),
+      JSON.stringify(mergedEphemeral),
+      now,
+      target.id
+    ]
+  );
+  database.run("DELETE FROM profiles WHERE id != ?", [target.id]);
+}
+
+export function saveDb(): void {
+  if (!db) return;
+  try {
+    // Consolidate WAL writes into the main database file before scheduling a snapshot.
+    db.export();
+
+    // Debounced automatic background sync to B2 (persists data across Render restarts)
+    if (b2SyncTimer) clearTimeout(b2SyncTimer);
+    b2SyncTimer = setTimeout(async () => {
+      try {
+        b2SyncTimer = null;
+        if (!db) return;
+        const buffer = Buffer.from(db.export());
+        console.log(`[Database] Iniciando respaldo a B2 (${buffer.length} bytes)...`);
+        await queueDatabaseSnapshot(buffer);
+        console.log('[Database] Snapshot sincronizado exitosamente con Backblaze B2');
+      } catch (err: any) {
+        console.warn('[Database] Advertencia al sincronizar snapshot con B2:', err?.message);
+      }
+    }, 5000);
+  } catch (err) {
+    console.error('Error saving database file:', err);
+  }
+}
+
+export async function syncDbToB2Now(): Promise<string> {
+  const database = await getDb();
+  if (b2SyncTimer) {
+    clearTimeout(b2SyncTimer);
+    b2SyncTimer = null;
+  }
+  const buffer = Buffer.from(database.export());
+  return await queueDatabaseSnapshot(buffer);
+}
+
+function initTables(database: any): void {
+  database.run(`
+    CREATE TABLE IF NOT EXISTS profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      age INTEGER NOT NULL,
+      zone TEXT NOT NULL,
+      description TEXT NOT NULL,
+      rate_bs REAL NOT NULL,
+      commission_bs REAL NOT NULL,
+      photos TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      telegram_message_id INTEGER,
+      priority_order INTEGER DEFAULT 0,
+      ephemeral_config TEXT
+    );
+  `);
+
+  const profileCols = database.exec("PRAGMA table_info(profiles)");
+  const existingProfileCols = new Set(
+    profileCols[0]?.values.map((row: any[]) => String(row[1])) || []
+  );
+  if (!existingProfileCols.has('ephemeral_config')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN ephemeral_config TEXT`);
+  }
+  for (const column of ['reactions', 'active_reactions']) {
+    if (existingProfileCols.has(column)) {
+      try { database.run(`ALTER TABLE profiles DROP COLUMN ${column}`); } catch (error) {
+        console.warn(`[Database] No se pudo retirar la columna obsoleta ${column}:`, (error as any)?.message || error);
+      }
+    }
+  }
+  if (!existingProfileCols.has('media_descriptions')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_descriptions TEXT`);
+  }
+  if (!existingProfileCols.has('media_status')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_status TEXT`);
+  }
+  if (!existingProfileCols.has('media_stars')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN media_stars TEXT`);
+  }
+  if (!existingProfileCols.has('telegram_media_file_ids')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN telegram_media_file_ids TEXT`);
+  }
+  if (!existingProfileCols.has('telegram_channel_id')) {
+    database.run(`ALTER TABLE profiles ADD COLUMN telegram_channel_id TEXT`);
+  }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS bot_media_queue (
+      id TEXT PRIMARY KEY,
+      media_url TEXT NOT NULL,
+      telegram_file_id TEXT,
+      caption TEXT,
+      category TEXT DEFAULT 'general',
+      is_published INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  database.run('DROP TABLE IF EXISTS profile_reactions');
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS customer_requests (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      profile_name TEXT NOT NULL,
+      telegram_user_id TEXT,
+      telegram_username TEXT,
+      telegram_first_name TEXT,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      admin_notified_at TEXT,
+      auto_reply_at TEXT,
+      responded_at TEXT,
+      notes TEXT
+    );
+  `);
+
+  const requestColumns = database.exec("PRAGMA table_info(customer_requests)");
+  const existingRequestColumns = new Set(
+    requestColumns[0]?.values.map((row: any[]) => String(row[1])) || []
+  );
+  for (const column of ['admin_notified_at', 'auto_reply_at', 'responded_at']) {
+    if (!existingRequestColumns.has(column)) {
+      database.run(`ALTER TABLE customer_requests ADD COLUMN ${column} TEXT`);
+    }
+  }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS conversations (
+      telegram_user_id TEXT PRIMARY KEY,
+      step TEXT NOT NULL,
+      draft_data TEXT NOT NULL,
+      active_profile_id TEXT,
+      last_updated TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      action TEXT NOT NULL,
+      performed_by TEXT NOT NULL,
+      profile_id TEXT,
+      details TEXT NOT NULL,
+      timestamp TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS sync_errors (
+      id TEXT PRIMARY KEY,
+      profile_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      error_message TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      status TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS subscribers (
+      telegram_user_id TEXT PRIMARY KEY,
+      telegram_username TEXT,
+      telegram_first_name TEXT,
+      created_at TEXT NOT NULL,
+      last_seen TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS invitation_codes (
+      code TEXT PRIMARY KEY,
+      telegram_user_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      used_at TEXT
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS custom_buttons (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      url TEXT NOT NULL,
+      button_type TEXT NOT NULL DEFAULT 'url',
+      visible_channel INTEGER DEFAULT 1,
+      visible_miniapp INTEGER DEFAULT 1,
+      is_active INTEGER DEFAULT 1,
+      priority_order INTEGER DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  const customButtonInfo = database.exec('PRAGMA table_info(custom_buttons)');
+  const hasButtonType = customButtonInfo[0]?.values.some((col: any[]) => col[1] === 'button_type');
+  if (!hasButtonType) {
+    database.run('ALTER TABLE custom_buttons ADD COLUMN button_type TEXT NOT NULL DEFAULT "url"');
+  }
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS telegram_botoneras (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      target TEXT NOT NULL DEFAULT 'channel',
+      title TEXT NOT NULL,
+      intro TEXT NOT NULL,
+      country_label TEXT NOT NULL,
+      plan_label TEXT NOT NULL,
+      confirmation_title TEXT NOT NULL,
+      confirmation_text TEXT NOT NULL,
+      contact_text TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      flow_json TEXT NOT NULL,
+      published_message_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS dynamic_polls (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      options TEXT NOT NULL,
+      votes TEXT NOT NULL,
+      telegram_poll_id TEXT,
+      telegram_message_id INTEGER,
+      visible_channel INTEGER DEFAULT 1,
+      visible_miniapp INTEGER DEFAULT 1,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS poll_user_votes (
+      poll_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      option_index INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (poll_id, user_id)
+    );
+  `);
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS payment_methods (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      image_url TEXT,
+      description TEXT,
+      price TEXT,
+      is_active INTEGER DEFAULT 1,
+      priority_order INTEGER DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  try {
+    database.run("ALTER TABLE payment_methods ADD COLUMN price TEXT");
+  } catch {}
+}
+
+function seedInitialData(database: any): void {
+  const check = database.exec("SELECT COUNT(*) as count FROM profiles");
+  const count = check[0]?.values[0]?.[0] as number;
+
+  if (count === 0) {
+    const now = new Date().toISOString();
+    const modelName = process.env.VIP_MODEL_NAME || process.env.VIP_BRAND_NAME || 'IAM DANI 🧾🩸';
+
+    const sampleProfiles: Partial<Profile>[] = [
+      {
+        id: 'prof_vip_main',
+        name: modelName,
+        zone: 'CANAL FREE VIP',
+        description: '',
+        rate_bs: 100,
+        commission_bs: 0,
+        photos: [],
+        ephemeral_config: {},
+        media_descriptions: {},
+        status: 'disponible',
+        priority_order: 1
+      }
+    ];
+
+    const stmt = database.prepare(`
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, priority_order, media_descriptions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+    `);
+
+    for (const p of sampleProfiles) {
+      stmt.run([
+        p.id!,
+        p.name!,
+        // age es NOT NULL en el esquema: usar un valor por defecto válido (no null)
+        p.age ?? 18,
+        p.zone!,
+        p.description!,
+        p.rate_bs!,
+        p.commission_bs!,
+        JSON.stringify(p.photos!),
+        JSON.stringify(p.ephemeral_config || {}),
+        p.status!,
+        now,
+        now,
+        p.priority_order || 0,
+        JSON.stringify(p.media_descriptions || {})
+      ]);
+    }
+    stmt.free();
+
+    // Initial audit log
+    database.run(`
+      INSERT INTO audit_logs (id, action, performed_by, profile_id, details, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [
+      'log_init_01',
+      'SYSTEM_INIT',
+      'System',
+      null,
+      'Base de datos inicializada para ' + modelName + ' Canal VIP Free (+18)',
+      now
+    ]);
+  }
+}
+
+function seedPaymentMethods(database: any): void {
+  const check = database.exec("SELECT COUNT(*) as count FROM payment_methods");
+  const count = (check[0]?.values[0]?.[0] as number) || 0;
+
+  let existingQr: string | null = null;
+  const qrRes = database.exec("SELECT value FROM system_settings WHERE key = 'qr_image_url'");
+  if (qrRes && qrRes.length > 0 && qrRes[0].values.length > 0) {
+    existingQr = String(qrRes[0].values[0][0]);
+  }
+
+  if (count === 0) {
+    const now = new Date().toISOString();
+    const initialMethods: Array<{
+      id: string;
+      title: string;
+      category: 'national' | 'international' | 'service';
+      image_url: string | null;
+      description: string;
+      priority_order: number;
+    }> = [
+      {
+        id: 'qr_bolivia',
+        title: '🇧🇴 PAGO QR BOLIVIA',
+        category: 'national',
+        image_url: existingQr,
+        description: 'Escanea el código QR desde cualquier banco boliviano o app de pagos para realizar tu transferencia inmediata en Bs. Envía el comprobante para habilitar tu acceso.',
+        priority_order: 1
+      },
+      {
+        id: 'peru',
+        title: '🇵🇪 PERU',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Perú disponibles mediante Yape, Plin o transferencia bancaria local (BCP, BBVA, Interbank). Envía tu comprobante a la administradora.',
+        priority_order: 2
+      },
+      {
+        id: 'chile',
+        title: '🇨🇱 CHILE',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Chile disponibles mediante CuentaRUT (BancoEstado) o transferencia electrónica bancaria en pesos chilenos.',
+        priority_order: 3
+      },
+      {
+        id: 'argentina',
+        title: '🇦🇷 ARGENTINA',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias disponibles en Argentina mediante Mercado Pago (alias/CVU), Ualá o transferencia bancaria en pesos argentinos.',
+        priority_order: 4
+      },
+      {
+        id: 'espana',
+        title: '🇪🇸 ESPAÑA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en España y toda la Unión Europea mediante Bizum, transferencia SEPA o PayPal en Euros (€).',
+        priority_order: 5
+      },
+      {
+        id: 'mexico',
+        title: '🇲🇽 MEXICO',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en México mediante transferencia interbancaria SPEI (CLABE), OXXO Pay o Spin by OXXO.',
+        priority_order: 6
+      },
+      {
+        id: 'paraguay',
+        title: '🇵🇾 PARAGUAY',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias locales en Paraguay mediante SIPAP, Tigo Money o bancos en Guaraníes (PYG).',
+        priority_order: 7
+      },
+      {
+        id: 'brasil',
+        title: '🇧🇷 BRASIL',
+        category: 'international',
+        image_url: null,
+        description: 'Pagamentos no Brasil disponíveis instantaneamente via chave PIX ou transferência bancária local.',
+        priority_order: 8
+      },
+      {
+        id: 'uruguay',
+        title: '🇺🇾 URUGUAY',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Uruguay mediante Prex, Brou o transferencia local en pesos uruguayos o dólares.',
+        priority_order: 9
+      },
+      {
+        id: 'colombia',
+        title: '🇨🇴 COLOMBIA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Colombia disponibles mediante Nequi, Daviplata, Bancolombia o PSE.',
+        priority_order: 10
+      },
+      {
+        id: 'rusia',
+        title: '🇷🇺 RUSIA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos y transferencias internacionales / criptomonedas (USDT) para Rusia.',
+        priority_order: 11
+      },
+      {
+        id: 'ecuador',
+        title: '🇪🇨 ECUADOR',
+        category: 'international',
+        image_url: null,
+        description: 'Transferencias directas en Ecuador (USD) mediante Banco Pichincha, Banco Guayaquil o app DeUna.',
+        priority_order: 12
+      },
+      {
+        id: 'venezuela',
+        title: '🇻🇪 VENEZUELA',
+        category: 'international',
+        image_url: null,
+        description: 'Pagos en Venezuela mediante Pago Móvil (Bs), Zinli o Binance Pay USDT.',
+        priority_order: 13
+      },
+      {
+        id: 'cripto',
+        title: '🪙 CRIPTOMONEDA',
+        category: 'service',
+        image_url: null,
+        description: 'Aceptamos USDT (TRC-20, BEP-20, TON, Polygon), Bitcoin (BTC), Ethereum (ETH) o Binance Pay ID sin comisiones.',
+        priority_order: 14
+      },
+      {
+        id: 'tigo_money',
+        title: 'â˜Žï¸ TIGO MONEY',
+        category: 'service',
+        image_url: null,
+        description: 'Envío directo por Tigo Money Bolivia al número de la administradora.',
+        priority_order: 15
+      },
+      {
+        id: 'paypal',
+        title: '💸 PAYPAL',
+        category: 'service',
+        image_url: null,
+        description: 'Pagos internacionales seguros mediante PayPal (saldo o tarjeta de débito/crédito internacional).',
+        priority_order: 16
+      },
+      {
+        id: 'telegram_stars',
+        title: '⭐ ESTRELLAS TELEGRAM',
+        category: 'service',
+        image_url: null,
+        description: 'Paga directamente con Telegram Stars dentro de Telegram de manera 100% anónima, instantánea y segura.',
+        priority_order: 17
+      },
+      {
+        id: 'western_remitly',
+        title: '🌐 WESTER Y REMITLY',
+        category: 'service',
+        image_url: null,
+        description: 'Giros internacionales directos mediante Western Union, Remitly, MoneyGram o WorldRemit.',
+        priority_order: 18
+      },
+      {
+        id: 'zelle',
+        title: '💳 ZELLE',
+        category: 'service',
+        image_url: null,
+        description: 'Transferencia instantánea en USD mediante Zelle desde cualquier cuenta bancaria de Estados Unidos.',
+        priority_order: 19
+      }
+    ];
+
+    const stmt = database.prepare(`
+      INSERT INTO payment_methods (id, title, category, image_url, description, is_active, priority_order, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+    `);
+
+    for (const m of initialMethods) {
+      stmt.run([
+        m.id,
+        m.title,
+        m.category,
+        m.image_url,
+        m.description,
+        m.priority_order,
+        now
+      ]);
+    }
+    stmt.free();
+  } else if (existingQr) {
+    database.run(
+      "UPDATE payment_methods SET image_url = ? WHERE id = 'qr_bolivia' AND (image_url IS NULL OR image_url = '')",
+      [existingQr]
+    );
+  }
+}
+
+// Helper para normalizar URLs de fotos a rutas relativas para compatibilidad móvil exterior
+function normalizePhotoUrls(photos: any): string[] {
+  if (!Array.isArray(photos)) return [];
+  return photos.map(url => {
+    if (typeof url === 'string') {
+      if (url.includes('/uploads/')) {
+        const filename = url.split('/uploads/').pop();
+        return `/uploads/${filename}`;
+      }
+      if (url.includes('/api/telegram-media/')) {
+        const filePart = url.split('/api/telegram-media/').pop();
+        return `/api/telegram-media/${filePart}`;
+      }
+      if (url.includes('/telegram-media/')) {
+        const filePart = url.split('/telegram-media/').pop();
+        return `/api/telegram-media/${filePart}`;
+      }
+      if (url.includes('/api/media?')) {
+        const queryPart = url.split('/api/media?').pop();
+        return `/api/media?${queryPart}`;
+      }
+      if (url.includes('/media?')) {
+        const queryPart = url.split('/media?').pop();
+        return `/api/media?${queryPart}`;
+      }
+    }
+    return url;
+  });
+}
+
+// Normaliza las claves de diccionarios multimedia para que coincidan tanto con rutas relativas como absolutas
+function normalizeDictKeys(dict: Record<string, any>): Record<string, any> {
+  if (!dict || typeof dict !== 'object') return {};
+  const result: Record<string, any> = {};
+  for (const [key, val] of Object.entries(dict)) {
+    const normalizedKey = normalizePhotoUrls([key])[0] || key;
+    result[normalizedKey] = val;
+    if (normalizedKey !== key) {
+      result[key] = val;
+    }
+  }
+  return result;
+}
+
+// Data Access Methods
+// Data Access Methods & Hydration Helper
+function hydrateProfile(raw: any, filterPublic: boolean = false): Profile {
+  const obj = { ...raw };
+  try {
+    obj.photos = normalizePhotoUrls(JSON.parse(obj.photos || '[]'));
+  } catch {
+    obj.photos = [];
+  }
+  try {
+    obj.ephemeral_config = obj.ephemeral_config ? normalizeDictKeys(JSON.parse(obj.ephemeral_config)) : {};
+  } catch {
+    obj.ephemeral_config = {};
+  }
+  try {
+    obj.media_descriptions = obj.media_descriptions ? normalizeDictKeys(JSON.parse(obj.media_descriptions)) : {};
+  } catch {
+    obj.media_descriptions = {};
+  }
+  try {
+    obj.media_status = obj.media_status ? normalizeDictKeys(JSON.parse(obj.media_status)) : {};
+  } catch {
+    obj.media_status = {};
+  }
+  try {
+    obj.media_stars = obj.media_stars ? normalizeDictKeys(JSON.parse(obj.media_stars)) : {};
+  } catch {
+    obj.media_stars = {};
+  }
+  try {
+    obj.telegram_media_file_ids = obj.telegram_media_file_ids ? normalizeDictKeys(JSON.parse(obj.telegram_media_file_ids)) : {};
+  } catch {
+    obj.telegram_media_file_ids = {};
+  }
+
+  // ASIGNACIÓN POR DEFECTO: Todo archivo multimedia sin estatus explícito queda con Status = 2 ("Para Publicar")
+  if (Array.isArray(obj.photos)) {
+    obj.photos.forEach((url: string) => {
+      if (obj.media_status[url] === undefined) {
+        obj.media_status[url] = 2; // 2 = Para Publicar
+      }
+    });
+  }
+
+  // Para clientes públicos (Mini App), filtrar para mostrar solo fotos con Status = 1 ("Activa")
+  // EXCLUYENDO contenido VIP/Pago y Efímero (Solo visibles en Admin Panel)
+  if (filterPublic && Array.isArray(obj.photos)) {
+    obj.photos = obj.photos.filter((url: string) => {
+      const isActive = obj.media_status[url] === 1;
+      const isPaid = (obj.media_stars && obj.media_stars[url] > 0);
+      const isEphemeral = (obj.ephemeral_config && obj.ephemeral_config[url] && obj.ephemeral_config[url].enabled === true);
+      return isActive && !isPaid && !isEphemeral;
+    });
+  }
+
+  return obj as Profile;
+}
+
+export async function getAllProfiles(): Promise<Profile[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM profiles ORDER BY priority_order ASC, updated_at DESC");
+  if (!res || res.length === 0) return [];
+  
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
+      raw[col] = row[idx];
+    });
+    return hydrateProfile(raw, false);
+  });
+}
+
+export async function getPublicProfiles(): Promise<Profile[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM profiles WHERE status IN ('disponible', 'ocupada') AND age >= 18 ORDER BY priority_order ASC, updated_at DESC");
+  if (!res || res.length === 0) return [];
+  
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
+      raw[col] = row[idx];
+    });
+    return hydrateProfile(raw, true);
+  });
+}
+
+export async function getProfileById(id: string, filterPublic: boolean = false): Promise<Profile | null> {
+  const database = await getDb();
+  const stmt = database.prepare("SELECT * FROM profiles WHERE id = ?");
+  stmt.bind([id]);
+  
+  if (stmt.step()) {
+    const row = stmt.getAsObject() as Record<string, any>;
+    stmt.free();
+    return hydrateProfile(row, filterPublic);
+  }
+  stmt.free();
+  return null;
+}
+
+export async function saveProfile(profile: Partial<Profile> & { id: string }): Promise<Profile> {
+  const database = await getDb();
+  const existing = await getProfileById(profile.id, false);
+  const now = new Date().toISOString();
+
+  // Strict safety check: Age >= 18
+  if (profile.age !== undefined && profile.age < 18) {
+    throw new Error('PROHIBICION LEGAL Y DE SEGURIDAD: Todos los perfiles deben ser de personas mayores de 18 años.');
+  }
+
+  if (existing) {
+    const updatedName = profile.name ?? existing.name;
+    const updatedZone = profile.zone ?? existing.zone;
+    const updatedDesc = profile.description ?? existing.description;
+    const updatedRate = profile.rate_bs ?? existing.rate_bs;
+    const updatedCommission = profile.commission_bs ?? existing.commission_bs;
+    const updatedPhotos = profile.photos ? JSON.stringify(profile.photos) : JSON.stringify(existing.photos);
+    const updatedEphemeral = profile.ephemeral_config !== undefined
+      ? JSON.stringify(profile.ephemeral_config)
+      : (existing.ephemeral_config ? JSON.stringify(existing.ephemeral_config) : '{}');
+    const updatedStatus = profile.status ?? existing.status;
+    const updatedTgMsgId = profile.telegram_message_id !== undefined ? profile.telegram_message_id : existing.telegram_message_id;
+    const updatedTgChannelId = profile.telegram_channel_id !== undefined ? profile.telegram_channel_id : existing.telegram_channel_id;
+    const updatedPriority = profile.priority_order ?? existing.priority_order;
+    const updatedMediaDesc = profile.media_descriptions !== undefined
+      ? JSON.stringify(profile.media_descriptions)
+      : (existing.media_descriptions ? JSON.stringify(existing.media_descriptions) : '{}');
+    const updatedMediaStatus = profile.media_status !== undefined
+      ? JSON.stringify(profile.media_status)
+      : (existing.media_status ? JSON.stringify(existing.media_status) : '{}');
+    const updatedMediaStars = profile.media_stars !== undefined
+      ? JSON.stringify(profile.media_stars)
+      : (existing.media_stars ? JSON.stringify(existing.media_stars) : '{}');
+    const updatedTgFileIds = profile.telegram_media_file_ids !== undefined
+      ? JSON.stringify(profile.telegram_media_file_ids)
+      : (existing.telegram_media_file_ids ? JSON.stringify(existing.telegram_media_file_ids) : '{}');
+
+    database.run(`
+      UPDATE profiles
+      SET name = ?, zone = ?, description = ?, rate_bs = ?, commission_bs = ?, photos = ?, ephemeral_config = ?, status = ?, updated_at = ?, telegram_message_id = ?, telegram_channel_id = ?, priority_order = ?, media_descriptions = ?, media_status = ?, media_stars = ?, telegram_media_file_ids = ?
+      WHERE id = ?
+    `, [
+      updatedName,
+      updatedZone,
+      updatedDesc,
+      updatedRate,
+      updatedCommission,
+      updatedPhotos,
+      updatedEphemeral,
+      updatedStatus,
+      now,
+      updatedTgMsgId ?? null,
+      updatedTgChannelId ?? null,
+      updatedPriority,
+      updatedMediaDesc,
+      updatedMediaStatus,
+      updatedMediaStars,
+      updatedTgFileIds,
+      profile.id
+    ]);
+  } else {
+    const initialMediaDesc = JSON.stringify(profile.media_descriptions || {});
+    const initialMediaStatus = JSON.stringify(profile.media_status || {});
+    const initialMediaStars = JSON.stringify(profile.media_stars || {});
+    const initialTgFileIds = JSON.stringify(profile.telegram_media_file_ids || {});
+    database.run(`
+      INSERT INTO profiles (id, name, age, zone, description, rate_bs, commission_bs, photos, ephemeral_config, status, created_at, updated_at, telegram_message_id, telegram_channel_id, priority_order, media_descriptions, media_status, media_stars, telegram_media_file_ids)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      profile.id,
+      profile.name || 'Sin nombre',
+      profile.age || 18,
+      profile.zone || 'Contenido +18 VIP',
+      profile.description || '',
+      profile.rate_bs || 0,
+      0,
+      JSON.stringify(profile.photos || []),
+      JSON.stringify(profile.ephemeral_config || {}),
+      profile.status || 'borrador',
+      now,
+      now,
+      profile.telegram_message_id || null,
+      profile.telegram_channel_id ?? null,
+      profile.priority_order || 0,
+      initialMediaDesc,
+      initialMediaStatus,
+      initialMediaStars,
+      initialTgFileIds
+    ]);
+  }
+
+  saveDb();
+  return (await getProfileById(profile.id, false))!;
+}
+
+export async function removeMediaFromProfile(profileId: string, mediaUrl: string): Promise<Profile | null> {
+  const profile = await getProfileById(profileId, false);
+  if (!profile) return null;
+
+  const updatedPhotos = (profile.photos || []).filter(u => u !== mediaUrl);
+  const updatedMediaStatus = { ...(profile.media_status || {}) };
+  delete updatedMediaStatus[mediaUrl];
+  const updatedDescriptions = { ...(profile.media_descriptions || {}) };
+  delete updatedDescriptions[mediaUrl];
+  const updatedEphemeral = { ...(profile.ephemeral_config || {}) };
+  delete updatedEphemeral[mediaUrl];
+  const updatedMediaStars = { ...(profile.media_stars || {}) };
+  delete updatedMediaStars[mediaUrl];
+  const updatedTgFiles = { ...(profile.telegram_media_file_ids || {}) };
+  delete updatedTgFiles[mediaUrl];
+
+  return await saveProfile({
+    id: profileId,
+    photos: updatedPhotos,
+    media_status: updatedMediaStatus,
+    media_descriptions: updatedDescriptions,
+    ephemeral_config: updatedEphemeral,
+    media_stars: updatedMediaStars,
+    telegram_media_file_ids: updatedTgFiles
+  });
+}
+
+export async function deleteProfile(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM profiles WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+// Customer Requests
+export async function createCustomerRequest(req: Partial<CustomerRequest>): Promise<CustomerRequest> {
+  const database = await getDb();
+  const id = `req_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+
+  database.run(`
+    INSERT INTO customer_requests (id, profile_id, profile_name, telegram_user_id, telegram_username, telegram_first_name, status, created_at, admin_notified_at, auto_reply_at, responded_at, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id,
+    req.profile_id || '',
+    req.profile_name || '',
+    req.telegram_user_id || null,
+    req.telegram_username || null,
+    req.telegram_first_name || null,
+    req.status || 'pendiente',
+    now,
+    req.admin_notified_at || null,
+    req.auto_reply_at || null,
+    req.responded_at || null,
+    req.notes || ''
+  ]);
+
+  saveDb();
+  return {
+    id,
+    profile_id: req.profile_id || '',
+    profile_name: req.profile_name || '',
+    telegram_user_id: req.telegram_user_id,
+    telegram_username: req.telegram_username,
+    telegram_first_name: req.telegram_first_name,
+    status: req.status as any || 'pendiente',
+    created_at: now,
+    admin_notified_at: req.admin_notified_at,
+    auto_reply_at: req.auto_reply_at,
+    responded_at: req.responded_at,
+    notes: req.notes
+  };
+}
+
+export async function findRecentDuplicateCustomerRequest(
+  telegramUserId: string,
+  profileId: string,
+  notes: string,
+  withinMinutes = 10
+): Promise<CustomerRequest | null> {
+  const database = await getDb();
+  const stmt = database.prepare(`
+    SELECT * FROM customer_requests
+    WHERE telegram_user_id = ?
+      AND profile_id = ?
+      AND notes = ?
+      AND status != 'fallida'
+      AND created_at >= datetime('now', ?)
+    ORDER BY created_at DESC
+    LIMIT 1
+  `);
+  stmt.bind([telegramUserId, profileId, notes, `-${Math.max(1, Math.floor(withinMinutes))} minutes`]);
+  if (!stmt.step()) {
+    stmt.free();
+    return null;
+  }
+  const row = stmt.getAsObject() as unknown as CustomerRequest;
+  stmt.free();
+  return row;
+}
+
+export async function getCustomerRequests(): Promise<CustomerRequest[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM customer_requests ORDER BY created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
+      obj[col] = row[idx];
+    });
+    return obj as CustomerRequest;
+  });
+}
+
+export async function getCustomerRequestById(id: string): Promise<CustomerRequest | null> {
+  const database = await getDb();
+  const stmt = database.prepare("SELECT * FROM customer_requests WHERE id = ?");
+  stmt.bind([id]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row as unknown as CustomerRequest;
+  }
+  stmt.free();
+  return null;
+}
+
+export async function updateCustomerRequestStatus(id: string, status: string): Promise<void> {
+  const database = await getDb();
+  database.run("UPDATE customer_requests SET status = ?, responded_at = CASE WHEN ? = 'pendiente' THEN responded_at ELSE ? END WHERE id = ?", [status, status, new Date().toISOString(), id]);
+  saveDb();
+}
+
+export async function markCustomerRequestScheduled(id: string, adminNotifiedAt: string, autoReplyAt?: string): Promise<void> {
+  const database = await getDb();
+  database.run(
+    "UPDATE customer_requests SET admin_notified_at = ?, auto_reply_at = ? WHERE id = ?",
+    [adminNotifiedAt, autoReplyAt || null, id]
+  );
+  saveDb();
+}
+
+export async function getDueCustomerRequests(nowIso: string): Promise<CustomerRequest[]> {
+  const database = await getDb();
+  const stmt = database.prepare(`
+    SELECT * FROM customer_requests
+    WHERE status = 'pendiente'
+      AND auto_reply_at IS NOT NULL
+      AND auto_reply_at <= ?
+    ORDER BY auto_reply_at ASC
+  `);
+  stmt.bind([nowIso]);
+  const requests: CustomerRequest[] = [];
+  while (stmt.step()) {
+    requests.push(stmt.getAsObject() as unknown as CustomerRequest);
+  }
+  stmt.free();
+  return requests;
+}
+
+// Conversation State Machine for Telegram Bot
+export async function getConversationState(userId: string): Promise<ConversationState | null> {
+  const database = await getDb();
+  const stmt = database.prepare("SELECT * FROM conversations WHERE telegram_user_id = ?");
+  stmt.bind([userId]);
+  if (stmt.step()) {
+    const row = stmt.getAsObject();
+    stmt.free();
+    return {
+      telegram_user_id: row.telegram_user_id as string,
+      step: row.step as string,
+      draft_data: JSON.parse((row.draft_data as string) || '{}'),
+      active_profile_id: row.active_profile_id as string || undefined,
+      last_updated: row.last_updated as string
+    };
+  }
+  stmt.free();
+  return null;
+}
+
+export async function setConversationState(userId: string, step: string, draftData: Partial<Profile>, activeProfileId?: string): Promise<void> {
+  const database = await getDb();
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO conversations (telegram_user_id, step, draft_data, active_profile_id, last_updated)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(telegram_user_id) DO UPDATE SET
+      step = excluded.step,
+      draft_data = excluded.draft_data,
+      active_profile_id = excluded.active_profile_id,
+      last_updated = excluded.last_updated
+  `, [
+    userId,
+    step,
+    JSON.stringify(draftData),
+    activeProfileId || null,
+    now
+  ]);
+  saveDb();
+}
+
+export async function clearConversationState(userId: string): Promise<void> {
+  const database = await getDb();
+  database.run("DELETE FROM conversations WHERE telegram_user_id = ?", [userId]);
+  saveDb();
+}
+
+// Audit Logs & Sync Errors
+export async function addAuditLog(action: string, performedBy: string, details: string, profileId?: string): Promise<void> {
+  const database = await getDb();
+  const id = `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO audit_logs (id, action, performed_by, profile_id, details, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `, [id, action, performedBy, profileId || null, details, now]);
+  saveDb();
+}
+
+export async function getAuditLogs(): Promise<AuditLog[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 100");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
+      obj[col] = row[idx];
+    });
+    return obj as AuditLog;
+  });
+}
+
+export async function addSyncError(profileId: string, action: string, errorMessage: string): Promise<void> {
+  const database = await getDb();
+  const id = `err_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO sync_errors (id, profile_id, action, error_message, timestamp, status)
+    VALUES (?, ?, ?, ?, ?, 'pending')
+  `, [id, profileId, action, errorMessage, now]);
+  saveDb();
+}
+
+export async function getSyncErrors(): Promise<SyncErrorLog[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM sync_errors ORDER BY timestamp DESC LIMIT 50");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => {
+      obj[col] = row[idx];
+    });
+    return obj as SyncErrorLog;
+  });
+}
+
+export function getSystemSetting(key: string): string | null {
+  if (!db) return null;
+  const stmt = db.prepare('SELECT value FROM system_settings WHERE key = ?');
+  stmt.bind([key]);
+  if (stmt.step()) {
+    const val = stmt.getAsObject().value as string;
+    stmt.free();
+    return val;
+  }
+  stmt.free();
+  return null;
+}
+
+export function saveSystemSetting(key: string, value: string): void {
+  if (!db) return;
+  db.run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', [key, value]);
+  saveDb();
+}
+
+export function addAdminTelegramId(telegramUserId: string | number): void {
+  const current = (getSystemSetting('admin_telegram_ids') || '')
+    .split(',')
+    .map(id => id.trim())
+    .filter(Boolean);
+  const strId = String(telegramUserId).trim();
+  if (!current.includes(strId)) {
+    current.push(strId);
+    saveSystemSetting('admin_telegram_ids', current.join(','));
+  }
+}
+
+// Invitation Codes Management
+export interface InvitationCode {
+  code: string;
+  telegram_user_id: string;
+  status: string;
+  created_at: string;
+  used_at?: string;
+}
+
+export async function createInvitationCode(telegram_user_id: string): Promise<string> {
+  const database = await getDb();
+  // Invalidar códigos anteriores del usuario
+  database.run("UPDATE invitation_codes SET status = 'expired' WHERE telegram_user_id = ? AND status = 'active'", [telegram_user_id]);
+  
+  const code = `VIP-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const now = new Date().toISOString();
+  
+  database.run(`
+    INSERT INTO invitation_codes (code, telegram_user_id, status, created_at)
+    VALUES (?, ?, 'active', ?)
+  `, [code, telegram_user_id, now]);
+  
+  saveDb();
+  return code;
+}
+
+export async function verifyInvitationCode(code: string): Promise<boolean> {
+  const database = await getDb();
+  const stmt = database.prepare("SELECT * FROM invitation_codes WHERE code = ? AND status = 'active'");
+  stmt.bind([code]);
+  
+  const isValid = stmt.step();
+  stmt.free();
+  
+  if (isValid) {
+    const now = new Date().toISOString();
+    database.run("UPDATE invitation_codes SET status = 'used', used_at = ? WHERE code = ?", [now, code]);
+    saveDb();
+  }
+  
+  return isValid;
+}
+
+// ==========================================
+// Custom Buttons Management
+// ==========================================
+export async function getAllCustomButtons(): Promise<CustomButton[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM custom_buttons ORDER BY priority_order ASC, created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      label: String(obj.label || ''),
+      url: String(obj.url || ''),
+      type: (String(obj.button_type || obj.type || 'url') as any) || 'url',
+      visible_channel: Boolean(obj.visible_channel),
+      visible_miniapp: Boolean(obj.visible_miniapp),
+      is_active: Boolean(obj.is_active),
+      priority_order: Number(obj.priority_order || 0),
+      created_at: String(obj.created_at || '')
+    };
+  });
+}
+
+export async function getPublicCustomButtons(target: 'channel' | 'miniapp'): Promise<CustomButton[]> {
+  const all = await getAllCustomButtons();
+  return all.filter(btn => btn.is_active && (target === 'channel' ? btn.visible_channel : btn.visible_miniapp));
+}
+
+export async function saveCustomButton(btn: Partial<CustomButton> & { label: string; url?: string }): Promise<CustomButton> {
+  const database = await getDb();
+  const id = btn.id || `btn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+  const type = (btn.type || 'url') as 'url' | 'telegram' | 'subscription';
+  const safeUrl = String(btn.url || '').trim();
+  const visibleChannel = btn.visible_channel !== undefined ? (btn.visible_channel ? 1 : 0) : 1;
+  const visibleMiniapp = btn.visible_miniapp !== undefined ? (btn.visible_miniapp ? 1 : 0) : 1;
+  const isActive = btn.is_active !== undefined ? (btn.is_active ? 1 : 0) : 1;
+  const priorityOrder = btn.priority_order ?? 0;
+
+  database.run(`
+    INSERT OR REPLACE INTO custom_buttons (id, label, url, button_type, visible_channel, visible_miniapp, is_active, priority_order, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, btn.label, safeUrl, type, visibleChannel, visibleMiniapp, isActive, priorityOrder, btn.created_at || now]);
+
+  saveDb();
+  const buttons = await getAllCustomButtons();
+  return buttons.find(b => b.id === id)!;
+}
+
+export async function deleteCustomButton(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM custom_buttons WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+// ==========================================
+// Telegram Botonera / Rapid Subscription Flow
+// ==========================================
+export async function getAllTelegramBotoneras(): Promise<TelegramBotonera[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM telegram_botoneras ORDER BY updated_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row: any[]) => {
+    const obj: any = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    const flow = (() => {
+      try { return JSON.parse(String(obj.flow_json || '{}')); } catch { return {}; }
+    })();
+    return {
+      id: String(obj.id),
+      name: String(obj.name || 'Botonera VIP'),
+      status: (obj.status || 'draft') as 'draft' | 'published' | 'anchored',
+      target: (obj.target || 'channel') as 'channel' | 'bot' | 'both',
+      title: String(obj.title || 'SUSCRIPCIÓN VIP'),
+      intro: String(obj.intro || 'Selecciona tu país para continuar.'),
+      country_label: String(obj.country_label || 'País / Bandera'),
+      plan_label: String(obj.plan_label || 'Elige tu plan'),
+      confirmation_title: String(obj.confirmation_title || 'Confirmar suscripción'),
+      confirmation_text: String(obj.confirmation_text || 'Tu solicitud quedará en revisión privada.'),
+      contact_text: String(obj.contact_text || 'Contacta a la administradora en privado.'),
+      is_active: Boolean(obj.is_active),
+      countries: Array.isArray(flow.countries) ? flow.countries : [],
+      plans: Array.isArray(flow.plans) ? flow.plans : [],
+      created_at: String(obj.created_at || new Date().toISOString()),
+      updated_at: String(obj.updated_at || new Date().toISOString()),
+      published_message_id: obj.published_message_id ? Number(obj.published_message_id) : null
+    } satisfies TelegramBotonera;
+  });
+}
+
+export async function saveTelegramBotonera(botonera: Partial<TelegramBotonera> & { name: string; title: string }): Promise<TelegramBotonera> {
+  const database = await getDb();
+  const now = new Date().toISOString();
+  const id = botonera.id || `botonera_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const normalized = {
+    id,
+    name: String(botonera.name || 'Botonera VIP').trim(),
+    status: botonera.status || 'draft',
+    target: botonera.target || 'channel',
+    title: String(botonera.title || 'SUSCRIPCIÓN VIP').trim(),
+    intro: String(botonera.intro || 'Selecciona tu país para continuar.').trim(),
+    country_label: String(botonera.country_label || 'País / Bandera').trim(),
+    plan_label: String(botonera.plan_label || 'Elige tu plan').trim(),
+    confirmation_title: String(botonera.confirmation_title || 'Confirmar suscripción').trim(),
+    confirmation_text: String(botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.').trim(),
+    contact_text: String(botonera.contact_text || 'Contacta a la administradora en privado.').trim(),
+    is_active: Boolean(botonera.is_active !== false),
+    countries: Array.isArray(botonera.countries) ? botonera.countries.filter(item => item && item.active !== false) : [],
+    plans: Array.isArray(botonera.plans) ? botonera.plans.filter(item => item && item.active !== false) : [],
+    published_message_id: botonera.published_message_id ?? null
+  };
+
+  const flowJson = JSON.stringify({
+    countries: normalized.countries,
+    plans: normalized.plans
+  });
+
+  database.run(`
+    INSERT OR REPLACE INTO telegram_botoneras (
+      id, name, status, target, title, intro, country_label, plan_label,
+      confirmation_title, confirmation_text, contact_text, is_active, flow_json,
+      published_message_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [
+    normalized.id,
+    normalized.name,
+    normalized.status,
+    normalized.target,
+    normalized.title,
+    normalized.intro,
+    normalized.country_label,
+    normalized.plan_label,
+    normalized.confirmation_title,
+    normalized.confirmation_text,
+    normalized.contact_text,
+    normalized.is_active ? 1 : 0,
+    flowJson,
+    normalized.published_message_id,
+    botonera.created_at || now,
+    now
+  ]);
+
+  saveDb();
+  return (await getAllTelegramBotoneras()).find(item => item.id === id)!;
+}
+
+export async function deleteTelegramBotonera(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run('DELETE FROM telegram_botoneras WHERE id = ?', [id]);
+  saveDb();
+  return true;
+}
+
+// ==========================================
+// Dynamic Polls Management
+// ==========================================
+export async function getAllPolls(): Promise<DynamicPoll[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM dynamic_polls ORDER BY created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    let options: string[] = [];
+    let votes: Record<number, number> = {};
+    try { options = JSON.parse(obj.options || '[]'); } catch { options = []; }
+    try { votes = JSON.parse(obj.votes || '{}'); } catch { votes = {}; }
+    return {
+      id: String(obj.id),
+      question: String(obj.question || ''),
+      options,
+      votes,
+      telegram_poll_id: obj.telegram_poll_id ? String(obj.telegram_poll_id) : undefined,
+      telegram_message_id: obj.telegram_message_id ? Number(obj.telegram_message_id) : undefined,
+      visible_channel: Boolean(obj.visible_channel),
+      visible_miniapp: Boolean(obj.visible_miniapp),
+      is_active: Boolean(obj.is_active),
+      created_at: String(obj.created_at || '')
+    };
+  });
+}
+
+export async function getActivePolls(): Promise<DynamicPoll[]> {
+  const all = await getAllPolls();
+  return all.filter(p => p.is_active && p.visible_miniapp);
+}
+
+export async function getPollById(id: string): Promise<DynamicPoll | null> {
+  const all = await getAllPolls();
+  return all.find(p => p.id === id) || null;
+}
+
+export async function savePoll(poll: Partial<DynamicPoll> & { question: string; options: string[] }): Promise<DynamicPoll> {
+  const database = await getDb();
+  const id = poll.id || `poll_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const now = new Date().toISOString();
+  const existing = await getPollById(id);
+
+  const optionsJson = JSON.stringify(poll.options);
+  const votesJson = JSON.stringify(poll.votes || (existing ? existing.votes : {}));
+  const visibleChannel = poll.visible_channel !== undefined ? (poll.visible_channel ? 1 : 0) : 1;
+  const visibleMiniapp = poll.visible_miniapp !== undefined ? (poll.visible_miniapp ? 1 : 0) : 1;
+  const isActive = poll.is_active !== undefined ? (poll.is_active ? 1 : 0) : 1;
+  const tgPollId = poll.telegram_poll_id ?? existing?.telegram_poll_id ?? null;
+  const tgMsgId = poll.telegram_message_id ?? existing?.telegram_message_id ?? null;
+
+  database.run(`
+    INSERT OR REPLACE INTO dynamic_polls (id, question, options, votes, telegram_poll_id, telegram_message_id, visible_channel, visible_miniapp, is_active, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [id, poll.question, optionsJson, votesJson, tgPollId, tgMsgId, visibleChannel, visibleMiniapp, isActive, existing?.created_at || now]);
+
+  saveDb();
+  return (await getPollById(id))!;
+}
+
+export async function votePoll(pollId: string, userId: string, optionIndex: number): Promise<{ poll: DynamicPoll; alreadyVoted: boolean }> {
+  const database = await getDb();
+  const poll = await getPollById(pollId);
+  if (!poll) throw new Error('Encuesta no encontrada');
+
+  const stmt = database.prepare("SELECT option_index FROM poll_user_votes WHERE poll_id = ? AND user_id = ?");
+  stmt.bind([pollId, userId]);
+  const hasVoted = stmt.step();
+  stmt.free();
+
+  if (hasVoted) {
+    return { poll, alreadyVoted: true };
+  }
+
+  database.run("INSERT INTO poll_user_votes (poll_id, user_id, option_index, created_at) VALUES (?, ?, ?, ?)", [
+    pollId,
+    userId,
+    optionIndex,
+    new Date().toISOString()
+  ]);
+
+  const votes: Record<number, number> = { ...(poll.votes || {}) };
+  votes[optionIndex] = (votes[optionIndex] || 0) + 1;
+
+  const updated = await savePoll({
+    ...poll,
+    votes
+  });
+
+  return { poll: updated, alreadyVoted: false };
+}
+
+export async function deletePoll(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM dynamic_polls WHERE id = ?", [id]);
+  database.run("DELETE FROM poll_user_votes WHERE poll_id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+export async function registerSubscriber(userId: string, username?: string, firstName?: string): Promise<void> {
+  const combined = `${username || ''} ${firstName || ''}`;
+  if (
+    /(sms[-_ ]?boom|bomber|Ð±Ð¾Ð¼Ð±ÐµÑ€|ÑÐ¿Ð°Ð¼|ÑÐ¼Ñ|crypto|airdrop)/i.test(combined) ||
+    /[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF]/.test(combined)
+  ) {
+    return; // Descartar bots de spam
+  }
+  const database = await getDb();
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO subscribers (telegram_user_id, telegram_username, telegram_first_name, created_at, last_seen)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(telegram_user_id) DO UPDATE SET
+      telegram_username = excluded.telegram_username,
+      telegram_first_name = excluded.telegram_first_name,
+      last_seen = excluded.last_seen
+  `, [String(userId), username || null, firstName || null, now, now]);
+  saveDb();
+}
+
+export async function getSubscribersCount(): Promise<number> {
+  const database = await getDb();
+  const res = database.exec("SELECT COUNT(*) as count FROM subscribers");
+  if (res.length > 0 && res[0].values.length > 0) {
+    return Number(res[0].values[0][0]) || 0;
+  }
+  return 0;
+}
+
+// ==========================================
+// Payment Methods Management
+// ==========================================
+export async function getAllPaymentMethods(): Promise<PaymentMethod[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM payment_methods ORDER BY priority_order ASC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      title: String(obj.title || ''),
+      category: obj.category as 'national' | 'international' | 'service',
+      image_url: obj.image_url ? String(obj.image_url) : null,
+      description: String(obj.description || ''),
+      price: obj.price !== null && obj.price !== undefined ? String(obj.price) : null,
+      is_active: Boolean(obj.is_active),
+      priority_order: Number(obj.priority_order || 0),
+      updated_at: String(obj.updated_at || '')
+    };
+  });
+}
+
+export async function getPublicPaymentMethods(): Promise<PaymentMethod[]> {
+  const all = await getAllPaymentMethods();
+  return all.filter(m => m.is_active);
+}
+
+export async function getPaymentMethodById(id: string): Promise<PaymentMethod | null> {
+  const all = await getAllPaymentMethods();
+  return all.find(m => m.id === id) || null;
+}
+
+export async function savePaymentMethod(method: Partial<PaymentMethod> & { id: string }): Promise<PaymentMethod> {
+  const database = await getDb();
+  const existing = await getPaymentMethodById(method.id);
+  const now = new Date().toISOString();
+
+  const title = method.title !== undefined ? method.title : (existing?.title ?? '');
+  const category = method.category !== undefined ? method.category : (existing?.category ?? 'service');
+  const imageUrl = method.image_url !== undefined ? method.image_url : (existing?.image_url ?? null);
+  const description = method.description !== undefined ? method.description : (existing?.description ?? '');
+  const price = method.price !== undefined ? (method.price !== null ? String(method.price) : null) : (existing?.price ?? null);
+  const isActive = method.is_active !== undefined ? (method.is_active ? 1 : 0) : (existing?.is_active ? 1 : 0);
+  const priorityOrder = method.priority_order !== undefined ? method.priority_order : (existing?.priority_order ?? 0);
+
+  database.run(`
+    INSERT OR REPLACE INTO payment_methods (id, title, category, image_url, description, price, is_active, priority_order, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `, [method.id, title, category, imageUrl, description, price, isActive, priorityOrder, now]);
+
+  // If this is qr_bolivia and an image_url is provided, also sync it to system_settings qr_image_url
+  if (method.id === 'qr_bolivia' && imageUrl) {
+    saveSystemSetting('qr_image_url', imageUrl);
+  }
+
+  saveDb();
+  return (await getPaymentMethodById(method.id))!;
+}
+
+// ── Bot Media Queue Methods ───────────────────────────────────────────────
+
+export async function getBotMediaQueue(): Promise<BotMediaItem[]> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM bot_media_queue ORDER BY created_at DESC");
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const raw: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { raw[col] = row[idx]; });
+    return {
+      id: String(raw.id),
+      media_url: String(raw.media_url),
+      telegram_file_id: raw.telegram_file_id ? String(raw.telegram_file_id) : undefined,
+      caption: String(raw.caption || ''),
+      category: (raw.category || 'general') as any,
+      is_published: Boolean(raw.is_published),
+      created_at: String(raw.created_at)
+    };
+  });
+}
+
+export async function addBotMediaItem(item: Omit<BotMediaItem, 'id' | 'created_at'>): Promise<BotMediaItem> {
+  const database = await getDb();
+  const id = `bot_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+  database.run(`
+    INSERT INTO bot_media_queue (id, media_url, telegram_file_id, caption, category, is_published, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `, [
+    id,
+    item.media_url,
+    item.telegram_file_id || null,
+    item.caption || '',
+    item.category || 'general',
+    item.is_published ? 1 : 0,
+    now
+  ]);
+  saveDb();
+  return {
+    id,
+    media_url: item.media_url,
+    telegram_file_id: item.telegram_file_id,
+    caption: item.caption,
+    category: item.category,
+    is_published: item.is_published,
+    created_at: now
+  };
+}
+
+export async function deleteBotMediaItem(id: string): Promise<boolean> {
+  const database = await getDb();
+  database.run("DELETE FROM bot_media_queue WHERE id = ?", [id]);
+  saveDb();
+  return true;
+}
+
+export async function updateBotMediaItem(id: string, updates: Partial<BotMediaItem>): Promise<BotMediaItem | null> {
+  const database = await getDb();
+  const res = database.exec("SELECT * FROM bot_media_queue WHERE id = ?", [id]);
+  if (!res || res.length === 0 || res[0].values.length === 0) return null;
+  
+  if (updates.caption !== undefined) {
+    database.run("UPDATE bot_media_queue SET caption = ? WHERE id = ?", [updates.caption, id]);
+  }
+  if (updates.category !== undefined) {
+    database.run("UPDATE bot_media_queue SET category = ? WHERE id = ?", [updates.category, id]);
+  }
+  if (updates.is_published !== undefined) {
+    database.run("UPDATE bot_media_queue SET is_published = ? WHERE id = ?", [updates.is_published ? 1 : 0, id]);
+  }
+  saveDb();
+  const all = await getBotMediaQueue();
+  return all.find(x => x.id === id) || null;
+}
+
+export async function getDatabaseStats(): Promise<{
+  fileSizeBytes: number;
+  fileSizeFormatted: string;
+  tableCounts: Record<string, number>;
+  largeFieldsAlert?: string[];
+}> {
+  const database = await getDb();
+  const tablesRes = database.exec("SELECT name FROM sqlite_master WHERE type='table'");
+  const tables = tablesRes?.[0]?.values?.map((v: any[]) => String(v[0])) || [];
+  const stats: Record<string, number> = {};
+  for (const t of tables) {
+    try {
+      const countRes = database.exec(`SELECT COUNT(*) FROM ${t}`);
+      stats[t] = Number(countRes?.[0]?.values?.[0]?.[0] || 0);
+    } catch {}
+  }
+
+  const largeAlerts: string[] = [];
+  // Detectar si hay base64 o campos excesivamente grandes en profiles
+  try {
+    const profs = database.exec("SELECT id, name, length(photos) as l_photos, length(description) as l_desc FROM profiles");
+    if (profs?.[0]?.values) {
+      for (const row of profs[0].values) {
+        if (Number(row[2]) > 50000) {
+          largeAlerts.push(`Perfil ${row[1]} tiene ${row[2]} bytes en campo photos (posible base64 o sobrecarga)`);
+        }
+      }
+    }
+  } catch {}
+
+  let fileSize = 0;
+  if (fs.existsSync(DB_FILE)) {
+    fileSize = fs.statSync(DB_FILE).size;
+  }
+
+  return {
+    fileSizeBytes: fileSize,
+    fileSizeFormatted: `${(fileSize / (1024 * 1024)).toFixed(2)} MB`,
+    tableCounts: stats,
+    largeFieldsAlert: largeAlerts.length > 0 ? largeAlerts : undefined
+  };
+}
+
+export async function vacuumAndCompactDb(): Promise<{
+  before: string;
+  after: string;
+  purgedLogs: number;
+  message: string;
+}> {
+  const database = await getDb();
+  const beforeStats = await getDatabaseStats();
+
+  let purgedLogs = 0;
+  try {
+    const countBefore = database.exec("SELECT COUNT(*) FROM audit_logs");
+    const cVal = Number(countBefore?.[0]?.values?.[0]?.[0] || 0);
+    // Limpiar logs antiguos de auditoría y errores que ya no se necesitan
+    database.run("DELETE FROM audit_logs WHERE timestamp < datetime('now', '-15 days')");
+    database.run("DELETE FROM sync_errors WHERE timestamp < datetime('now', '-15 days')");
+    const countAfter = database.exec("SELECT COUNT(*) FROM audit_logs");
+    const aVal = Number(countAfter?.[0]?.values?.[0]?.[0] || 0);
+    purgedLogs = Math.max(0, cVal - aVal);
+  } catch (e) {
+    console.warn('[VACUUM] Advertencia al purgar logs antiguos:', e);
+  }
+
+  // Ejecutar VACUUM para desfragmentar y liberar todas las páginas vacías de SQLite
+  try {
+    database.run("VACUUM;");
+  } catch (e) {
+    console.warn('[VACUUM] Error ejecutando comando VACUUM:', e);
+  }
+
+  saveDb();
+  if (isB2Configured()) {
+    try {
+      await syncDbToB2Now();
+    } catch (e) {
+      console.warn('[VACUUM] Advertencia al sincronizar snapshot con B2:', e);
+    }
+  }
+
+  const afterStats = await getDatabaseStats();
+
+  return {
+    before: beforeStats.fileSizeFormatted,
+    after: afterStats.fileSizeFormatted,
+    purgedLogs,
+    message: `Base de datos compactada con éxito: pasó de ${beforeStats.fileSizeFormatted} a ${afterStats.fileSizeFormatted}.`
+  };
+}
+
+
+
+export async function getAllSubscribers(): Promise<any[]> {
+  const database = await getDb();
+  const res = database.exec('SELECT * FROM subscribers');
+  if (!res || res.length === 0) return [];
+  const columns = res[0].columns as string[];
+  return res[0].values.map((row: any[]) => {
+    const obj: Record<string, any> = {};
+    columns.forEach((col: string, idx: number) => { obj[col] = row[idx]; });
+    return obj;
+  });
+}
+
