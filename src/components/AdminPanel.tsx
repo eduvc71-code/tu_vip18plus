@@ -848,7 +848,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     is_active: true,
     countries: buildTelegramCountriesFromPaymentMethods(methods),
     plans: [
-      { id: 'monthly', name: 'MENSUAL', plan_type: 'monthly', price: '', description: 'Acceso mensual.', order: 1, active: true }
+      { id: 'mes', name: 'SUSCRIPCION MES', plan_type: 'monthly', price: '', description: 'Acceso por 1 mes.', order: 1, active: true },
+      { id: 'seis', name: 'SUSCRIPCION 6 MESES', plan_type: 'semester', price: '', description: 'Acceso por 6 meses.', order: 2, active: true },
+      { id: 'permanente', name: 'SUSCRIPCION PERMANENTE', plan_type: 'permanent', price: '', description: 'Acceso permanente.', order: 3, active: true }
     ],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

@@ -33,702 +33,10 @@ import {
   registerSubscriber,
   getAllPaymentMethods,
   getPublicPaymentMethods,
-  getPaymentMethodById,
-  getPublicProfiles,
-  findRecentDuplicateCustomerRequest,
-  markCustomerRequestScheduled
+  getPaymentMethodById
 } from './db.js';
 import { Profile, ProfileStatus, PaymentMethod } from '../types.js';
 import { uploadBufferToB2, isB2Configured, mediaUrl } from './b2Storage.js';
-
-// ============================ FASE 1: NAVEGACIÓN EDITABLE (BOTONERA NATIVA) ============================
-// Utilidades de escape para MarkdownV2: permite inyectar texto dinámico (nombres, descripciones,
-// precios configurables) sin romper el parseo ni generar mensajes vacíos por caracteres especiales.
-export function escapeMarkdownV2(text: string): string {
-  return String(text ?? '').replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
-}
-
-// Convierte Markdown clásico (*negrita*, `código`) a MarkdownV2 escapando el resto del texto.
-// Útil para reutilizar plantillas existentes en flujos editables sin perder formato.
-export function markdownToMarkdownV2(text: string): string {
-  const segments = String(text ?? '').split(/(\*[^*\n]+\*|`[^`\n]+`)/g).filter(Boolean);
-  return segments
-    .map((seg) => {
-      if (/^\*[^*\n]+\*$/.test(seg)) return `*${escapeMarkdownV2(seg.slice(1, -1))}*`;
-      if (/^`[^`\n]+`$/.test(seg)) return `\`${escapeMarkdownV2(seg.slice(1, -1))}\``;
-      return escapeMarkdownV2(seg);
-    })
-    .join('');
-}
-
-// Edición en el sitio: los menús de la botonera nativa se actualizan sobre el mismo mensaje
-// (como la Mini App) en lugar de acumular mensajes nuevos en el chat del cliente.
-async function editMessageContent(chatId: string | number, messageId: number, text: string, inlineKeyboard?: any[][], mediaType?: 'photo' | 'video', mediaUrlValue?: string): Promise<boolean> {
-  const useCaption = Boolean(mediaType && mediaUrlValue);
-  const method = useCaption
-    ? 'editMessageCaption'
-    : (mediaType || mediaUrlValue)
-      ? 'editMessageMedia'
-      : 'editMessageText';
-  const payload: any = { chat_id: chatId, message_id: messageId };
-  if (useCaption) {
-    payload.caption = text;
-    payload.parse_mode = 'MarkdownV2';
-  } else if (method === 'editMessageMedia') {
-    payload.media = {
-      type: mediaType === 'video' ? 'video' : 'photo',
-      media: mediaUrlValue,
-      caption: text,
-      parse_mode: 'MarkdownV2'
-    };
-  } else {
-    payload.text = text;
-    payload.parse_mode = 'MarkdownV2';
-  }
-  if (inlineKeyboard) payload.reply_markup = { inline_keyboard: inlineKeyboard };
-  const res = await callTelegramApi(method, payload);
-  if (!res?.ok) {
-    console.warn(`[EditNav] No se pudo editar mensaje ${messageId}: ${res?.description}`);
-    return false;
-  }
-  return true;
-}
-
-// Resuelve el ID de perfil desde callback_data (nav_prof_<id>, nav_gal_<id>_<page>, nav_pay_<id>).
-function resolveProfileIdFromNavData(data: string): string | null {
-  const m = data.match(/^nav_(?:prof|gal|pay)_([^_]+(?:_(?!p\d{1,3}$)[^_]+)*)(?:_p\d{1,3})?$/);
-  return m ? m[1] : null;
-}
-
-// Página de galería + botones ◀ ▶ cuando hay más de un elemento multimedia activo.
-function buildGalleryPageRows(profile: Profile, page: number): { rows: any[][]; safePage: number; total: number } {
-  const activePhotos = (profile.photos || []).filter((u: string) => !(profile.media_status?.[u] === 2));
-  const total = Math.max(activePhotos.length, 1);
-  const safePage = ((page - 1) % total + total) % total + 1;
-  const rows: any[][] = [];
-  if (total > 1) {
-    const prev = safePage <= 1 ? total : safePage - 1;
-    const next = safePage >= total ? 1 : safePage + 1;
-    rows.push([
-      { text: '◀️ Anterior', callback_data: `nav_gal_${profile.id}_p${prev}` },
-      { text: `${safePage}/${total}`, callback_data: 'nav_noop' },
-      { text: 'Siguiente ▶️', callback_data: `nav_gal_${profile.id}_p${next}` }
-    ]);
-  }
-  return { rows, safePage, total };
-}
-
-// Ficha completa de un perfil, con paginación de galería y CTA de suscripción (sin registrar nada).
-async function renderNavProfileView(chatId: string | number, messageId: number, profileId: string, page: number, listCallback: string): Promise<boolean> {
-  const profile = await getProfileById(profileId, true);
-  if (!profile) {
-    return await editMessageContent(chatId, messageId,
-      '⚠️ Este contenido ya no está disponible.\nPulsa el botón para volver al catálogo.',
-      [[{ text: '🔙 Volver al Catálogo', callback_data: listCallback }]]);
-  }
-  const { rows, safePage } = buildGalleryPageRows(profile, page);
-  const photos = (profile.photos || []).filter((u: string) => !(profile.media_status?.[u] === 2));
-  const currentPhoto = photos[safePage - 1];
-  const isVideo = !!currentPhoto && (/\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(currentPhoto) || currentPhoto.includes('/video'));
-  const tgFileId = currentPhoto ? profile.telegram_media_file_ids?.[currentPhoto] : undefined;
-  const mediaTarget = tgFileId || currentPhoto;
-
-  const starsPrice = currentPhoto ? profile.media_stars?.[currentPhoto] : undefined;
-  const desc = (profile.media_descriptions?.[currentPhoto!] || profile.description || '').trim();
-  const lines = [
-    `💎 *${escapeMarkdownV2(profile.name)}*`,
-    '',
-    ...(desc ? [escapeMarkdownV2(desc), ''] : []),
-    `📍 ${escapeMarkdownV2(profile.zone || 'Contenido VIP')}`,
-    `💵 Suscripción: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}* / mes`,
-    ...(starsPrice ? [`⭐ Foto exclusiva: *${starsPrice} Stars*`] : [])
-  ];
-  const text = lines.join('\n');
-
-  const navRows: any[][] = [];
-  if (rows.length > 0) navRows.push(...rows);
-  navRows.push([{ text: '🛒 Adquirir Contenido', callback_data: `nav_acq_${profile.id}` }]);
-  navRows.push([{ text: '💳 Métodos de Pago', callback_data: `nav_pay_${profile.id}` }]);
-  navRows.push([
-    { text: '🔙 Catálogo', callback_data: listCallback },
-    { text: '🏠 Menú', callback_data: 'client_cmd_menu' }
-  ]);
-
-  if (mediaTarget) {
-    const ok = await editMessageContent(chatId, messageId, text, navRows, isVideo ? 'video' : 'photo', mediaTarget);
-    if (ok) return true;
-  }
-  return await editMessageContent(chatId, messageId, text, navRows);
-}
-
-// Paginación del listado de perfiles (2 por fila, como grilla de la Mini App).
-function buildNavProfileListKeyboard(profiles: Profile[], page: number, pageSize: number, prefix: string): any[][] {
-  const totalPages = Math.max(1, Math.ceil(profiles.length / pageSize));
-  const safePage = Math.min(Math.max(page, 1), totalPages);
-  const slice = profiles.slice((safePage - 1) * pageSize, safePage * pageSize);
-  const rows: any[][] = [];
-  for (let i = 0; i < slice.length; i += 2) {
-    rows.push(slice.slice(i, i + 2).map(p => ({
-      text: `💎 ${p.name.length > 18 ? p.name.slice(0, 17) + '…' : p.name}`,
-      callback_data: `nav_prof_${p.id}`
-    })));
-  }
-  if (totalPages > 1) {
-    const navRow: any[] = [];
-    if (safePage > 1) navRow.push({ text: '◀️ Anterior', callback_data: `${prefix}_p${safePage - 1}` });
-    navRow.push({ text: `📄 ${safePage}/${totalPages}`, callback_data: 'nav_noop' });
-    if (safePage < totalPages) navRow.push({ text: 'Siguiente ▶️', callback_data: `${prefix}_p${safePage + 1}` });
-    rows.push(navRow);
-  }
-  rows.push([{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]);
-  return rows;
-}
-
-async function renderNavProfileList(chatId: string | number, messageId: number, page: number, title: string, intro: string): Promise<boolean> {
-  const pageSize = 6;
-  const profiles = await getPublicProfiles();
-  const totalPages = Math.max(1, Math.ceil(profiles.length / pageSize));
-  const safePage = Math.min(Math.max(page, 1), totalPages);
-  const first = profiles[(safePage - 1) * pageSize];
-  const last = profiles[Math.min(safePage * pageSize, profiles.length) - 1];
-  const baseLines = [
-    `${title}`,
-    '',
-    intro,
-    `🗂 Modelos disponibles: *${profiles.length}*${first && last ? ` · Mostrando ${escapeMarkdownV2(first.name)} → ${escapeMarkdownV2(last.name)}` : ''}`
-  ].join('\n');
-  const keyboard = buildNavProfileListKeyboard(profiles, safePage, pageSize, 'nav_list');
-  if (profiles.length === 0) {
-    return await editMessageContent(chatId, messageId,
-      `${title}\n\nAún no hay contenido publicado. Vuelve pronto ✨`,
-      [[{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]]);
-  }
-  return await editMessageContent(chatId, messageId, baseLines, keyboard);
-}
-
-// Detalle de método de pago en modo editable (reutilizado por la navegacion nativa).
-async function renderPaymentMethodDetailEditable(chatId: string | number, messageId: number, methodId: string, backCallback: string, options?: { profileRateBs?: number | string }): Promise<boolean> {
-  const method = await getPaymentMethodById(methodId);
-  if (!method) {
-    return await editMessageContent(chatId, messageId, '⚠️ Método de pago no disponible.', [[{ text: '🔙 Volver', callback_data: backCallback }]]);
-  }
-  const adminUsername = getAdminContactUsername();
-  const adminContactUrl = `https://t.me/${adminUsername}`;
-  const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
-  const text = [
-    `✨ *${escapeMarkdownV2(method.title)}* ✨`,
-    '',
-    escapeMarkdownV2(method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'),
-    '',
-    `💵 *Tarifa Oficial:* ${escapeMarkdownV2(officialFeeText)}`,
-    '',
-    `📲 *Envía tu comprobante a:* https://t.me/${escapeMarkdownV2(adminUsername)}`,
-    '',
-    '_Una vez verificado tu comprobante, la Administradora te enviará el acceso privado VIP_'
-  ].join('\n');
-  const keyboard = [
-    [{ text: '📲 Enviar Comprobante', url: adminContactUrl }],
-    [{ text: '💳 Todos los Métodos', callback_data: 'client_cmd_pagos' }],
-    [{ text: '🔙 Volver', callback_data: backCallback }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
-  ];
-  return await editMessageContent(chatId, messageId, text, keyboard);
-}
-
-// ===== FASE 2: Filtros avanzados del catálogo nativo (solo lectura, cero escrituras) =====
-interface NavFilterState {
-  zone?: string;
-  q?: string;
-  sort?: 'default' | 'new' | 'price_asc' | 'price_desc' | 'name';
-  page?: number;
-  __ts?: number; // TTL: última actividad; los estados inactivos se purgan
-}
-const NAV_FILTERS: Record<string, any> = {};
-const NAV_FILTERS_TTL_MS = 30 * 60 * 1000; // 30 minutos de inactividad
-
-function getNavFilters(key: string): NavFilterState {
-  if (!NAV_FILTERS[key]) NAV_FILTERS[key] = { sort: 'default' };
-  NAV_FILTERS[key].__ts = Date.now();
-  return NAV_FILTERS[key];
-}
-
-// Purga periódica (con límite duro) para que la caché en memoria no crezca sin tope.
-let navPurgeCounter = 0;
-function purgeNavFilters(): void {
-  if (++navPurgeCounter % 50 !== 0) return;
-  const now = Date.now();
-  const keys = Object.keys(NAV_FILTERS);
-  for (const k of keys) {
-    const state = NAV_FILTERS[k];
-    if (!state || now - Number(state.__ts || 0) > NAV_FILTERS_TTL_MS) delete NAV_FILTERS[k];
-  }
-  const remaining = Object.keys(NAV_FILTERS);
-  if (remaining.length > 5000) {
-    remaining
-      .sort((a, b) => Number(NAV_FILTERS[a]?.__ts || 0) - Number(NAV_FILTERS[b]?.__ts || 0))
-      .slice(0, remaining.length - 5000)
-      .forEach(k => delete NAV_FILTERS[k]);
-  }
-}
-
-function navSortLabel(sort?: NavFilterState['sort']): string {
-  switch (sort) {
-    case 'new': return '🆕 Más nuevas';
-    case 'price_asc': return '💵 Precio ↑';
-    case 'price_desc': return '💵 Precio ↓';
-    case 'name': return '🔤 Nombre A-Z';
-    default: return '⭐ Prioridad';
-  }
-}
-
-function navFilterSummary(f: NavFilterState): string {
-  const parts: string[] = [`Orden: ${navSortLabel(f.sort)}`];
-  if (f.zone) parts.push(`Zona: ${f.zone}`);
-  if (f.q) parts.push(`Búsqueda: "${f.q}"`);
-  return parts.join(' · ');
-}
-
-function applyNavFilters(profiles: Profile[], f: NavFilterState): Profile[] {
-  let list = [...profiles];
-  if (f.zone) { const z = f.zone.toLowerCase(); list = list.filter(p => (p.zone || '').toLowerCase() === z); }
-  if (f.q) {
-    const q = f.q.toLowerCase();
-    list = list.filter(p =>
-      (p.name || '').toLowerCase().includes(q) ||
-      (p.description || '').toLowerCase().includes(q) ||
-      (p.zone || '').toLowerCase().includes(q)
-    );
-  }
-  switch (f.sort) {
-    case 'new': list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || ''))); break;
-    case 'price_asc': list.sort((a, b) => Number(a.rate_bs || 0) - Number(b.rate_bs || 0)); break;
-    case 'price_desc': list.sort((a, b) => Number(b.rate_bs || 0) - Number(a.rate_bs || 0)); break;
-    case 'name': list.sort((a, b) => String(a.name).localeCompare(String(b.name))); break;
-    default: list.sort((a, b) => Number(a.priority_order || 0) - Number(b.priority_order || 0)); break;
-  }
-  return list;
-}
-
-// Renderiza el listado filtrado/paginado. Clave de estado: "list" (catálogo) o "new" (novedades).
-async function renderNavFilteredPage(chatId: string | number, messageId: number, key: 'list' | 'new'): Promise<boolean> {
-  const filters = getNavFilters(key);
-  const all = await getPublicProfiles();
-  let profiles = applyNavFilters(all, filters);
-  if (key === 'new') {
-    profiles = [...all]
-      .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-      .slice(0, Math.max(6, Math.min(profiles.length || all.length, 12)));
-  }
-  const pageSize = 6;
-  const totalPages = Math.max(1, Math.ceil(profiles.length / pageSize));
-  const safePage = Math.min(Math.max(filters.page || 1, 1), totalPages);
-  filters.page = safePage;
-  const title = key === 'new' ? '🆕 *NOVEDADES*' : '🗂 *CATÁLOGO VIP*';
-  const intro = key === 'new'
-    ? 'Lo último que subimos, directo desde el canal'
-    : 'Toca un nombre para ver su ficha completa';
-
-  if (profiles.length === 0) {
-    const kb = [
-      [{ text: '🧹 Limpiar filtros', callback_data: `nav_${key}_clear` }],
-      [{ text: '🔙 Volver', callback_data: 'nav_catalog' }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
-    ];
-    return await editMessageContent(chatId, messageId, `${title}\n\nSin resultados con estos filtros.`, kb);
-  }
-
-  const keyboard = buildNavProfileListKeyboard(profiles, safePage, pageSize, `nav_${key}`);
-  // Barra de filtros debajo de la paginación (rota orden; zona/búsqueda vía prompt en memoria)
-  keyboard.splice(keyboard.length - 1, 0,
-    [
-      { text: '🌐 Zona', callback_data: `nav_${key}_prompt_zone` },
-      { text: '🔎 Buscar', callback_data: `nav_${key}_prompt_q` }
-    ],
-    [
-      { text: `↕️ ${navSortLabel(filters.sort)}`, callback_data: `nav_${key}_sort_cycle` },
-      { text: '🧹 Limpiar', callback_data: `nav_${key}_clear` }
-    ]
-  );
-  const footer = `\n\n🎛 ${escapeMarkdownV2(navFilterSummary(filters))}`;
-  return await editMessageContent(chatId, messageId, `${title}\n\n${intro}${footer}`, keyboard);
-}
-
-// ===== FLUJO "ADQUIRIR CONTENIDO" (espejo exacto del RequestModal de la Mini App) =====
-// Pasos: nav_acq_<perfil> (menú de planes) -> nav_acqp_<plan>__<perfil> (país, en memoria)
-//        -> nav_acqc_<plan>__<perfil> (confirmación) -> nav_acqok_<plan>__<perfil> (ÚNICO paso que registra).
-// Lista por defecto (espejo del fallback de dynamicCountries en RequestModal.tsx de la Mini App).
-// Se usa SOLO si la admin no tiene métodos 'national'/'international' activos en BD.
-const NAV_COUNTRY_LIST = ['Bolivia', 'Argentina', 'Chile', 'Colombia', 'Ecuador', 'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'];
-const NAV_PLAN_EMOJI: Record<string, string> = { mensual: '🧸', semestral: '💎', permanente: '💙' };
-
-function navPlanName(plan: string): string {
-  return plan === 'semestral' ? 'SEMESTRAL' : plan === 'permanente' ? 'PERMANENTE' : 'MENSUAL';
-}
-
-// Extrae el nombre del país del título del método de pago, igual que la Mini App
-// (RequestModal.tsx -> dynamicCountries): elimina emojis y símbolos, deja solo el texto.
-function extractNavCountryTitle(title: string): string {
-  return title.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
-}
-
-async function buildAcqCountryKeyboard(plan: string, profileId: string): Promise<any[][]> {
-  // Fuente dinámica: países de los métodos de pago ACTIVOS de la admin en BD
-  // (categorías national/international), con dedupe — mismo orden/criterio que la Mini App.
-  let countries: string[] = [];
-  try {
-    const methods = await getPublicPaymentMethods();
-    countries = Array.from(new Set(
-      methods
-        .filter(m => m.is_active && (m.category === 'international' || m.category === 'national'))
-        .map(m => extractNavCountryTitle(m.title))
-        .filter(t => t.length > 0)
-    ));
-  } catch { /* fallback abajo */ }
-  if (countries.length === 0) countries = NAV_COUNTRY_LIST;
-
-  const rows: any[][] = [];
-  for (let i = 0; i < countries.length; i += 2) {
-    rows.push(countries.slice(i, i + 2).map(c => ({
-      text: c.length > 16 ? c.slice(0, 15) + '…' : c,
-      callback_data: `nav_acqs_${plan}__${profileId}__${encodeURIComponent(c)}`
-    })));
-  }
-  rows.push([{ text: '✍️ Otro país', callback_data: `nav_acqo_${plan}__${profileId}` }]);
-  rows.push([{ text: '🔙 Volver a Planes', callback_data: `nav_acq_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]);
-  return rows;
-}
-
-async function renderNavAcquireMenu(chatId: string | number, messageId: number, profileId: string): Promise<boolean> {
-  const profile = await getProfileById(profileId, true);
-  const methods = await getPublicPaymentMethods();
-  const hasStars = methods.some(m => m.is_active && /star/i.test(`${m.title} ${m.description || ''}`));
-  // Botón "Ver lo Exclusivo 🔥🔥🔥" en el mismo nivel de los planes: abre la Mini App
-  // directamente en la ficha de este perfil (deep link #profile-<id>, igual que en los posts).
-  const { baseUrl: navBaseUrl } = getBotConfig();
-  const exclusiveButton = { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: `${navBaseUrl}/#profile-${profileId}` } };
-
-  const text = [
-    `🛒 *ADQUIRIR CONTENIDO*`,
-    '',
-    ...(profile ? [`Elige tu *Plan VIP* para *${escapeMarkdownV2(profile.name)}*:`, '', `💵 Tarifa de referencia: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}* / mes`] : ['Elige tu *Plan VIP*:']),
-    ...(hasStars ? ['', `⭐ También puedes desbloquear fotos sueltas pagando con Telegram Stars desde su ficha.`] : []),
-    '',
-    '_La atención y los pagos continúan 100% privados por Telegram_',
-    '',
-    '⚡ _¿Prefieres la experiencia visual completa? Toca_ *Ver lo Exclusivo* _abajo._'
-  ].join('\n');
-  const keyboard = [
-    //// MODIFICACION 002 /// Botonera de PLANES del flujo de adquisicion (nav_acq_<perfil>). Los 3 planes existen: MENSUAL -> metodos de pago; SEMESTRAL/PERMANENTE -> botonera de paises (sin precios, chat privado). NO se publica al canal.
-    [{ text: '🧸 SUSCRIPCIÓN MENSUAL', callback_data: `nav_acqp_mensual__${profileId}` }],
-    [{ text: '💎 SUSCRIPCIÓN SEMESTRAL', callback_data: `nav_acqp_semestral__${profileId}` }],
-    [{ text: '💙 SUSCRIPCIÓN PERMANENTE', callback_data: `nav_acqp_permanente__${profileId}` }],
-    [exclusiveButton],
-    [{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
-  ];
-  return await editMessageContent(chatId, messageId, text, keyboard);
-}
-
-async function renderNavAcquireCountry(chatId: string | number, messageId: number, plan: string, profileId: string): Promise<boolean> {
-  const profile = await getProfileById(profileId, true);
-  const text = [
-    `🌍 *¡Bienvenido a la zona exclusiva!*`,
-    '',
-    `${NAV_PLAN_EMOJI[plan] || '💎'} Plan *SUSCRIPCIÓN ${navPlanName(plan)}*${profile ? ` — *${escapeMarkdownV2(profile.name)}*` : ''}`,
-    '',
-    `Por favor indícanos *de qué país nos contactas* para darte información detallada\\.`
-  ].join('\n');
-  return await editMessageContent(chatId, messageId, text, await buildAcqCountryKeyboard(plan, profileId));
-}
-
-async function renderNavAcquireConfirm(chatId: string | number, messageId: number, plan: string, profileId: string, country: string): Promise<boolean> {
-  const profile = await getProfileById(profileId, true);
-  const { brandName } = getBotConfig();
-  const text = [
-    `📤 *ENVÍO DIRECTO*`,
-    '',
-    `¿Aceptas enviar un mensaje directo y privado a *${escapeMarkdownV2(brandName || 'IAM DANII VIP')}*?`,
-    '',
-    `Toda la información de los planes y formas de pago para *${escapeMarkdownV2(country)}* te será enviada de manera 100\\% privada y confidencial a tu chat de Telegram\\.`
-  ].join('\n');
-  const keyboard = [
-    [{ text: '✅ Sí, Enviar Mensaje Privado', callback_data: `nav_acqok_${plan}__${profileId}__${encodeURIComponent(country)}` }],
-    [{ text: '✖️ Cancelar y volver atrás', callback_data: `nav_acqp_${plan}__${profileId}` }]
-  ];
-  return await editMessageContent(chatId, messageId, text, keyboard);
-}
-
-// Único punto del flujo nativo que escribe en BD: igual que la Mini App, SOLO al confirmar.
-async function completeNavAcquireRequest(cb: any, plan: string, profileId: string, country: string): Promise<void> {
-  const chatId = cb.message.chat.id;
-  const messageId = cb.message.message_id;
-  const user = cb.from || {};
-  const userId = String(user.id || chatId);
-  const firstName = user.first_name || 'Cliente Telegram';
-  const username = user.username ? `@${user.username}` : `ID:${userId}`;
-  const profile = await getProfileById(profileId, true);
-  if (!profile) {
-    await editMessageContent(chatId, messageId, '⚠️ Este contenido ya no está disponible. Pulsa 🏠 Menú para volver.', [[{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
-    return;
-  }
-
-  // Anti-duplicado (misma lógica que POST /api/requests de la Mini App)
-  const msg = `Hola, estoy interesado en la SUSCRIPCIÓN ${navPlanName(plan)}. Soy de ${country}. Solicito Información VIP por favor.`;
-  const duplicate = await findRecentDuplicateCustomerRequest(userId, profile.id, msg, 10);
-  if (duplicate) {
-    await editMessageContent(chatId, messageId,
-      `✅ *Ya recibimos tu solicitud reciente*\n\nLa Administradora responderá pronto en privado\\. Si necesitas cambiar algo, escríbele directamente\\.`,
-      [[{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
-    return;
-  }
-
-  const request = await createCustomerRequest({
-    profile_id: profile.id,
-    profile_name: profile.name,
-    telegram_user_id: userId,
-    telegram_first_name: firstName,
-    telegram_username: user.username || undefined,
-    notes: msg,
-    status: 'pendiente'
-  });
-
-  // Notificación a admins (mismos botones que la alerta de la Mini App)
-  const { adminIds } = getBotConfig();
-  let delivered = false;
-  const adminNotice = [
-    `🔔 NUEVA SOLICITUD DE ACCESO VIP (Botonera Nativa) 🔔`,
-    ``,
-    `👤 Cliente: ${firstName} ${username}`,
-    `🆔 Telegram ID: ${userId}`,
-    `👠 Perfil: ${profile.name} (PRECIO VIP: Bs. ${profile.rate_bs})`,
-    `📋 Plan: SUSCRIPCIÓN ${navPlanName(plan)}`,
-    `🌍 País: ${country}`,
-    `💬 Mensaje: ${msg}`
-  ].join('\n');
-  for (const adminId of adminIds) {
-    try {
-      const delivery = await sendMessage(adminId, adminNotice, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '📩 Responder al cliente', url: `https://t.me/${String(username).replace('@', '')}` }],
-            [
-              { text: '📲 Enviar QR privado', callback_data: `request_qr_${request.id}` },
-              { text: '✅ Marcar atendida', callback_data: `request_done_${request.id}` }
-            ]
-          ]
-        }
-      });
-      if (delivery.ok) delivered = true;
-    } catch (err) {
-      console.error('[NavAcquire] No se pudo notificar al admin:', err);
-    }
-  }
-
-  if (!delivered) {
-    await updateCustomerRequestStatus(request.id, 'fallida');
-    await editMessageContent(chatId, messageId,
-      '⚠️ No fue posible notificar a la Administradora\\. Intenta nuevamente en unos minutos\\.',
-      [[{ text: '🔙 Reintentar', callback_data: `nav_acqc_${plan}__${profileId}__${encodeURIComponent(country)}` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
-    return;
-  }
-
-  await markCustomerRequestScheduled(request.id, new Date().toISOString());
-  try { await addAuditLog('CREATE_REQUEST_TG_NAV', userId, `Solicitud nativa ${navPlanName(plan)} para ${profile.name} (${country})`, request.id); } catch {}
-
-  await editMessageContent(chatId, messageId,
-    [
-      `✅ *¡SOLICITUD NOTIFICADA!*`,
-      ``,
-      `La Administradora ha sido notificada\\.`,
-      `La atención continuará de forma *privada* en tu chat de Telegram\\.`,
-      ``,
-      `📋 Plan: *SUSCRIPCIÓN ${navPlanName(plan)}* · 🌍 ${escapeMarkdownV2(country)}`
-    ].join('\n'),
-    [
-      [{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }],
-      [{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
-    ]);
-}
-
-// Router central de la botonera nativa navegable: TODO se resuelve editando el mensaje actual
-// y NINGÚN clic escribe en la base de datos (los registros solo ocurren al comprar en la Mini App
-// o cuando la admin procesa una solicitud real).
-async function handleNavCallback(cb: any): Promise<void> {
-  const chatId = cb.message.chat.id;
-  const messageId = cb.message.message_id;
-  const data = String(cb.data || '');
-
-  purgeNavFilters();
-
-  if (data === 'nav_noop') {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    return;
-  }
-
-  // Prompt de texto libre para filtros (zona / búsqueda): solo vive en memoria, cero BD.
-  const promptMatch = data.match(/^nav_(list|new)_prompt_(zone|q)$/);
-  if (promptMatch) {
-    const [, pKey, pField] = promptMatch;
-    NAV_FILTERS[`pending_${chatId}`] = { __field: pField, __key: pKey, __ts: Date.now() };
-    await callTelegramApi('answerCallbackQuery', {
-      callback_query_id: cb.id,
-      text: pField === 'zone'
-        ? 'Escribe la zona a filtrar (ej: Santa Cruz). Envía "-" para quitarlo.'
-        : 'Escribe el texto a buscar (nombre o descripción). Envía "-" para quitarlo.'
-    });
-    return;
-  }
-
-  // Ciclo de ordenamiento
-  const sortCycleMatch = data.match(/^nav_(list|new)_sort_cycle$/);
-  if (sortCycleMatch) {
-    const sKey = sortCycleMatch[1] as 'list' | 'new';
-    const f = getNavFilters(sKey);
-    const order: NonNullable<NavFilterState['sort']>[] = ['default', 'new', 'price_asc', 'price_desc', 'name'];
-    f.sort = order[(order.indexOf(f.sort || 'default') + 1) % order.length];
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: `Orden: ${navSortLabel(f.sort)}` });
-    await renderNavFilteredPage(chatId, messageId, sKey);
-    return;
-  }
-
-  // Limpiar filtros
-  const clearMatch = data.match(/^nav_(list|new)_clear$/);
-  if (clearMatch) {
-    const cKey = clearMatch[1] as 'list' | 'new';
-    NAV_FILTERS[cKey] = { sort: 'default' };
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Filtros restablecidos' });
-    await renderNavFilteredPage(chatId, messageId, cKey);
-    return;
-  }
-
-  // Listados navegables (catálogo completo / novedades) con filtros y paginación
-  if (data.startsWith('nav_list') || data === 'nav_catalog' || data.startsWith('nav_new')) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const key: 'list' | 'new' = (data === 'nav_catalog' || data.startsWith('nav_list')) ? 'list' : 'new';
-    const pm = data.match(/_p(\d+)$/);
-    if (pm) getNavFilters(key).page = parseInt(pm[1], 10) || 1;
-    const ok = await renderNavFilteredPage(chatId, messageId, key);
-    if (!ok) await sendMessage(chatId, key === 'new' ? '🆕 NOVEDADES' : '🗂 CATÁLOGO VIP');
-    return;
-  }
-
-  // Ficha de perfil con galería paginada
-  if (data.startsWith('nav_prof_') || /^nav_gal_[^_]+(_p\d+)?$/.test(data)) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const profileId = resolveProfileIdFromNavData(data);
-    if (!profileId) return;
-    const pm = data.match(/_p(\d+)$/);
-    const page = pm ? parseInt(pm[1], 10) || 1 : 1;
-    const listCallback = data.startsWith('nav_gal') ? `nav_prof_${profileId}` : 'nav_catalog';
-    const ok = await renderNavProfileView(chatId, messageId, profileId, page, listCallback);
-    if (!ok) {
-      const fallback = await getProfileById(profileId, true);
-      if (fallback) await sendClientWelcome(chatId);
-    }
-    return;
-  }
-
-  // Métodos de pago por perfil (solo lectura; el cobro lo hace Telegram/admin en privado)
-  if (data.startsWith('nav_pay_')) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const profileId = data.replace('nav_pay_', '');
-    const profile = await getProfileById(profileId, true);
-    const methods = (await getPublicPaymentMethods()).filter(m => m.is_active);
-    const keyboard: any[][] = [];
-    const featured = methods.filter(m => m.category !== 'service');
-    const services = methods.filter(m => m.category === 'service');
-    for (const m of featured) keyboard.push([{ text: m.title, callback_data: `nav_pmd_${m.id}__${profileId}` }]);
-    for (let i = 0; i < services.length; i += 2) {
-      keyboard.push(services.slice(i, i + 2).map(m => ({ text: m.title, callback_data: `nav_pmd_${m.id}__${profileId}` })));
-    }
-    keyboard.push([{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]);
-    const text = [
-      `💳 *MÉTODOS DE PAGO*`,
-      '',
-      profile ? `Para *${escapeMarkdownV2(profile.name)}* — Tarifa: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}*/mes` : 'Selecciona tu método de pago favorito:',
-      '',
-      '_Toca un método para ver los datos exactos y enviar tu comprobante en privado_'
-    ].join('\n');
-    const ok = await editMessageContent(chatId, messageId, text, keyboard);
-    if (!ok) await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'MarkdownV2' });
-    return;
-  }
-
-  // ===== FLUJO "ADQUIRIR CONTENIDO" (espejo del RequestModal de la Mini App) =====
-  //// MODIFICACION 005 /// Alias 'nav_vipfree': llega desde el boton "SUSCRIPCION VIP" publicado en el CANAL (deep link /start nav_vipfree).
-  //// Muestra la botonera con las 3 suscripciones (Mensual/Semestral/Permanente). Se usa un perfil REAL activo como contexto para que cada plan muestre su tarifa correctamente;
-  //// si no hay perfiles activos, se abre igualmente el menu sin tarifa. NO expone datos sensibles: solo nombre de plan y tarifa general.
-  if (data === 'nav_vipfree') {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    let vipCtxId = '';
-    try {
-      const activeProfiles = await getPublicProfiles();
-      vipCtxId = (activeProfiles || []).find(p => p.status === 'disponible')?.id || activeProfiles?.[0]?.id || '';
-    } catch { /* sin contexto de perfil: el menu tolera profile inexistente */ }
-    const okVip = await renderNavAcquireMenu(chatId, messageId, vipCtxId);
-    if (!okVip) await sendMessage(chatId, '⚠️ Contenido no disponible.', { reply_markup: { inline_keyboard: [[{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]] } });
-    return;
-  }
-
-  // Menú de planes VIP
-  if (data.startsWith('nav_acq_') && !data.startsWith('nav_acqp_') && !data.startsWith('nav_acqc_') && !data.startsWith('nav_acqo_') && !data.startsWith('nav_acqs_') && !data.startsWith('nav_acqok_')) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const profileId = data.replace('nav_acq_', '');
-    const ok = await renderNavAcquireMenu(chatId, messageId, profileId);
-    if (!ok) await sendMessage(chatId, '⚠️ Contenido no disponible.', { reply_markup: { inline_keyboard: [[{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]] } });
-    return;
-  }
-
-  // Selección de plan -> pantalla de país
-  const acqPlanMatch = data.match(/^nav_acqp_(mensual|semestral|permanente)__(.+)$/);
-  if (acqPlanMatch) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    await renderNavAcquireCountry(chatId, messageId, acqPlanMatch[1], acqPlanMatch[2]);
-    return;
-  }
-
-  // País preseleccionado -> confirmación
-  const acqSelMatch = data.match(/^nav_acqs_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
-  if (acqSelMatch) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const country = decodeURIComponent(acqSelMatch[3]);
-    await renderNavAcquireConfirm(chatId, messageId, acqSelMatch[1], acqSelMatch[2], country);
-    return;
-  }
-
-  // Reconfirmación directa (desde botón "Reintentar")
-  const acqConfirmMatch = data.match(/^nav_acqc_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
-  if (acqConfirmMatch) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    await renderNavAcquireConfirm(chatId, messageId, acqConfirmMatch[1], acqConfirmMatch[2], decodeURIComponent(acqConfirmMatch[3]));
-    return;
-  }
-
-  // "Otro país": captura por texto libre en memoria (cero BD hasta confirmar)
-  const acqOtherMatch = data.match(/^nav_acqo_(mensual|semestral|permanente)__(.+)$/);
-  if (acqOtherMatch) {
-    NAV_FILTERS[`pending_acq_${chatId}`] = { __plan: acqOtherMatch[1], __profile: acqOtherMatch[2], __field: 'country', __ts: Date.now() };
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Escribe tu país y lo llevamos a la confirmación.' });
-    return;
-  }
-
-  // Confirmación final: ÚNICO clic que registra la solicitud (igual que la Mini App)
-  const acqOkMatch = data.match(/^nav_acqok_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
-  if (acqOkMatch) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Enviando solicitud...' });
-    await completeNavAcquireRequest(cb, acqOkMatch[1], acqOkMatch[2], decodeURIComponent(acqOkMatch[3]));
-    return;
-  }
-
-  // Detalle de método dentro del flujo de navegación (nav_pmd_<methodId>__<profileId>)
-  if (data.startsWith('nav_pmd_')) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const payload = data.replace('nav_pmd_', '');
-    const [methodId, profileId] = payload.split('__');
-    const profile = profileId ? await getProfileById(profileId, true) : null;
-    const backCallback = profileId ? `nav_pay_${profileId}` : 'client_cmd_pagos';
-    const ok = await renderPaymentMethodDetailEditable(chatId, messageId, methodId, backCallback, { profileRateBs: profile?.rate_bs });
-    if (!ok) await showPaymentMethodDetail(chatId, methodId, profile?.rate_bs ? { profileRateBs: profile.rate_bs } : undefined);
-    return;
-  }
-}
 
 const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) {
@@ -744,7 +52,7 @@ export function getBotConfig() {
     rawUsername = 'Danii_Catalogo_SCZ_bot';
   }
   let username = rawUsername.replace(/^@/, '').trim() || 'Danii_Catalogo_SCZ_bot';
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || crypto.createHash('sha256').update(token).digest('hex').substring(0, 32);
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || require('crypto').createHash('sha256').update(token).digest('hex').substring(0, 32);
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
   if (!channelId.startsWith('@') && !channelId.startsWith('-') && /^\d+$/.test(channelId)) {
@@ -759,7 +67,7 @@ export function getBotConfig() {
     .map(id => id.trim())
     .filter(Boolean);
   const adminIds = Array.from(new Set([...envAdminIds, ...dbAdminIds]));
-  const signingSecret = process.env.ADMIN_SIGNING_SECRET || crypto.createHash('sha256').update(token + 'jwt').digest('hex').substring(0, 32);
+  const signingSecret = process.env.ADMIN_SIGNING_SECRET || require('crypto').createHash('sha256').update(token + 'jwt').digest('hex').substring(0, 32);
   const brandName = process.env.VIP_BRAND_NAME || 'IAM DANII VIP';
   const baseUrl = (
     process.env.RENDER_EXTERNAL_URL ||
@@ -773,21 +81,12 @@ export function getBotConfig() {
   return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl, appShortName };
 }
 
-// PARCHE (seguridad de contacto admin): el fallback del contacto de administradora
-// es SIEMPRE el bot (siempre puede recibir mensajes). Los usernames heredados o
-// incorrectos (ruti / flavia / iam_danii_vip_bot) NUNCA deben quedar expuestos a
-// los usuarios como contacto admin. El username personal real (p.ej. danii001)
-// se define vía ADMIN_CONTACT_USERNAME (env) o desde el Panel Admin (DB), y tiene
-// prioridad sobre este filtro.
 export function getAdminContactUsername(): string {
   const envValue = (process.env.ADMIN_CONTACT_USERNAME || '').trim();
   const dbValue = (getSystemSetting('admin_contact_username') || '').trim();
   const rawValue = envValue || dbValue || 'Danii_Catalogo_SCZ_bot';
-  let username = rawValue.replace(/^@/, '').trim();
-  // Bloqueo explícito: ningún valor ruti|flavia|iam_danii_vip_bot puede usarse como contacto admin.
-  if (!username || /ruti|flavia|iam_danii_vip_bot/i.test(username)) {
-    username = 'Danii_Catalogo_SCZ_bot';
-  }
+  const username = rawValue.replace(/^@/, '').trim();
+  if (!username) return 'Danii_Catalogo_SCZ_bot';
   return username;
 }
 
@@ -801,7 +100,7 @@ export function isAdminUser(telegramUserId: string | number): boolean {
 
 export function isPublicTelegramCallbackData(data: string): boolean {
   if (!data) return false;
-  return /^(client_|vip_|pay_method_|nav_)/.test(data);
+  return /^(client_|vip_|pay_method_)/.test(data);
 }
 
 export function parseTelegramBotoneraCallbackData(data: string): {
@@ -1358,49 +657,25 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   }
 }
 
-// Fase 3 (deep links en posts del canal): los canales NO permiten callback_data en sus posts,
-// pero sí botones URL con deep links t.me/<bot>?start=... que abren el chat privado del bot.
-// El handler /start nav_* ya reenvía esos datos al router nav_* (edición en el mismo mensaje,
-// cero registros por clic). Modo configurable via setting post_button_mode:
-//   miniapp (default) | nativo | ambos.
-export function isNavDeepLinkStartParam(payload: string): boolean {
-  return /^nav_/.test(String(payload || '')) && isPublicTelegramCallbackData(String(payload || ''));
-}
-
 export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string, username: string) {
   const { appShortName } = getBotConfig();
   const botAppUrl = `https://t.me/${username}/${appShortName || 'canalVipFreeIamDanii'}?startapp=ver_${profile.id}`;
-  const cleanBotUser = String(username || '').replace(/^@/, '').trim();
 
   let customButtonRows: any[] = [];
   try {
     const customButtons = await getPublicCustomButtons('channel');
-    customButtonRows = customButtons
-      .filter(btn => btn.url && String(btn.url).trim().startsWith('http'))
-      .map(btn => [{ text: btn.label, url: btn.url }]);
+    customButtonRows = customButtons.map(btn => [{ text: btn.label, url: btn.url }]);
   } catch (err) {
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
-  let mode = String(getSystemSetting('post_button_mode') || 'miniapp').toLowerCase();
-  if (!['miniapp', 'nativo', 'ambos'].includes(mode)) mode = 'miniapp';
-
-  //// MODIFICACION 004 /// BOTONERA PUBLICADA AL CANAL (instruccion del usuario): TODO post publicado desde el Panel lleva SIEMPRE exactamente 2 botones en la misma fila:
-  ////   1) "Ver lo exclusivo" -> Mini App (deep link startapp=ver_<perfil>).
-  ////   2) "SUSCRIPCION VIP"  -> deep link nav_vipfree: abre el chat PRIVADO del bot y muestra la botonera con las 3 suscripciones (Mensual/Semestral/Permanente).
-  //// NOTA: los canales de Telegram NO permiten callback_data, por eso se usa URL t.me/<bot>?start=... que el handler /start reenvia al router nav_*.
-  //// El modo anterior (setting post_button_mode: miniapp|nativo|ambos con botones extra Catalogo/Ficha/Metodos de Pago/Novedades) queda INUTILIZADO a proposito: ya no debe publicarse nada mas.
-  //// Los custom buttons activos del Panel ('channel') SI se conservan: los agrega el bloque final ...customButtonRows.
-  void mode; // MODIFICACION 004: post_button_mode ya no decide la botonera publicada (siempre 2 botones fijos).
-  //// El boton "⭐ Suscripcion VIP FREE" NO EXISTE (no hay suscripcion free); se conserva unicamente el token interno 'nav_vipfree' como alias tecnico del menu de planes porque esta documentado en el codigo fuente original.
-  const keyboard: any[][] = [];
-  const vipDeepLink = cleanBotUser
-    ? `https://t.me/${cleanBotUser}?start=${encodeURIComponent('nav_vipfree')}`
-    : botAppUrl;
-  keyboard.push([
-    { text: 'Ver lo exclusivo 🔥', url: botAppUrl },
-    { text: 'SUSCRIPCION VIP 💎', url: vipDeepLink }
-  ]);
+  // Telegram-native reactions are configured in the channel settings.
+  // Posts here use only the Mini App link and configured custom URL buttons.
+  const keyboard = [
+    [
+      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }
+    ]
+  ];
   return {
     inline_keyboard: [
       ...keyboard,
@@ -1502,11 +777,7 @@ export async function uploadBufferToTelegram(
       formData.append('has_spoiler', 'true');
     }
 
-  // Copia a un ArrayBuffer nuevo: evita el error de tipos TS2322 (Buffer<ArrayBufferLike>
-  // no asignable a BlobPart) en entornos con @types/node >= 20 / lib ES2024.
-  const ab = new ArrayBuffer(buffer.byteLength);
-  new Uint8Array(ab).set(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength));
-  const blob = new Blob([ab], { type: mimeType });
+  const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
   formData.append(fieldName, blob, fileName);
 
   try {
@@ -1790,50 +1061,34 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // Deep Link de navegación nativa: /start nav_<callback> (llega desde botones del canal)
-  if (text.startsWith('/start nav_')) {
+  // [Flujo VIP] Deep links de suscripción: nav_* (nav_vipfree, nav_vip, nav_plan...) y vipc_<pais>.
+  // SIEMPRE llevan a los botones de plan (Mes / 6 Meses / Permanente). Nunca caen en el welcome
+  // ni en "Ver lo Exclusivo". Si la URL trae un país codificado (p.ej. vipc_bo o nav_vipfree_bo),
+  // abre directamente los planes de ese país; si no, muestra primero el menú de países.
+  if (text.startsWith('/start nav_') || text.startsWith('/start vipc_')) {
     if (!isPrivateChat(message.chat)) {
-      await sendMessage(chatId, '🔒 Abre el chat privado para navegar el catálogo.');
+      await sendMessage(chatId, '🔒 Abre el chat privado para ver los planes VIP.');
       return;
     }
     if (fromId) {
       await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
     }
-    const rawNav = text.replace('/start nav_', '').trim();
-    const inner = rawNav.startsWith('nav_') ? rawNav : `nav_${rawNav}`;
-    const welcomeRes = await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
-    const navMessageId = welcomeRes?.result?.message_id;
-    if (navMessageId && isPublicTelegramCallbackData(inner)) {
-      await handleNavCallback({ id: '', data: inner, message: { chat: { id: chatId }, message_id: navMessageId } });
-    }
-    return;
-  }
-
-  // Deep Link desde la botonera publicada en el CANAL: /start vipc_<idPais>
-  if (text.startsWith('/start vipc_')) {
-    if (!isPrivateChat(message.chat)) {
-      await sendMessage(chatId, '🔒 Abre el chat privado para ver los métodos de pago.');
-      return;
-    }
-    if (fromId) {
-      await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
-    }
-    const vipCountryId = text.replace('/start vipc_', '').trim();
-    // Fase 5: el flujo país→plan (vip_country_*/vip_plan_*) quedó deprecado.
-    // Si está desactivado por flag, los deep links legados del canal se derivan
-    // a la navegación nativa `nav_*` (equivalente al flujo de la Mini App).
-    if (!isLegacyVipCountryFlowEnabled()) {
-      await sendMessage(chatId, '🗂 Explora el catálogo y sus tarifas directamente desde el menú:', {
-        reply_markup: { inline_keyboard: [[{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]] }
-      });
-      return;
-    }
+    const rawParam = text.replace(/^\/start\s+/, '').trim();
+    const payload = rawParam.startsWith('vipc_') ? rawParam.slice('vipc_'.length) : rawParam.slice('nav_'.length);
+    const knownCountries = ['bo', 'pe', 'cl', 'ar', 'py', 'uy', 'ec', 'co', 've', 'mx', 'es', 'us', 'br', 'ru'];
+    const tail = payload.includes('_') ? payload.split('_').pop()!.toLowerCase() : '';
+    const vipCountryId = knownCountries.includes(tail) ? tail : '';
     const vipBotonera = await getActiveTelegramBotoneraFlow();
-    if (!vipBotonera || !vipCountryId) {
+    if (!vipBotonera) {
+      // Sin botonera configurada: no romper el flujo, mostrar métodos de pago.
       await sendClientPagos(chatId);
       return;
     }
-    await sendTelegramPlanOptions(chatId, vipBotonera.id, vipCountryId);
+    if (vipCountryId) {
+      await sendTelegramPlanOptions(chatId, vipBotonera.id, vipCountryId);
+    } else {
+      await sendTelegramBotoneraFlow(chatId);
+    }
     return;
   }
 
@@ -1848,43 +1103,6 @@ export async function processTelegramUpdate(update: any) {
     }
     await sendClientPagos(chatId);
     return;
-  }
-
-  // FASE 2: Texto libre pendiente para filtros de la botonera nativa (zona / búsqueda).
-  // Solo vive en memoria por chat; nunca escribe en la base de datos.
-  {
-    const pendingAcqKey = `pending_acq_${chatId}`;
-    const pendingAcq = NAV_FILTERS[pendingAcqKey];
-    if (pendingAcq && pendingAcq.__field === 'country' && isPrivateChat(message.chat) && text) {
-      delete NAV_FILTERS[pendingAcqKey];
-      const country = text.replace(/^\/+/, '').trim().slice(0, 40);
-      if (country && country !== '-') {
-        await renderNavAcquireConfirm(chatId, message.message_id, String(pendingAcq.__plan), String(pendingAcq.__profile), country);
-      } else {
-        await renderNavAcquireCountry(chatId, message.message_id, String(pendingAcq.__plan), String(pendingAcq.__profile));
-      }
-      return;
-    }
-  }
-  {
-    const pendingKey = `pending_${chatId}`;
-    const pending = NAV_FILTERS[pendingKey];
-    if (pending && pending.__field && isPrivateChat(message.chat) && text) {
-      delete NAV_FILTERS[pendingKey];
-      const fKey: 'list' | 'new' = pending.__key === 'new' ? 'new' : 'list';
-      const f = getNavFilters(fKey);
-      const value = text.replace(/^\/+/, '').trim();
-      if (!value || value === '-') {
-        if (pending.__field === 'zone') delete f.zone; else delete f.q;
-      } else if (pending.__field === 'zone') {
-        f.zone = value.slice(0, 40);
-      } else {
-        f.q = value.slice(0, 40);
-      }
-      f.page = 1;
-      await renderNavFilteredPage(chatId, message.message_id, fKey);
-      return;
-    }
   }
 
   const normText = text.toLowerCase().trim();
@@ -1951,12 +1169,14 @@ export async function processTelegramUpdate(update: any) {
   }
 
   if (normText === '/canal' || normText === '/ver_canal' || normText === '/vercanal') {
-    await sendClientCanal(chatId);
+    // [Boton retirado] Canal ya no debe mostrarse; se devuelve el menu principal.
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
   }
 
   if (normText === '/precios' || normText === '/precio' || normText === '/tarifas' || normText === '/tarifa') {
-    await sendClientPrecios(chatId);
+    // [Boton retirado] Tarifas y Precios ya no debe mostrarse; se devuelve el menu principal.
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
   }
 
@@ -1975,7 +1195,8 @@ export async function processTelegramUpdate(update: any) {
   }
 
   if (normText === '/info' || normText === '/información' || normText === '/información') {
-    await sendClientInfo(chatId);
+    // [Boton retirado] Informacion ya no debe mostrarse; se devuelve el menu principal.
+    await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     return;
   }
 
@@ -1983,7 +1204,8 @@ export async function processTelegramUpdate(update: any) {
     if (isAdminUser(fromId)) {
       await sendAdminHelp(chatId);
     } else {
-      await sendClientAyuda(chatId);
+      // [Boton retirado] Ayuda y Soporte ya no debe mostrarse; se devuelve el menu principal.
+      await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     }
     return;
   }
@@ -2612,9 +1834,6 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
 
   const btnCanal = await getBotCommandText('canal', '📢 Entrar al Canal Free Oficial', '📢');
-  const btnPrecios = await getBotCommandText('precios', '💰 Tarifas y Precios VIP', '💰');
-  const btnInfo = await getBotCommandText('info', 'ℹ️ Información', 'ℹ️');
-  const btnAyuda = await getBotCommandText('ayuda', '❓ Ayuda y Soporte', '❓');
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
@@ -2624,17 +1843,6 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
   const inlineKeyboard: any[][] = [];
   inlineKeyboard.push([
     { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-  ]);
-  inlineKeyboard.push([
-    { text: '🗂 Ver Catálogo', callback_data: 'nav_catalog' },
-    { text: '🆕 Novedades', callback_data: 'nav_new' }
-  ]);
-  inlineKeyboard.push([
-    { text: btnPrecios, callback_data: 'client_cmd_precios' },
-    { text: btnInfo, callback_data: 'client_cmd_info' }
-  ]);
-  inlineKeyboard.push([
-    { text: btnAyuda, callback_data: 'client_cmd_ayuda' }
   ]);
 
   const welcomeMediaUrl = getSystemSetting('welcome_media_url');
@@ -2661,67 +1869,6 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
   });
 }
 
-export async function sendClientCanal(chatId: string | number) {
-  const { baseUrl, channelId } = getBotConfig();
-  const cleanChannelId = channelId ? channelId.replace(/^-100/, '') : '';
-  const storedChannelUsername = getSystemSetting('channel_username');
-  const channelUrl = storedChannelUsername 
-    ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
-    : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
-
-  const btnCanal = await getBotCommandText('canal', '📢 Ir al Canal Telegram', '📢');
-
-  const text = `📢 *CANAL OFICIAL FREE* 📢\n\n` +
-    `En nuestro canal compartimos previews, novedades y promociones especiales.\n\n` +
-    `👉 *Abre la Mini App para ver la galería completa:*`;
-
-  const inlineKeyboard: any[][] = [];
-  inlineKeyboard.push([
-    { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-  ]);
-  inlineKeyboard.push([
-    { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
-  ]);
-
-  return await sendMessage(chatId, text, {
-    reply_markup: {
-      inline_keyboard: inlineKeyboard
-    }
-  });
-}
-
-export async function sendClientPrecios(chatId: string | number) {
-  const { baseUrl } = getBotConfig();
-  const btnInfo = await getBotCommandText('info', 'ℹ️ Información y Seguridad', 'ℹ️');
-  const boliviaRate = await getBoliviaOfficialRateFromServer();
-  const boliviaRateText = boliviaRate !== null ? `Bs. ${boliviaRate} / mes` : 'Consultar con Administradora';
-
-  const text = `💰 *TARIFAS Y SUSCRIPCIÓN VIP* 💰\n\n` +
-    `✨ *¿Qué incluye la Suscripción VIP?*\n` +
-    `• Acceso ilimitado a la galería privada completa (fotos y videos en alta definición).\n` +
-    `• Contenido sugestivo y exclusivo sin censura.\n` +
-    `• Novedades y actualizaciones continuas.\n` +
-    `• Trato confidencial y atención directa 1 a 1.\n\n` +
-    `💵 *Tarifa Oficial:* ${boliviaRateText}\n\n` +
-    `🔒 *Forma de Pago Segura:* La Administradora entrega el *QR oficial de pago* de forma 100% privada. Tras validar tu comprobante, recibirás el link privado y confidencial para unirte al Grupo/Canal VIP.\n\n` +
-    `_Explora el contenido en la Mini App y pulsa en Ver lo Exclusivo._`;
-
-  return await sendMessage(chatId, text, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-        ],
-        
-        [
-          { text: btnInfo, callback_data: 'client_cmd_info' },
-          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
-        ]
-      ]
-    }
-  });
-}
-
 export async function buildPaymentMethodsKeyboard(publicMethods?: PaymentMethod[]): Promise<any[][]> {
   const methods = (publicMethods || (await getPublicPaymentMethods()))
     .filter((method) => method.is_active)
@@ -2744,7 +1891,6 @@ export async function buildPaymentMethodsKeyboard(publicMethods?: PaymentMethod[
     rows.push(chunk.map(method => ({ text: method.title, callback_data: `pay_method_${method.id}` })));
   }
 
-  rows.push([{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
   return rows;
 }
 
@@ -2779,33 +1925,10 @@ export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
     }
     rows.push(row);
   }
-  rows.push([{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
   return rows;
 }
 
-// ── Fase 5: Botonera VIP por países (modo deprecado) ─────────────────────────
-// Este flujo antiguo (país → plan → confirmación con vip_country_*/vip_plan_*)
-// fue reemplazado por la navegación nativa `nav_*` (Fases 1 y 2), que replica el
-// flujo de la Mini App sin escribir en la base de datos. Se conserva SOLO como
-// respaldo para publicaciones antiguas del canal; ya no se ofrece en el menú.
-// Para desactivarlo por completo: ADMIN_FEATURES_JSON {"legacyVipCountryFlow": false}
-export function isLegacyVipCountryFlowEnabled(): boolean {
-  try {
-    const raw = process.env.ADMIN_FEATURES_JSON;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object' && 'legacyVipCountryFlow' in parsed) {
-        return Boolean(parsed.legacyVipCountryFlow);
-      }
-    }
-  } catch { /* configuración inválida: mantener respaldo activo */ }
-  return true;
-}
-
 export async function sendTelegramBotoneraFlow(chatId: string | number) {
-  if (!isLegacyVipCountryFlowEnabled()) {
-    return await sendClientWelcome(chatId);
-  }
   const botonera = await getActiveTelegramBotoneraFlow();
   if (!botonera) {
     return await sendMessage(chatId, '⚠️ Aún no hay una botonera VIP publicada para este flujo.');
@@ -2822,9 +1945,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   const items = await getAllTelegramBotoneras();
   const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
   if (!botonera) {
-    await sendMessage(chatId, '⚠️ No pude abrir la botonera VIP en este momento. Vuelve al menú principal e inténtalo otra vez.', {
-      reply_markup: { inline_keyboard: [[{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]] }
-    });
+    await sendMessage(chatId, '⚠️ No pude abrir la botonera VIP en este momento. Inténtalo otra vez más tarde.');
     return;
   }
 
@@ -2838,6 +1959,60 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
     );
   }) || (botonera.countries || []).find((item: any) => String(item.id) === String(countryId));
 
+  // [Flujo VIP] Mostrar SIEMPRE los planes (Mes / 6 Meses / Permanente) tras elegir país.
+  const allPlans = botonera.plans || [];
+  const plans = allPlans
+    .filter((plan: any) => plan.active !== false)
+    .sort((a: any, b: any) => (a.order ?? 0) - (b.order ?? 0));
+
+  // Fallback de seguridad: si la botonera llegó sin planes activos (o con banderas antiguas),
+  // reconstruir SIEMPRE la botonera estándar Mes / 6 Meses / Permanente. Nunca dejar que el
+  // flujo caiga directo a métodos de pago o al welcome.
+  if (plans.length === 0) {
+    const base = allPlans[allPlans.length - 1];
+    const fallbackPlans = [
+      { id: 'mes', name: '📅 Suscripción 1 Mes', price: base?.price || null },
+      { id: 'seis', name: '⭐ Suscripción 6 Meses', price: base?.price_6 || base?.price || null },
+      { id: 'permanente', name: '💎 Acceso Permanente', price: base?.price_permanent || base?.price || null }
+    ];
+    const fbRows: any[][] = fallbackPlans.map((plan) => {
+      const cbData = `vip_plan_${botonera.id}__${countryId}__${plan.id}`;
+      const safeCb = Buffer.byteLength(cbData, 'utf8') <= 64 ? cbData : `vip_plan_menu_${botonera.id}__${countryId}`;
+      return [{ text: `${plan.name}${plan.price ? ` — ${plan.price}` : ''}`, callback_data: safeCb }];
+    });
+    fbRows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
+
+    const fbText = `💎 *SUSCRIPCIÓN VIP* 💎\n\n` +
+      `${botonera.plan_label || 'Selecciona tu plan:'}\n\n` +
+      `${country?.flag || '🌍'} País seleccionado: *${country?.name || countryId || 'Internacional'}*`;
+
+    return await sendMessage(chatId, fbText, { reply_markup: { inline_keyboard: fbRows }, parse_mode: 'Markdown' });
+  }
+
+  if (plans.length > 0) {
+    const rows: any[][] = [];
+    for (const plan of plans) {
+      const planKey = String(plan.id ?? plan.name ?? '').trim();
+      const cbData = `vip_plan_${botonera.id}__${countryId}__${planKey}`;
+      // Telegram limita callback_data a 64 bytes; si excede, usar forma corta vip_plan_menu_<botonera>__<pais> (<=64).
+      const safeCb = Buffer.byteLength(cbData, 'utf8') <= 64
+        ? cbData
+        : `vip_plan_menu_${botonera.id}__${countryId}`;
+      rows.push([{
+        text: `${plan.name || 'Plan'}${plan.price ? ` — ${plan.price}` : ''}`,
+        callback_data: safeCb
+      }]);
+    }
+    rows.push([{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]);
+
+    const text = `💎 *SUSCRIPCIÓN VIP* 💎\n\n` +
+      `${botonera.plan_label || 'Selecciona tu plan:'}\n\n` +
+      `${country?.flag || '🌍'} País seleccionado: *${country?.name || countryId || 'Internacional'}*`;
+
+    return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+  }
+
+  // Sin planes configurados: mostrar directamente los métodos de pago del país.
   const methods = await getRelevantPaymentMethodsForCountry(country?.name || countryId || '');
 
   if (methods.length > 0) {
@@ -2848,7 +2023,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   }
 
   const adminUsername = getAdminContactUsername();
-  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }]];
 
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || countryId || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
@@ -2941,7 +2116,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
 
   const keyboard = [
     [{ text: '✅ Confirmar solicitud', url: adminUrl }],
-    [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }, { text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]
+    [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]
   ];
   return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
 }
@@ -2999,11 +2174,7 @@ export async function showPaymentMethodDetail(
       { text: '📲 Enviar Comprobante', url: adminContactUrl }
     ],
     [
-      { text: '💳 Ver Todos los Métodos', callback_data: 'client_cmd_pagos' },
       { text: '💎 Abrir Mini App', web_app: { url: baseUrl } }
-    ],
-    [
-      { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
     ]
   ];
 
@@ -3063,61 +2234,6 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
   }
 }
 
-export async function sendClientInfo(chatId: string | number) {
-  const { baseUrl } = getBotConfig();
-  const btnPrecios = await getBotCommandText('precios', '💰 Ver Tarifas y Precios', '💰');
-
-  const text = `ℹ️ *INFORMACIÓN, SEGURIDAD Y DISCRECIÓN* ℹ️\n\n` +
-    `🔒 *Garantía de Confidencialidad:*\n` +
-    `• Contenido 100% digital exclusivo para mayores de 18 años (+18).\n` +
-    `• Material protegido con marca de agua digital.\n` +
-    `• Todas las conversaciones, pagos y accesos son estrictamente privados.\n\n` +
-    `⚠️ *Aviso Importante:* Este bot no publica comprobantes ni enlaces en grupos públicos. Toda coordinación se realiza por mensaje privado directo con la Administradora.`;
-
-  return await sendMessage(chatId, text, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-        ],
-        [
-          { text: btnPrecios, callback_data: 'client_cmd_precios' },
-          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
-        ]
-      ]
-    }
-  });
-}
-
-export async function sendClientAyuda(chatId: string | number) {
-  const { baseUrl } = getBotConfig();
-  const btnPrecios = await getBotCommandText('precios', '💰 Ver Precios', '💰');
-
-  const text = `❓ *PREGUNTAS FRECUENTES Y AYUDA* ❓\n\n` +
-    `1️⃣ *¿Cómo abro la galería?*\n` +
-    `Pulsa el botón *"Ver Canal VIP Free"* en el menú inferior del bot o en cualquier mensaje.\n\n` +
-    `2️⃣ *¿Qué son las imágenes sugestivas/efímeras?*\n` +
-    `Son imágenes teaser que solo se pueden ver durante unos segundos antes de desaparecer permanentemente de tu galería.\n\n` +
-    `3️⃣ *¿Cómo me suscribo?*\n` +
-    `Pulsa *"Adquirir Contenido"* en la Mini App o escribe /precios para recibir el QR privado de la Administradora.\n\n` +
-    `4️⃣ *¿Problemas o dudas?*\n` +
-    `Escribe tu mensaje en este chat privado para recibir asistencia directa.`;
-
-  return await sendMessage(chatId, text, {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-        ],
-        [
-          { text: btnPrecios, callback_data: 'client_cmd_precios' },
-          { text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }
-        ]
-      ]
-    }
-  });
-}
-
 // Callback Query Handler (Inline Keyboard clicks)
 async function handleCallbackQuery(cb: any) {
   const chatId = cb.message.chat.id;
@@ -3139,22 +2255,6 @@ async function handleCallbackQuery(cb: any) {
   const callbackChatType = cb.message?.chat?.type;
   if (callbackChatType && callbackChatType !== 'private' && isPublicTelegramCallbackData(data)) {
     const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
-    // Navegación nativa (nav_*): se redirige al chat privado conservando el paso exacto del flujo.
-    if (data.startsWith('nav_')) {
-      const safeNav = data.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
-      const navLink = `https://t.me/${botUser}?start=nav_${safeNav}`;
-      const navRes = botUser
-        ? await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, url: navLink })
-        : { ok: false };
-      if (!navRes?.ok) {
-        await callTelegramApi('answerCallbackQuery', {
-          callback_query_id: cb.id,
-          text: `Abre @${botUser || 'el bot'} y pulsa Start para navegar el catálogo.`,
-          show_alert: true
-        });
-      }
-      return;
-    }
     const parsedPublic = parseTelegramBotoneraCallbackData(data);
     const safeCountry = String(parsedPublic?.countryId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
     const startParam = safeCountry ? `vipc_${safeCountry}` : 'pagos';
@@ -3173,26 +2273,14 @@ async function handleCallbackQuery(cb: any) {
     return;
   }
 
-  // 0.5. Navegación editable de la botonera nativa (equivalente en Telegram al flujo de la Mini App).
-  // Se resuelve SIEMPRE editando el mensaje actual; ningún clic escribe en la base de datos.
-  if (data.startsWith('nav_')) {
-    await handleNavCallback(cb);
-    return;
-  }
-
   // 1. Client Callbacks (accessible to everyone)
   if (data.startsWith('client_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    if (data === 'client_cmd_canal') {
-      await sendClientCanal(chatId);
-    } else if (data === 'client_cmd_precios') {
-      await sendClientPrecios(chatId);
-    } else if (data === 'client_cmd_pagos') {
+    if (data === 'client_cmd_pagos') {
       await sendClientPagos(chatId);
-    } else if (data === 'client_cmd_info') {
-      await sendClientInfo(chatId);
-    } else if (data === 'client_cmd_ayuda') {
-      await sendClientAyuda(chatId);
+    } else if (data === 'client_cmd_canal' || data === 'client_cmd_precios' || data === 'client_cmd_info' || data === 'client_cmd_ayuda') {
+      // [Botones retirados] Tarifas/Precios, Informacion, Ayuda y Canal ya no deben volver a mostrarse.
+      await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
     } else if (data === 'client_cmd_menu') {
       await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
     }
@@ -3249,7 +2337,11 @@ async function handleCallbackQuery(cb: any) {
     const parsed = parseTelegramBotoneraCallbackData(data);
     if (parsed && parsed.kind === 'plan' && parsed.countryId) {
       const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
-      if (fallbackBotoneraId) {
+      if (!fallbackBotoneraId) return;
+      if (parsed.planId) {
+        // Plan elegido (Mes / 6 Meses / Permanente) -> confirmación con métodos de pago del país.
+        await sendTelegramPlanConfirmation(chatId, fallbackBotoneraId, parsed.countryId, parsed.planId);
+      } else {
         await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
       }
     }
@@ -3290,31 +2382,6 @@ async function handleCallbackQuery(cb: any) {
 
   if (data === 'admin_btn_help') {
     await sendAdminHelp(chatId);
-    return;
-  }
-
-  // Fase 3: modo de botones en los posts del canal (Mini App / Nativo deep links / Ambos).
-  if (data === 'admin_btn_postmode' || data.startsWith('admin_postmode_')) {
-    const modes = ['miniapp', 'nativo', 'ambos'] as const;
-    const labels: Record<string, string> = { miniapp: '🌐 Solo Mini App', nativo: '📱 Solo Botonera Nativa', ambos: '✨ Ambos' };
-    if (data !== 'admin_btn_postmode') {
-      const chosen = data.replace('admin_postmode_', '');
-      if ((modes as readonly string[]).includes(chosen)) {
-        saveSystemSetting('post_button_mode', chosen);
-        await addAuditLog('CONFIG', userIdStr, `Modo de botones en posts del canal → ${labels[chosen]}`);
-      }
-    }
-    const current = String(getSystemSetting('post_button_mode') || 'miniapp');
-    const keyboard = modes.map(m => [{ text: `${current === m ? '✅ ' : ''}${labels[m]}`, callback_data: `admin_postmode_${m}` }]);
-    keyboard.push([{ text: '🔙 Volver al Menú', callback_data: 'admin_btn_help' }]);
-    await sendMessage(chatId,
-      '🎛 *MODO DE BOTONES EN POSTS DEL CANAL*\\n\\n' +
-      'Define qué botones se generan al publicar contenido:\\n' +
-      '• *Solo Mini App:* botón "Ver lo Exclusivo" (comportamiento clásico).\\n' +
-      '• *Solo Nativa:* deep links que abren el bot en privado con el flujo nav_* (Catálogo/Ficha/Pagos/Novedades), sin escribir en BD.\\n' +
-      '• *Ambos:* Mini App + botonera nativa en cada post.\\n\\n' +
-      `_Afecta a nuevas publicaciones y ediciones._`,
-      { reply_markup: { inline_keyboard: keyboard } });
     return;
   }
 
@@ -3517,7 +2584,14 @@ async function handleListProfiles(chatId: string | number) {
     return;
   }
 
-  await sendMessage(chatId, `✅ Total de perfiles registrados en el Canal VIP Free: ${profiles.length}. Usa /ver ID o /editar ID para administrar cada uno.`);
+  let text = '📋 *LISTADO DE PERFILES DEL CANAL VIP FREE*:\n\n';
+  profiles.forEach(p => {
+    const badge = p.status === 'disponible' ? '🟢 Disponible' : p.status === 'ocupada' ? '🔴 Ocupada' : p.status === 'pausada' ? '⏸️ Pausada' : p.status === 'retirada' ? '🗑️ Retirada' : '📁 Borrador';
+    text += `• *${p.name}* - ${badge}\n  ID: \`${p.id}\` | Zona: ${p.zone} | Tarifa: Bs. ${p.rate_bs}\n\n`;
+  });
+
+  text += '_Usa /ver ID o /editar ID para administrar cada uno._';
+  await sendMessage(chatId, text);
 }
 
 async function handleShowProfileDetail(chatId: string | number, id: string) {
@@ -3529,6 +2603,14 @@ async function handleShowProfileDetail(chatId: string | number, id: string) {
 
   const detail = `
 👤 *FICHA DEL PERFIL*: ${profile.name}
+
+🆔 *ID*: \`${profile.id}\`
+📍 *Zona*: ${profile.zone}
+💰 *Precio VIP*: Bs. ${profile.rate_bs}
+📌 *Estado*: ${profile.status.toUpperCase()}
+📷 *Fotos*: ${profile.photos.length} adjunta(s)
+📲 *Telegram Msg ID*: ${profile.telegram_message_id ? `#${profile.telegram_message_id}` : 'No publicado'}
+📅 *Última Actualización*: ${new Date(profile.updated_at).toLocaleString()}
 
 📝 *Descripción*:
 ${profile.description}
@@ -3593,8 +2675,6 @@ async function handlePromptStatusChange(chatId: string | number, id: string) {
     return;
   }
 
-  //// MODIFICACION 001 /// Botonera de cambio de estado (SOLO ADMIN, via /estado ID o botones del Panel). NO se publica al canal: lo publicado usa buildChannelPostMarkup.
-  //// DETALLE: Se conservo intacta esta botonera; unico parche previo en esta zona = ficha de perfil sin datos sensibles (ID/Zona/Precio/Fotos/etc).
   await sendMessage(chatId, `📌 *Cambiar Estado para ${profile.name}* (Actual: ${profile.status}):`, {
     reply_markup: {
       inline_keyboard: [
