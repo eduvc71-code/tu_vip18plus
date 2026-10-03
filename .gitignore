@@ -1,25 +1,9 @@
-# Dependencias
 node_modules/
-
-# Builds
 dist/
-demo/dist/
+.env
+*.log
+PLAN_MAESTRO_100_TELEGRAM.txt
 
-# Base de datos y backups (NUNCA subas esto)
-/data/
-*.sqlite
+# Bases de datos locales
 *.sqlite-shm
 *.sqlite-wal
-backups/
-
-# Variables de entorno (SECRETOS)
-.env
-.env.local
-
-# Logs
-*.log
-npm-debug.log*
-
-# Sistema operativo
-.DS_Store
-Thumbs.db

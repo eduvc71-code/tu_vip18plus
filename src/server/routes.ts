@@ -72,7 +72,7 @@ import {
   getTelegramFilePath,
   uploadBufferToTelegram,
   showPaymentMethodDetail,
-  callTelegramApi, buildChannelPostMarkup, isPublicTelegramCallbackData } from './telegram.js';
+  callTelegramApi, buildChannelPostMarkup } from './telegram.js';
 
 export const router = express.Router();
 
@@ -1264,22 +1264,12 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
       });
     }
 
+    // [Fix publicación Canal] buildChannelPostMarkup ya garantiza solo botones URL.
+    // Filtro de seguridad adicional: en canales NO se permiten botones callback_data
+    // ("Text buttons are not allowed in the inline keyboard") ni botones sin url válida.
     const replyMarkup = await buildChannelPostMarkup(updated, config.baseUrl, config.username);
     if (replyMarkup.inline_keyboard?.length) {
-      // Fase 3: en canales solo se permiten botones URL; los callback_data de posts antiguos se
-      // convierten a deep links t.me/<bot>?start=<data> que reabren el paso exacto en privado.
-      const cleanBotUser = String(config.username || '').replace(/^@/, '').trim();
-      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.map((row: any[]) => row.map((button: any) => {
-        if (button && button.callback_data && !button.url) {
-          const cd = String(button.callback_data);
-          if (cleanBotUser && isPublicTelegramCallbackData(cd)) {
-            const { callback_data, ...rest } = button;
-            return { ...rest, url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(cd)}` };
-          }
-          return null;
-        }
-        return button;
-      }).filter(Boolean));
+      replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.map((row: any[]) => row.filter((button: any) => !button.callback_data && typeof button.url === 'string' && /^https?:\/\//i.test(button.url)));
       replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.filter((row: any[]) => row.length > 0);
     }
     const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];

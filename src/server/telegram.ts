@@ -664,7 +664,23 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
   let customButtonRows: any[] = [];
   try {
     const customButtons = await getPublicCustomButtons('channel');
-    customButtonRows = customButtons.map(btn => [{ text: btn.label, url: btn.url }]);
+    // [Fix publicación Canal] Telegram rechaza posts de canal con botones callback_data
+    // ("Text buttons are not allowed in the inline keyboard"). Los botones personalizados
+    // de tipo 'telegram'/'subscription' pueden no traer URL absoluta; se convierten a
+    // botones URL apuntando al bot (?start=vipc_<id>) y se descarta cualquier botón sin
+    // URL http(s) válida para que NUNCA bloquee la publicación en el canal.
+    customButtonRows = customButtons
+      .map(btn => {
+        let url = String(btn.url || '').trim();
+        if (!url && (btn.type === 'subscription' || btn.type === 'telegram')) {
+          url = `https://t.me/${username}?start=vipc_${btn.id}`;
+        } else if (url && !/^https?:\/\//i.test(url) && /^t\.me\//i.test(url)) {
+          url = `https://${url}`;
+        }
+        if (!/^https?:\/\//i.test(url)) return null;
+        return [{ text: btn.label, url }];
+      })
+      .filter((row): row is any[] => row !== null);
   } catch (err) {
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
