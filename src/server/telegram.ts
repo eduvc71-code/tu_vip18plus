@@ -85,9 +85,34 @@ export function getAdminContactUsername(): string {
   const envValue = (process.env.ADMIN_CONTACT_USERNAME || '').trim();
   const dbValue = (getSystemSetting('admin_contact_username') || '').trim();
   const rawValue = envValue || dbValue || 'Danii_Catalogo_SCZ_bot';
-  const username = rawValue.replace(/^@/, '').trim();
-  if (!username) return 'Danii_Catalogo_SCZ_bot';
+  // Sanitizar: quitar @, espacios y URLs pegadas (p. ej. "https://t.me/@daniis001" o "@daniis001").
+  // Un username de Telegram solo admite A-Z, 0-9, guion bajo y longitud 5-32.
+  let username = rawValue
+    .replace(/(?:https?:\/\/)?(?:www\.)?t\.me\//gi, '')
+    .replace(/^@+/, '')
+    .replace(/[^A-Za-z0-9_]/g, '')
+    .trim();
+  if (!username || username.length < 5) return 'Danii_Catalogo_SCZ_bot';
   return username;
+}
+
+async function editOrSend(chatId: string | number, messageId: number | string | undefined | null, text: string, options: any = {}) {
+  // [Chat limpio] Si el flujo trae el message_id del mensaje anterior, lo EDITA en lugar de
+  // enviar uno nuevo: así el bot no acumula botoneras (países -> planes -> confirmación -> pago).
+  const mid = Number(messageId);
+  if (Number.isFinite(mid) && mid > 0) {
+    try {
+      const edited = await callTelegramApi('editMessageText', {
+        chat_id: chatId,
+        message_id: mid,
+        text,
+        parse_mode: 'Markdown',
+        ...options
+      });
+      if (edited?.ok) return edited;
+    } catch {}
+  }
+  return await sendMessage(chatId, text, options);
 }
 
 export function isAdminUser(telegramUserId: string | number): boolean {
@@ -1852,9 +1877,13 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
   const btnCanal = await getBotCommandText('canal', '📢 Entrar al Canal Free Oficial', '📢');
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
-    `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
-    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al contenido oficial sin censura.\n\n` +
-    `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
+    `¡Hola, *${firstName}*! Es un gusto tenerte por acá 🩷\n\n` +
+    `Veo que te ganó la curiosidad y quieres descubrir más de mí... 😋\n\n` +
+    `🔥 ¿Qué encontrarás en mi canal VIP?\n\n` +
+    `• Contenido exclusivo del mundo  (¡ya son 3 años!).\n\n` +
+    `• Videos y fotos totalmente únicos.\n\n` +
+    `• Material privado que no muestro en ningún otro lado 🍬\n\n` +
+    ` Pulsa el boton de abajo: 👇🏼🫶🏻  !!Unete a mi Canal Free!!`;
 
   const inlineKeyboard: any[][] = [];
   inlineKeyboard.push([
@@ -1957,7 +1986,7 @@ export async function sendTelegramBotoneraFlow(chatId: string | number) {
   });
 }
 
-export async function sendTelegramPlanOptions(chatId: string | number, botoneraId: string, countryId: string) {
+export async function sendTelegramPlanOptions(chatId: string | number, botoneraId: string, countryId: string, sourceMessageId?: number | string | null) {
   const items = await getAllTelegramBotoneras();
   const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
   if (!botonera) {
@@ -2002,7 +2031,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
       `${botonera.plan_label || 'Selecciona tu plan:'}\n\n` +
       `${country?.flag || '🌍'} País seleccionado: *${country?.name || countryId || 'Internacional'}*`;
 
-    return await sendMessage(chatId, fbText, { reply_markup: { inline_keyboard: fbRows }, parse_mode: 'Markdown' });
+    return await editOrSend(chatId, sourceMessageId, fbText, { reply_markup: { inline_keyboard: fbRows }, parse_mode: 'Markdown' });
   }
 
   if (plans.length > 0) {
@@ -2025,7 +2054,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
       `${botonera.plan_label || 'Selecciona tu plan:'}\n\n` +
       `${country?.flag || '🌍'} País seleccionado: *${country?.name || countryId || 'Internacional'}*`;
 
-    return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+    return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
   }
 
   // Sin planes configurados: mostrar directamente los métodos de pago del país.
@@ -2034,7 +2063,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   if (methods.length > 0) {
     const preferredMethod = methods[0];
     const boliviaRate = preferredMethod.id === 'qr_bolivia' ? await getBoliviaOfficialRateFromServer() : null;
-    await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: boliviaRate ?? undefined });
+    await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: boliviaRate ?? undefined, sourceMessageId });
     return;
   }
 
@@ -2044,7 +2073,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || countryId || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
     `_Contacta a la administradora para coordinar la suscripción._`;
-  return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows } });
+  return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: rows } });
 }
 
 function normalizeTelegramKey(value: string): string {
@@ -2096,7 +2125,7 @@ async function getRelevantPaymentMethodsForCountry(countryName: string): Promise
   });
 }
 
-export async function sendTelegramPlanConfirmation(chatId: string | number, botoneraId: string, countryId: string, planId: string) {
+export async function sendTelegramPlanConfirmation(chatId: string | number, botoneraId: string, countryId: string, planId: string, sourceMessageId?: number | string | null) {
   const items = await getAllTelegramBotoneras();
   const botonera = items.find(item => item.id === botoneraId) || null;
   if (!botonera) return;
@@ -2111,30 +2140,37 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
     const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
     const rows: any[][] = relevantMethods.length > 0
       ? relevantMethods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
-      : [[{ text: '📲 Hablar con administradora', url: adminUrl }]];
+      : [[{ text: '💎 Solicitar Información', url: adminUrl }]];
 
     rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]);
 
-    const text = `*${botonera.confirmation_title || 'Confirmar suscripción'}*\n\n` +
+    // Descripción alineada con la Mini App (RequestModal): el usuario solicita información VIP.
+    const text = `*Información Suscripción VIP*\n\n` +
+      `¡Bienvenido a la zona exclusiva!\n\n` +
       `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
-      `${plan?.name || 'Plan'}\n\n` +
-      `Selecciona el método de pago disponible para este país y luego confirma con la administradora en privado.`;
+      `🧸 ${plan?.name || 'SUSCRIPCIÓN MENSUAL'}\n\n` +
+      `_Selecciona tu método de pago y te enviamos los datos y coordenadas para coordinar tu suscripción._`;
 
-    return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+    return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
   }
 
-  const text = `*${botonera.confirmation_title || 'Confirmar suscripción'}*\n\n` +
+  const isSemester = normalizedPlanType.includes('semest') || normalizedPlanType.includes('six') || normalizedPlanType.includes('6');
+  const planEmoji = isSemester ? '💎' : '💙';
+  const planLabel = isSemester ? 'SEMESTRAL' : (normalizedPlanType === 'permanent' || normalizedPlanType.includes('perm') ? 'PERMANENTE' : (plan?.name || 'VIP'));
+
+  const text = `*Información Suscripción VIP*\n\n` +
+    `¡Bienvenido a la zona exclusiva!\n\n` +
     `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
-    `${plan?.name || 'Plan'}\n\n` +
+    `${planEmoji} SUSCRIPCIÓN ${planLabel}${plan?.price ? ` — ${plan.price}` : ''}\n\n` +
     `${botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.'}\n\n` +
-    `${botonera.contact_text || 'Contacta a la administradora en privado.'}\n\n` +
+    `${botonera.contact_text || 'Escríbenos por Telegram en privado para validar tu solicitud.'}\n\n` +
     `📲 [@${adminUsername}](${adminUrl})`;
 
   const keyboard = [
-    [{ text: '✅ Confirmar solicitud', url: adminUrl }],
+    [{ text: '💎 Solicitar Información', url: adminUrl }],
     [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]
   ];
-  return await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
+  return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
 }
 
 function parsePositiveCurrencyNumber(value: number | string | null | undefined): number | null {
@@ -2166,7 +2202,7 @@ export function getOfficialFeeText(method: { id: string; title: string; price?: 
 export async function showPaymentMethodDetail(
   chatId: string | number,
   methodId: string,
-  options?: { profileRateBs?: number | string }
+  options?: { profileRateBs?: number | string; sourceMessageId?: number | string | null }
 ) {
   const method = await getPaymentMethodById(methodId);
   if (!method) {
@@ -2194,6 +2230,16 @@ export async function showPaymentMethodDetail(
     ]
   ];
 
+  // [Chat limpio] Si venimos del flujo VIP (con message_id de origen), se ENVIA el método de pago
+  // como mensaje nuevo con QR/foto y luego se BORRA el mensaje anterior (confirmación/planes),
+  // para que el chat no acumule botoneras del proceso.
+  const prevMid = Number(options?.sourceMessageId);
+  const deletePrev = async () => {
+    if (Number.isFinite(prevMid) && prevMid > 0) {
+      try { await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: prevMid }); } catch {}
+    }
+  };
+
   if (method.image_url) {
     const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
     const apiMethod = isVideo ? 'sendVideo' : 'sendPhoto';
@@ -2205,14 +2251,19 @@ export async function showPaymentMethodDetail(
       parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: inlineKeyboard }
     });
-    if (res && res.ok) return res;
+    if (res && res.ok) {
+      await deletePrev();
+      return res;
+    }
   }
 
-  return await sendMessage(chatId, caption, {
+  const fallbackRes = await sendMessage(chatId, caption, {
     reply_markup: {
       inline_keyboard: inlineKeyboard
     }
   });
+  await deletePrev();
+  return fallbackRes;
 }
 
 export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; message: string }> {
@@ -2307,7 +2358,8 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('pay_method_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const methodId = data.replace('pay_method_', '');
-    await showPaymentMethodDetail(chatId, methodId);
+    // [Chat limpio] pasar el message_id del botón pulsado para borrar la pantalla anterior.
+    await showPaymentMethodDetail(chatId, methodId, { sourceMessageId: cb.message?.message_id });
     return;
   }
 
@@ -2317,7 +2369,7 @@ async function handleCallbackQuery(cb: any) {
     const items = await getAllTelegramBotoneras();
     const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
     if (botonera) {
-      await sendMessage(chatId, `*${botonera.title || 'SUSCRIPCIÓN VIP'}*\n\n${botonera.intro || 'Selecciona tu país para continuar.'}`, {
+      await editOrSend(chatId, cb.message?.message_id, `*${botonera.title || 'SUSCRIPCIÓN VIP'}*\n\n${botonera.intro || 'Selecciona tu país para continuar.'}`, {
         reply_markup: { inline_keyboard: buildTelegramBotoneraKeyboard(botonera) }
       });
     }
@@ -2330,7 +2382,7 @@ async function handleCallbackQuery(cb: any) {
     if (parsed && parsed.kind === 'country' && parsed.countryId) {
       const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
       if (fallbackBotoneraId) {
-        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId, cb.message?.message_id);
       }
     }
     return;
@@ -2342,7 +2394,7 @@ async function handleCallbackQuery(cb: any) {
     if (parsed && parsed.kind === 'plan_menu' && parsed.countryId) {
       const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
       if (fallbackBotoneraId) {
-        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId, cb.message?.message_id);
       }
     }
     return;
@@ -2356,9 +2408,9 @@ async function handleCallbackQuery(cb: any) {
       if (!fallbackBotoneraId) return;
       if (parsed.planId) {
         // Plan elegido (Mes / 6 Meses / Permanente) -> confirmación con métodos de pago del país.
-        await sendTelegramPlanConfirmation(chatId, fallbackBotoneraId, parsed.countryId, parsed.planId);
+        await sendTelegramPlanConfirmation(chatId, fallbackBotoneraId, parsed.countryId, parsed.planId, cb.message?.message_id);
       } else {
-        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId);
+        await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId, cb.message?.message_id);
       }
     }
     return;

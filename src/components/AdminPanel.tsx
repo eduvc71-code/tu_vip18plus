@@ -842,9 +842,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     intro: 'Selecciona tu país para continuar con tu suscripción VIP.',
     country_label: 'País / Bandera',
     plan_label: 'Elige tu plan',
-    confirmation_title: 'Confirmar suscripción',
-    confirmation_text: 'Tu solicitud quedará en revisión privada. La administradora te confirmará el acceso en privado.',
-    contact_text: 'Escríbenos por Telegram en privado para validar tu solicitud.',
+    confirmation_title: 'Solicitar información',
+    confirmation_text: 'Tu solicitud sera atendida en breve. La administradora te enviará un mensaje privado.',
+    contact_text: 'Escríbeme, por Telegram en privado.',
     is_active: true,
     countries: buildTelegramCountriesFromPaymentMethods(methods),
     plans: [
