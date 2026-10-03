@@ -1102,11 +1102,12 @@ export async function processTelegramUpdate(update: any) {
     return;
   }
 
-  // [Flujo VIP] Deep links de suscripción: nav_* (nav_vipfree, nav_vip, nav_plan...) y vipc_<pais>.
+  // [Flujo VIP] Deep links de suscripción: nav_* (nav_vipfree, nav_vip, nav_plan...), vipauto*
+  // (botón "SUSCRIPCIÓN AUTOMÁTICA" de la bienvenida) y vipc_<pais>.
   // SIEMPRE llevan a los botones de plan (Mes / 6 Meses / Permanente). Nunca caen en el welcome
   // ni en "Ver lo Exclusivo". Si la URL trae un país codificado (p.ej. vipc_bo o nav_vipfree_bo),
   // abre directamente los planes de ese país; si no, muestra primero el menú de países.
-  if (text.startsWith('/start nav_') || text.startsWith('/start vipc_')) {
+  if (text.startsWith('/start nav_') || text.startsWith('/start vipc_') || /^\/start vipauto/i.test(text)) {
     if (!isPrivateChat(message.chat)) {
       await sendMessage(chatId, '🔒 Abre el chat privado para ver los planes VIP.');
       return;
@@ -1115,8 +1116,19 @@ export async function processTelegramUpdate(update: any) {
       await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
     }
     const rawParam = text.replace(/^\/start\s+/, '').trim();
-    const payload = rawParam.startsWith('vipc_') ? rawParam.slice('vipc_'.length) : rawParam.slice('nav_'.length);
-    const knownCountries = ['bo', 'pe', 'cl', 'ar', 'py', 'uy', 'ec', 'co', 've', 'mx', 'es', 'us', 'br', 'ru'];
+    const payload = rawParam.startsWith('vipc_') ? rawParam.slice('vipc_'.length) : (rawParam.startsWith('nav_') ? rawParam.slice('nav_'.length) : rawParam.replace(/^vipauto/i, ''));
+    // Venezuela ('ve') excluida de la botonera VIP por decisión de la administradora: si alguien
+    // llega con deep link vipc_ve / nav_*_ve, se enruta al flujo "Otros Países" (texto libre).
+    {
+      const veTail = payload.includes('_') ? payload.split('_').pop()!.toLowerCase() : payload.toLowerCase();
+      if (veTail === 've' || veTail === 'venezuela') {
+        const veBotonera = await getActiveTelegramBotoneraFlow();
+        if (veBotonera) await askOtherCountry(chatId, veBotonera.id);
+        else await sendMessage(chatId, '🌍 Escribe el nombre de tu país para coordinar tu suscripción con la Administradora 💎');
+        return;
+      }
+    }
+    const knownCountries = ['bo', 'pe', 'cl', 'ar', 'py', 'uy', 'ec', 'co', 'mx', 'es', 'us', 'br', 'ru'];
     const tail = payload.includes('_') ? payload.split('_').pop()!.toLowerCase() : '';
     const vipCountryId = knownCountries.includes(tail) ? tail : '';
     const vipBotonera = await getActiveTelegramBotoneraFlow();
@@ -1315,6 +1327,16 @@ export async function processTelegramUpdate(update: any) {
     } else {
       await sendMessage(chatId, '❌ PIN incorrecto. Intenta nuevamente con `/admin TU_PIN_SECRETO`');
       return;
+    }
+  }
+
+  // [Flujo "Otros Países"] Cualquier usuario (también admin) escribiendo su país libre:
+  // se captura el texto tal cual, sin validación ni comparación.
+  {
+    const vipOtherState = await getConversationState(userIdStr);
+    if (vipOtherState?.step === 'VIP_OTHER_COUNTRY' && typeof message.text === 'string') {
+      const handled = await handleVipOtherCountryText(chatId, userIdStr, message, vipOtherState);
+      if (handled) return;
     }
   }
 
@@ -1877,17 +1899,18 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
   const btnCanal = await getBotCommandText('canal', '📢 Entrar al Canal Free Oficial', '📢');
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
-    `¡Hola, *${firstName}*! Es un gusto tenerte por acá 🩷\n\n` +
-    `Veo que te ganó la curiosidad y quieres descubrir más de mí... 😋\n\n` +
-    `🔥 ¿Qué encontrarás en mi canal VIP?\n\n` +
-    `• Contenido exclusivo del mundo  (¡ya son 3 años!).\n\n` +
-    `• Videos y fotos totalmente únicos.\n\n` +
-    `• Material privado que no muestro en ningún otro lado 🍬\n\n` +
-    ` Pulsa el boton de abajo: 👇🏼🫶🏻  !!Unete a mi Canal Free!!`;
+    `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
+    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al contenido oficial sin censura.\n\n` +
+    `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
 
+  const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
   const inlineKeyboard: any[][] = [];
   inlineKeyboard.push([
     { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
+  ]);
+  // [Nuevo] Botón de suscripción automática: abre el flujo VIP (países -> planes Mes/6Meses/Permanente).
+  inlineKeyboard.push([
+    { text: '⭐ SUSCRIPCIÓN AUTOMÁTICA', url: `https://t.me/${botUser || 'Danii_Catalogo_SCZ_bot'}?start=vipauto` }
   ]);
 
   const welcomeMediaUrl = getSystemSetting('welcome_media_url');
@@ -1961,16 +1984,81 @@ export async function getActiveTelegramBotoneraFlow(): Promise<any | null> {
 }
 
 export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
-  const countries = (botonera?.countries || []).filter((item: any) => item.active);
+  // [Venezuela excluida] La administradora decidió sacar Venezuela de la botonera VIP de Telegram.
+  const isVenezuelaItem = (item: any): boolean => {
+    const key = normalizeTelegramKey(String(item?.id || ''));
+    const name = normalizeTelegramKey(String(item?.name || item?.label || ''));
+    return key === 've' || key === 'venezuela' || name === 'venezuela';
+  };
+  const countries = (botonera?.countries || []).filter((item: any) => item.active && !isVenezuelaItem(item));
   const rows: any[][] = [];
   for (let i = 0; i < countries.length; i += 2) {
-    const row: any[] = [];
+    const row: any[] = []
+    ;
     for (const country of countries.slice(i, i + 2)) {
       row.push({ text: `${country.flag || '🌍'} ${country.name || country.label || 'País'}`, callback_data: `vip_country_${botonera.id}__${country.id}` });
     }
     rows.push(row);
   }
+  // [Nuevo] "Otros Países": el usuario escribe su país libremente (sin validación ni comparación)
+  // y el texto se almacena para enviarlo a la administradora en el flujo VIP.
+  rows.push([{ text: '🌍 Otros Países', callback_data: `vip_other_${botonera.id}` }]);
   return rows;
+}
+
+// [Flujo "Otros Países"] Pregunta al usuario por su país (respuesta de texto libre).
+async function askOtherCountry(chatId: string | number, botoneraId: string, sourceMessageId?: number | string | null) {
+  await setConversationState(String(chatId), 'VIP_OTHER_COUNTRY', { botonera_id: botoneraId } as any);
+  const text = `🌍 *OTROS PAÍSES*\\n\\n` +
+    `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\\n\\n` +
+    `No lo escribas con @ ni abreviaturas, solo el nombre. Lo enviaremos directo a la Administradora para coordinar tu suscripción 💎`;
+  return await editOrSend(chatId, sourceMessageId, text);
+}
+
+// [Flujo "Otros Países"] El usuario escribió su país: NO se valida ni se compara con los existentes.
+// El texto tal cual se almacena (conversation state + registro de client + auditoría) y continúa
+// el flujo establecido: planes Mes / 6 Meses / Permanente -> Solicitar Información (admin).
+async function handleVipOtherCountryText(chatId: string | number, userIdStr: string, message: any, state: any): Promise<boolean> {
+  const rawCountry = String(message.text || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 80);
+  if (!rawCountry) {
+    await sendMessage(chatId, '✍️ Por favor escribe el nombre de tu país (ejemplo: Japón).');
+    return true;
+  }
+
+  // El texto libre del país queda almacenado en el estado de conversación (campo free_country)
+  // y viaja con el lead hasta la Administradora al pulsar "Solicitar Información".
+  await setConversationState(userIdStr, 'VIP_OTHER_COUNTRY', { ...(state.draft_data || {}), free_country: rawCountry });
+
+  try {
+    await registerSubscriber(userIdStr, message.from?.username, message.from?.first_name);
+  } catch { /* no romper el flujo si el registro falla */ }
+
+  await addAuditLog('VIP_OTHER_COUNTRY', `${userIdStr}${message.from?.username ? ' (@' + message.from.username + ')' : ''}`, `País escrito por el cliente (sin validar): "${rawCountry}"`).catch(() => {});
+
+  // [Notificación a la administradora] Se avisa directamente al chat privado de la admin
+  // (primer adminId configurado) con el país libre tal cual lo escribió el usuario.
+  try {
+    const { adminIds } = getBotConfig();
+    const adminChat = String(adminIds[0] || '');
+    if (adminChat) {
+      const who = `${message.from?.first_name || ''}${message.from?.username ? ' (@' + message.from.username + ')' : ''}`.trim() || 'Cliente';
+      await sendMessage(adminChat, `🌍 *OTROS PAÍSES — nueva solicitud*\n\n` +
+        `👤 ${who}\n` +
+        `🆔 \`${userIdStr}\`\n` +
+        `🗺 País escrito por el cliente: *${rawCountry}*\n\n` +
+        `_El cliente continuó el flujo VIP (planes Mes / 6 Meses / Permanente). Al pulsar "Solicitar Información" te llegará el lead._`).catch(() => {});
+    }
+  } catch { /* nunca romper el flujo del cliente por la notificación */ }
+
+  const botonera = (await getAllTelegramBotoneras()).find(item => item.id === (state.draft_data?.botonera_id || ''))
+    || await getActiveTelegramBotoneraFlow();
+  if (!botonera) {
+    await sendMessage(chatId, `✅ Anotado: *${rawCountry}*.\n\nAhora mismo no tengo la botonera VIP disponible; escríbele a la Administradora 💎`);
+    return true;
+  }
+
+  await sendTelegramPlanOptions(chatId, botonera.id, rawCountry);
+  return true;
 }
 
 export async function sendTelegramBotoneraFlow(chatId: string | number) {
@@ -1991,6 +2079,19 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   const botonera = items.find(item => item.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
   if (!botonera) {
     await sendMessage(chatId, '⚠️ No pude abrir la botonera VIP en este momento. Inténtalo otra vez más tarde.');
+    return;
+  }
+
+  // [Venezuela excluida] La administradora decidió sacar Venezuela de la botonera VIP de Telegram.
+  const isVenezuelaSelected = normalizeTelegramKey(String(countryId || '')) === 'venezuela'
+    || normalizeTelegramKey(String(countryId || '')) === 've';
+  if (isVenezuelaSelected) {
+    await editOrSend(chatId, sourceMessageId,
+      `🌍 *OTROS PAÍSES*\\n\\n` +
+      `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\\n\\n` +
+      `Lo enviaremos directo a la Administradora para coordinar tu suscripción 💎`,
+      { parse_mode: 'Markdown' });
+    await setConversationState(String(chatId), 'VIP_OTHER_COUNTRY', { botonera_id: String(botoneraId), free_country_hint: 'Venezuela' } as any);
     return;
   }
 
@@ -2136,12 +2237,35 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
   const adminUsername = getAdminContactUsername();
   const adminUrl = `https://t.me/${adminUsername}`;
 
+  // [Otros Países] País libre escrito por el usuario (p.ej. "Japón"): no hay métodos de pago
+  // específicos. Mostrar SIEMPRE los Otros Métodos de Pago internacionales + "escríbeme al privado".
+  const isFreeCountryFlow = !country && !!String(countryId || '').trim();
+  if (isFreeCountryFlow) {
+    const rows: any[][] = [
+      [{ text: '💎 Solicitar Información', url: adminUrl }]
+    ];
+    if (normalizedPlanType === 'monthly') {
+      rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_plan_menu_${botonera.id}__${countryId}` }]);
+    } else {
+      rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]);
+    }
+    const freeText = `*Información Suscripción VIP*\n\n` +
+      `¡Bienvenido a la zona exclusiva!\n\n` +
+      `🌍 País: *${String(countryId).slice(0, 80)}*\n` +
+      `${normalizedPlanType === 'monthly' ? '🧸' : '💎'} ${plan?.name || 'SUSCRIPCIÓN VIP'}${plan?.price ? ` — ${plan.price}` : ''}\n\n` +
+      `💳 *OTROS MÉTODOS DE PAGO:* Western Union, PayPal, Remitly, CriptoMoneda, PIX\n\n` +
+      `📲 _Escríbeme al privado y coordinamos tu suscripción:_ [@${adminUsername}](${adminUrl})`;
+    return await editOrSend(chatId, sourceMessageId, freeText, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+  }
+
   if (normalizedPlanType === 'monthly') {
     const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
     const rows: any[][] = relevantMethods.length > 0
       ? relevantMethods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
       : [[{ text: '💎 Solicitar Información', url: adminUrl }]];
 
+    // [Sugerencia] Botón de Otros Métodos de Pago internacionales (sin saturar: un solo botón).
+    rows.push([{ text: '💳 Otros Métodos de Pago', callback_data: `vip_othermethods_${botonera.id}__${countryId}` }]);
     rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]);
 
     // Descripción alineada con la Mini App (RequestModal): el usuario solicita información VIP.
@@ -2149,7 +2273,8 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
       `¡Bienvenido a la zona exclusiva!\n\n` +
       `${country?.flag || '🌍'} ${country?.name || 'País'}\n` +
       `🧸 ${plan?.name || 'SUSCRIPCIÓN MENSUAL'}\n\n` +
-      `_Selecciona tu método de pago y te enviamos los datos y coordenadas para coordinar tu suscripción._`;
+      `_Selecciona tu método de pago y te enviamos los datos y coordenadas para coordinar tu suscripción._\n\n` +
+      `💳 *Otros Métodos de Pago:* Western Union, PayPal, Remitly, CriptoMoneda, PIX — escríbeme al privado.`;
 
     return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
   }
@@ -2164,11 +2289,33 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
     `${planEmoji} SUSCRIPCIÓN ${planLabel}${plan?.price ? ` — ${plan.price}` : ''}\n\n` +
     `${botonera.confirmation_text || 'Tu solicitud quedará en revisión privada.'}\n\n` +
     `${botonera.contact_text || 'Escríbenos por Telegram en privado para validar tu solicitud.'}\n\n` +
+    `💳 *Otros Métodos de Pago:* Western Union, PayPal, Remitly, CriptoMoneda, PIX — escríbeme al privado.\n\n` +
     `📲 [@${adminUsername}](${adminUrl})`;
 
   const keyboard = [
     [{ text: '💎 Solicitar Información', url: adminUrl }],
+    [{ text: '💳 Otros Métodos de Pago', callback_data: `vip_othermethods_${botonera.id}__${countryId}` }],
     [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]
+  ];
+  return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
+}
+
+// [Otros Métodos de Pago] Western Union, PayPal, Remitly, CriptoMoneda, PIX.
+// No se listan como botones individuales para no saturar el chat: un solo mensaje con la lista
+// y el botón directo al privado de la Administradora.
+export async function sendOtherPaymentMethods(chatId: string | number, sourceMessageId?: number | string | null) {
+  const adminUsername = getAdminContactUsername();
+  const adminUrl = `https://t.me/${adminUsername}`;
+  const text = `💳 *OTROS MÉTODOS DE PAGO*\n\n` +
+    `• Western Union\n` +
+    `• PayPal\n` +
+    `• Remitly\n` +
+    `• CriptoMoneda\n` +
+    `• PIX\n\n` +
+    `📲 _Escríbeme al privado y coordinamos tu suscripción:_ [@${adminUsername}](${adminUrl})`;
+  const keyboard = [
+    [{ text: '💎 Solicitar Información', url: adminUrl }],
+    [{ text: '🔙 Volver', url: `https://t.me/${String(getBotConfig().username || '').replace(/^@/, '')}?start=vipauto` }]
   ];
   return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
 }
@@ -2379,6 +2526,12 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_country_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const parsed = parseTelegramBotoneraCallbackData(data);
+    // [Venezuela excluida] Si un botón residual de Venezuela es pulsado, desviar al flujo "Otros Países".
+    const veKey = normalizeTelegramKey(String(parsed?.countryId || ''));
+    if (parsed && parsed.kind === 'country' && (veKey === 've' || veKey === 'venezuela')) {
+      await askOtherCountry(chatId, parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id || '', cb.message?.message_id);
+      return;
+    }
     if (parsed && parsed.kind === 'country' && parsed.countryId) {
       const fallbackBotoneraId = parsed.botoneraId || (await getActiveTelegramBotoneraFlow())?.id;
       if (fallbackBotoneraId) {
@@ -2397,6 +2550,23 @@ async function handleCallbackQuery(cb: any) {
         await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId, cb.message?.message_id);
       }
     }
+    return;
+  }
+
+  // [Flujo "Otros Países"] El usuario pulsa 🌍 Otros Países: se le pide que ESCRIBA su país.
+  // No se valida ni se compara con los países existentes ni con WhatsApp; el texto tal cual
+  // se almacena y se envía a la Administradora al continuar el flujo.
+  if (data.startsWith('vip_other_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const botoneraId = data.slice('vip_other_'.length);
+    await askOtherCountry(chatId, botoneraId, cb.message?.message_id);
+    return;
+  }
+
+  // [Otros Métodos de Pago] Western Union, PayPal, Remitly, CriptoMoneda, PIX + escríbeme al privado.
+  if (data.startsWith('vip_othermethods_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await sendOtherPaymentMethods(chatId, cb.message?.message_id);
     return;
   }
 
