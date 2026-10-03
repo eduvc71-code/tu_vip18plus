@@ -467,9 +467,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (tg) {
         tg.ready();
         if (!tg.isExpanded) tg.expand();
-        if (typeof tg.disableVerticalSwipes === 'function') {
-          tg.disableVerticalSwipes();
-        }
         if (typeof tg.setHeaderColor === 'function') {
           tg.setHeaderColor('#09090b');
         }
@@ -5762,9 +5759,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h4 className="font-bold text-white text-xs flex items-center gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Botonera VIP Rápida
+                        <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Botonera VIP Rápida (Legado)
                       </h4>
-                      <p className="text-[11px] text-zinc-400">Flujo paralelo para Telegram: país → plan → confirmación privada.</p>
+                      <p className="text-[11px] text-zinc-400">⚠️ Flujo legado país → plan, en desuso desde la Fase 5. El flujo recomendado es la botonera nativa nav_* (Catálogo/Ficha/Pagos con edición en el mismo mensaje, sin registros por clic). Úsalo solo si necesitas mantener publicaciones antiguas del canal con deep links vipc_&lt;país&gt;. Puedes desactivarlo con ADMIN_FEATURES_JSON {'{'}"legacyVipCountryFlow": false{'}'}.</p>
                     </div>
                     <button
                       type="button"
