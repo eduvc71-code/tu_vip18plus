@@ -438,7 +438,7 @@ async function renderNavPaymentList(chatId: string | number, profileId: string):
     .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
   if (methods.length === 0) {
     return Boolean(await sendMessage(chatId, '⚠️ Por ahora no hay métodos de pago configurados\\. Escríbele a la Administradora\\.', {
-      reply_markup: { inline_keyboard: [[{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }]] }
+      reply_markup: { inline_keyboard: [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }]] }
     }));
   }
   const keyboard: any[][] = methods.map(m => [{
@@ -585,7 +585,7 @@ async function completeNavAcquireRequest(cb: any, plan: string, profileId: strin
   if (duplicate) {
     await editMessageContent(chatId, messageId,
       `✅ *Ya recibimos tu solicitud reciente*\n\nLa Administradora responderá pronto en privado\\. Si necesitas cambiar algo, escríbele directamente\\.`,
-      [[{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
+      [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
     return;
   }
 
@@ -652,7 +652,7 @@ async function completeNavAcquireRequest(cb: any, plan: string, profileId: strin
       `📋 Plan: *SUSCRIPCIÓN ${navPlanName(plan)}* · 🌍 ${escapeMarkdownV2(country)}`
     ].join('\n'),
     [
-      [{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }],
+      [{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }],
       [{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
     ]);
 }
@@ -2932,7 +2932,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   }
 
   const adminUsername = getAdminContactUsername();
-  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
 
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || countryId || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
@@ -2998,7 +2998,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
   const plan = (botonera.plans || []).find((item: any) => String(item.id) === String(planId));
   const normalizedPlanType = String(plan?.plan_type || '').toLowerCase();
   const adminUsername = getAdminContactUsername();
-  const adminUrl = `https://t.me/${adminUsername}`;
+  const adminUrl = `https://t.me/daniis001`;
 
   if (normalizedPlanType === 'monthly') {
     const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
@@ -3068,7 +3068,7 @@ export async function showPaymentMethodDetail(
   }
 
   const adminUsername = getAdminContactUsername();
-  const adminContactUrl = `https://t.me/${adminUsername}`;
+  const adminContactUrl = `https://t.me/daniis001`;
   const { baseUrl } = getBotConfig();
   const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
 
