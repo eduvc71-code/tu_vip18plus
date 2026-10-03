@@ -1,4 +1,4 @@
-﻿import dotenv from 'dotenv';
+import dotenv from 'dotenv';
 dotenv.config();
 import fs from 'fs';
 import path from 'path';
@@ -50,12 +50,6 @@ export function escapeMarkdownV2(text: string): string {
 
 // Convierte Markdown clásico (*negrita*, `código`) a MarkdownV2 escapando el resto del texto.
 // Útil para reutilizar plantillas existentes en flujos editables sin perder formato.
-export function formatTelegramCaptionForMarkdown(text: string): string {
-  const value = String(text ?? '');
-  if (!value.trim()) return '';
-  return markdownToMarkdownV2(value);
-}
-
 export function markdownToMarkdownV2(text: string): string {
   const segments = String(text ?? '').split(/(\*[^*\n]+\*|`[^`\n]+`)/g).filter(Boolean);
   return segments
@@ -70,86 +64,34 @@ export function markdownToMarkdownV2(text: string): string {
 // Edición en el sitio: los menús de la botonera nativa se actualizan sobre el mismo mensaje
 // (como la Mini App) en lugar de acumular mensajes nuevos en el chat del cliente.
 async function editMessageContent(chatId: string | number, messageId: number, text: string, inlineKeyboard?: any[][], mediaType?: 'photo' | 'video', mediaUrlValue?: string): Promise<boolean> {
-  const markup = inlineKeyboard ? { inline_keyboard: inlineKeyboard } : undefined;
-  const hasMediaTarget = Boolean(mediaType && mediaUrlValue);
-  // Orden de intentos: primero el método que corresponde al contenido nuevo; si el mensaje
-  // anterior tenía media, editMessageText falla y hay que editar el caption. Si lo que falla
-  // es el parseo de MarkdownV2, se reintenta en texto plano para que un detalle de formato
-  // nunca rompa la navegación del cliente.
-  const methods = hasMediaTarget
-    ? ['editMessageCaption']
+  const useCaption = Boolean(mediaType && mediaUrlValue);
+  const method = useCaption
+    ? 'editMessageCaption'
     : (mediaType || mediaUrlValue)
-      ? ['editMessageMedia']
-      : ['editMessageText', 'editMessageCaption'];
-
-  const buildPayload = (method: string, parseMode?: string) => {
-    const payload: any = { chat_id: chatId, message_id: messageId };
-    if (parseMode) payload.parse_mode = parseMode;
-    if (markup) payload.reply_markup = markup;
-    if (method === 'editMessageCaption') {
-      payload.caption = text;
-    } else if (method === 'editMessageMedia') {
-      payload.media = {
-        type: mediaType === 'video' ? 'video' : 'photo',
-        media: mediaUrlValue,
-        caption: text,
-        ...(parseMode ? { parse_mode: parseMode } : {})
-      };
-    } else {
-      payload.text = text;
-    }
-    return payload;
-  };
-
-  let lastError = '';
-  for (const method of methods) {
-    for (const parseMode of ['MarkdownV2', undefined] as const) {
-      const res = await callTelegramApi(method, buildPayload(method, parseMode));
-      if (res?.ok) return true;
-      lastError = res?.description || 'sin respuesta de Telegram';
-      if (!/parse|entities/i.test(lastError)) break;
-    }
+      ? 'editMessageMedia'
+      : 'editMessageText';
+  const payload: any = { chat_id: chatId, message_id: messageId };
+  if (useCaption) {
+    payload.caption = text;
+    payload.parse_mode = 'MarkdownV2';
+  } else if (method === 'editMessageMedia') {
+    payload.media = {
+      type: mediaType === 'video' ? 'video' : 'photo',
+      media: mediaUrlValue,
+      caption: text,
+      parse_mode: 'MarkdownV2'
+    };
+  } else {
+    payload.text = text;
+    payload.parse_mode = 'MarkdownV2';
   }
-  console.warn(`[EditNav] No se pudo editar mensaje ${messageId}: ${lastError}`);
-  return false;
-}
-
-// Vista del post tal como se publicó en el canal: mismo multimedia y la descripción
-// real que la admin escribió al subir el contenido (nada generado por código).
-async function sendNavPostView(chatId: string | number, profileId: string): Promise<boolean> {
-  const profile = await getProfileById(profileId, true);
-  if (!profile) return false;
-  const freePhotos = (profile.photos || []).filter((u: string) => !(profile.media_stars?.[u] && profile.media_stars[u] > 0) && profile.media_status?.[u] !== 2);
-  const primaryPhoto = freePhotos[0] || null;
-  const caption = ((primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || `💎 ${profile.name}`).trim();
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: '💎 Suscripción VIP', callback_data: `nav_pay_${profile.id}` }]
-    ]
-  };
-  const escapedCaption = formatTelegramCaptionForMarkdown(caption);
-
-  if (primaryPhoto) {
-    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(primaryPhoto) || primaryPhoto.includes('/video');
-    const tgMatch = primaryPhoto.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
-    const mediaTarget = profile.telegram_media_file_ids?.[primaryPhoto] || (tgMatch ? tgMatch[1] : primaryPhoto);
-    const res = await callTelegramApi(isVideo ? 'sendVideo' : 'sendPhoto', {
-      chat_id: chatId,
-      [isVideo ? 'video' : 'photo']: mediaTarget,
-      caption: escapedCaption,
-      parse_mode: 'MarkdownV2',
-      reply_markup: keyboard
-    });
-    if (res?.ok) return true;
-    console.warn('[NavPost] No se pudo enviar el multimedia, se envía solo texto:', res?.description);
+  if (inlineKeyboard) payload.reply_markup = { inline_keyboard: inlineKeyboard };
+  const res = await callTelegramApi(method, payload);
+  if (!res?.ok) {
+    console.warn(`[EditNav] No se pudo editar mensaje ${messageId}: ${res?.description}`);
+    return false;
   }
-  const textRes = await callTelegramApi('sendMessage', {
-    chat_id: chatId,
-    text: escapedCaption,
-    parse_mode: 'MarkdownV2',
-    reply_markup: keyboard
-  });
-  return Boolean(textRes?.ok);
+  return true;
 }
 
 // Resuelve el ID de perfil desde callback_data (nav_prof_<id>, nav_gal_<id>_<page>, nav_pay_<id>).
@@ -181,7 +123,7 @@ async function renderNavProfileView(chatId: string | number, messageId: number, 
   const profile = await getProfileById(profileId, true);
   if (!profile) {
     return await editMessageContent(chatId, messageId,
-      '⚠️ Este contenido ya no está disponible\\.\nPulsa el botón para volver al catálogo\\.',
+      '⚠️ Este contenido ya no está disponible.\nPulsa el botón para volver al catálogo.',
       [[{ text: '🔙 Volver al Catálogo', callback_data: listCallback }]]);
   }
   const { rows, safePage } = buildGalleryPageRows(profile, page);
@@ -264,6 +206,34 @@ async function renderNavProfileList(chatId: string | number, messageId: number, 
   return await editMessageContent(chatId, messageId, baseLines, keyboard);
 }
 
+// Detalle de método de pago en modo editable (reutilizado por la navegacion nativa).
+async function renderPaymentMethodDetailEditable(chatId: string | number, messageId: number, methodId: string, backCallback: string, options?: { profileRateBs?: number | string }): Promise<boolean> {
+  const method = await getPaymentMethodById(methodId);
+  if (!method) {
+    return await editMessageContent(chatId, messageId, '⚠️ Método de pago no disponible.', [[{ text: '🔙 Volver', callback_data: backCallback }]]);
+  }
+  const adminUsername = getAdminContactUsername();
+  const adminContactUrl = `https://t.me/${adminUsername}`;
+  const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
+  const text = [
+    `✨ *${escapeMarkdownV2(method.title)}* ✨`,
+    '',
+    escapeMarkdownV2(method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'),
+    '',
+    `💵 *Tarifa Oficial:* ${escapeMarkdownV2(officialFeeText)}`,
+    '',
+    `📲 *Envía tu comprobante a:* https://t.me/${escapeMarkdownV2(adminUsername)}`,
+    '',
+    '_Una vez verificado tu comprobante, la Administradora te enviará el acceso privado VIP_'
+  ].join('\n');
+  const keyboard = [
+    [{ text: '📲 Enviar Comprobante', url: adminContactUrl }],
+    [{ text: '💳 Todos los Métodos', callback_data: 'client_cmd_pagos' }],
+    [{ text: '🔙 Volver', callback_data: backCallback }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
+  ];
+  return await editMessageContent(chatId, messageId, text, keyboard);
+}
+
 // ===== FASE 2: Filtros avanzados del catálogo nativo (solo lectura, cero escrituras) =====
 interface NavFilterState {
   zone?: string;
@@ -319,7 +289,7 @@ function navFilterSummary(f: NavFilterState): string {
 
 function applyNavFilters(profiles: Profile[], f: NavFilterState): Profile[] {
   let list = [...profiles];
-  if (f.zone) list = list.filter(p => (p.zone || '').toLowerCase() === (f.zone || '').toLowerCase());
+  if (f.zone) { const z = f.zone.toLowerCase(); list = list.filter(p => (p.zone || '').toLowerCase() === z); }
   if (f.q) {
     const q = f.q.toLowerCase();
     list = list.filter(p =>
@@ -384,40 +354,36 @@ async function renderNavFilteredPage(chatId: string | number, messageId: number,
 // ===== FLUJO "ADQUIRIR CONTENIDO" (espejo exacto del RequestModal de la Mini App) =====
 // Pasos: nav_acq_<perfil> (menú de planes) -> nav_acqp_<plan>__<perfil> (país, en memoria)
 //        -> nav_acqc_<plan>__<perfil> (confirmación) -> nav_acqok_<plan>__<perfil> (ÚNICO paso que registra).
-const NAV_COUNTRY_FALLBACK = ['Bolivia', 'Argentina', 'Chile', 'Colombia', 'Ecuador', 'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'];
+// Lista por defecto (espejo del fallback de dynamicCountries en RequestModal.tsx de la Mini App).
+// Se usa SOLO si la admin no tiene métodos 'national'/'international' activos en BD.
+const NAV_COUNTRY_LIST = ['Bolivia', 'Argentina', 'Chile', 'Colombia', 'Ecuador', 'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'];
 const NAV_PLAN_EMOJI: Record<string, string> = { mensual: '🧸', semestral: '💎', permanente: '💙' };
 
 function navPlanName(plan: string): string {
-  return plan === 'semestral' ? '6 MESES' : plan === 'permanente' ? 'PERMANENTE' : 'MENSUAL';
+  return plan === 'semestral' ? 'SEMESTRAL' : plan === 'permanente' ? 'PERMANENTE' : 'MENSUAL';
 }
 
-// nav_acqs/acqc/acqok_<plan>__<perfil>__<país>: el perfil admite guiones bajos, por lo que
-// el país es el último tramo y el perfil todo lo intermedio.
-export function parseNavAcqFlowData(data: string): { step: 'acqs' | 'acqc' | 'acqok'; plan: string; profileId: string; country: string } | null {
-  const m = data.match(/^nav_(acqs|acqc|acqok)_(mensual|semestral|permanente)__(.+)__([^_]+)$/);
-  if (!m) return null;
-  return { step: m[1] as 'acqs' | 'acqc' | 'acqok', plan: m[2], profileId: m[3], country: decodeURIComponent(m[4]) };
-}
-
-// Los países NO son código duro: salen de los métodos de pago activos (BD/B2), exactamente
-// como el selector de país del RequestModal de la Mini App; el fallback solo aplica si la
-// admin aún no ha configurado métodos.
-async function getNavCountryList(): Promise<string[]> {
-  try {
-    const methods = await getPublicPaymentMethods();
-    const fromMethods = methods
-      .filter(m => m.is_active && (m.category === 'international' || m.category === 'national'))
-      .map(m => String(m.title || '').replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim())
-      .filter(t => t.length > 0);
-    const unique = Array.from(new Set(fromMethods));
-    return unique.length > 0 ? unique : NAV_COUNTRY_FALLBACK;
-  } catch {
-    return NAV_COUNTRY_FALLBACK;
-  }
+// Extrae el nombre del país del título del método de pago, igual que la Mini App
+// (RequestModal.tsx -> dynamicCountries): elimina emojis y símbolos, deja solo el texto.
+function extractNavCountryTitle(title: string): string {
+  return title.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
 }
 
 async function buildAcqCountryKeyboard(plan: string, profileId: string): Promise<any[][]> {
-  const countries = await getNavCountryList();
+  // Fuente dinámica: países de los métodos de pago ACTIVOS de la admin en BD
+  // (categorías national/international), con dedupe — mismo orden/criterio que la Mini App.
+  let countries: string[] = [];
+  try {
+    const methods = await getPublicPaymentMethods();
+    countries = Array.from(new Set(
+      methods
+        .filter(m => m.is_active && (m.category === 'international' || m.category === 'national'))
+        .map(m => extractNavCountryTitle(m.title))
+        .filter(t => t.length > 0)
+    ));
+  } catch { /* fallback abajo */ }
+  if (countries.length === 0) countries = NAV_COUNTRY_LIST;
+
   const rows: any[][] = [];
   for (let i = 0; i < countries.length; i += 2) {
     rows.push(countries.slice(i, i + 2).map(c => ({
@@ -426,112 +392,36 @@ async function buildAcqCountryKeyboard(plan: string, profileId: string): Promise
     })));
   }
   rows.push([{ text: '✍️ Otro país', callback_data: `nav_acqo_${plan}__${profileId}` }]);
-  rows.push([{ text: '🔙 Volver a Planes', callback_data: `nav_pay_${profileId}` }]);
+  rows.push([{ text: '🔙 Volver a Planes', callback_data: `nav_acq_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]);
   return rows;
-}
-
-// Payments Board nativo: mismos métodos activos y tarifas que muestra la Mini App,
-// tomados en vivo de la base de datos (restaurada desde B2).
-async function renderNavPaymentList(chatId: string | number, profileId: string): Promise<boolean> {
-  const profile = profileId ? await getProfileById(profileId, true) : null;
-  const methods = (await getPublicPaymentMethods()).filter(m => m.is_active)
-    .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
-  if (methods.length === 0) {
-    return Boolean(await sendMessage(chatId, '⚠️ Por ahora no hay métodos de pago configurados\\. Escríbele a la Administradora\\.', {
-      reply_markup: { inline_keyboard: [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }]] }
-    }));
-  }
-  const keyboard: any[][] = methods.map(m => [{
-    text: `${m.title} · ${getOfficialFeeText(m, profile?.rate_bs)}`,
-    callback_data: `nav_pmd_${m.id}__${profileId}`
-  }]);
-  keyboard.push([{ text: '🔙 Volver a Planes', callback_data: `nav_pay_${profileId}` }]);
-  const text = [
-    `💳 *PAYMENTS BOARD*`,
-    '',
-    profile ? `Suscripción de *${escapeMarkdownV2(profile.name)}* — métodos y tarifas en vivo desde el servidor\\.` : 'Métodos y tarifas en vivo desde el servidor\\.',
-    '',
-    '_Toca un método para ver el QR, las coordenadas y el contacto de comprobante_'
-  ].join('\n');
-  return Boolean(await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'MarkdownV2' }));
-}
-
-// Detalle de método nativo: foto/QR + TODOS los datos (coordenadas, tarifa, contacto),
-// espejo del "Detalle de Pago" de la Mini App.
-async function renderNavPaymentMethodDetail(chatId: string | number, methodId: string, profileId: string): Promise<boolean> {
-  const method = await getPaymentMethodById(methodId);
-  if (!method) {
-    return Boolean(await sendMessage(chatId, '⚠️ Método de pago no disponible\\.', {
-      reply_markup: { inline_keyboard: [[{ text: '💳 Ver otros métodos', callback_data: `nav_paylist_${profileId}` }]] }
-    }));
-  }
-  const profile = profileId ? await getProfileById(profileId, true) : null;
-  const adminUsername = getAdminContactUsername();
-  const caption = [
-    `✨ *${escapeMarkdownV2(method.title)}* ✨`,
-    '',
-    escapeMarkdownV2(method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'),
-    '',
-    `💵 *Tarifa Oficial:* ${escapeMarkdownV2(getOfficialFeeText(method, profile?.rate_bs))}`,
-    '',
-    `📲 *Envía tu comprobante a:* [@${escapeMarkdownV2(adminUsername)}](https://t.me/${escapeMarkdownV2(adminUsername)})`,
-    '',
-    '_Una vez verificado tu comprobante, la Administradora te enviará el acceso privado VIP_'
-  ].join('\n');
-  const keyboard = {
-    inline_keyboard: [
-      [{ text: '📲 Enviar Comprobante', url: `https://t.me/${adminUsername}` }],
-      [{ text: '💳 Ver otros métodos', callback_data: `nav_paylist_${profileId}` }]
-    ]
-  };
-  if (method.image_url) {
-    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
-    const res = await callTelegramApi(isVideo ? 'sendVideo' : 'sendPhoto', {
-      chat_id: chatId,
-      [isVideo ? 'video' : 'photo']: method.image_url,
-      caption,
-      parse_mode: 'MarkdownV2',
-      reply_markup: keyboard
-    });
-    if (res?.ok) return true;
-    console.warn('[NavPay] No se pudo enviar el QR con datos, se envía solo texto:', res?.description);
-  }
-  const textRes = await callTelegramApi('sendMessage', { chat_id: chatId, text: caption, parse_mode: 'MarkdownV2', reply_markup: keyboard });
-  return Boolean(textRes?.ok);
-}
-
-// Texto del menú de planes (MarkdownV2 estricto: Telegram rechaza el mensaje entero si
-// queda un carácter reservado sin escapar, y el cliente ve "contenido no disponible").
-export function buildNavPlansMenuText(profileName: string, rateBs: number | string, hasStars: boolean): string {
-  return [
-    `💳 *MÉTODOS DE PAGO*`,
-    '',
-    `Elige tu *Plan VIP* para *${escapeMarkdownV2(profileName)}*:`,
-    '',
-    `💵 Tarifa de referencia: *Bs\\. ${escapeMarkdownV2(String(rateBs || 0))}* / mes`,
-    ...(hasStars ? ['', `⭐ También puedes desbloquear fotos sueltas pagando con Telegram Stars desde su ficha\\.`] : []),
-    '',
-    '_La atención y los pagos continúan 100\\% privados por Telegram_',
-    '',
-    '⚡ _¿Prefieres la experiencia visual completa? Toca_ *Ver lo Exclusivo* _abajo\\._'
-  ].join('\n');
 }
 
 async function renderNavAcquireMenu(chatId: string | number, messageId: number, profileId: string): Promise<boolean> {
   const profile = await getProfileById(profileId, true);
-  if (!profile) {
-    return await editMessageContent(chatId, messageId,
-      '⚠️ Este contenido ya no está disponible\\.\nPulsa el botón para volver al catálogo\\.',
-      [[{ text: '🔙 Volver al Catálogo', callback_data: 'nav_catalog' }]]);
-  }
   const methods = await getPublicPaymentMethods();
   const hasStars = methods.some(m => m.is_active && /star/i.test(`${m.title} ${m.description || ''}`));
+  // Botón "Ver lo Exclusivo 🔥🔥🔥" en el mismo nivel de los planes: abre la Mini App
+  // directamente en la ficha de este perfil (deep link #profile-<id>, igual que en los posts).
+  const { baseUrl: navBaseUrl } = getBotConfig();
+  const exclusiveButton = { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: `${navBaseUrl}/#profile-${profileId}` } };
 
-  const text = buildNavPlansMenuText(profile.name, profile.rate_bs, hasStars);
+  const text = [
+    `🛒 *ADQUIRIR CONTENIDO*`,
+    '',
+    ...(profile ? [`Elige tu *Plan VIP* para *${escapeMarkdownV2(profile.name)}*:`, '', `💵 Tarifa de referencia: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}* / mes`] : ['Elige tu *Plan VIP*:']),
+    ...(hasStars ? ['', `⭐ También puedes desbloquear fotos sueltas pagando con Telegram Stars desde su ficha.`] : []),
+    '',
+    '_La atención y los pagos continúan 100% privados por Telegram_',
+    '',
+    '⚡ _¿Prefieres la experiencia visual completa? Toca_ *Ver lo Exclusivo* _abajo._'
+  ].join('\n');
   const keyboard = [
+    //// MODIFICACION 002 /// Botonera de PLANES del flujo de adquisicion (nav_acq_<perfil>). Los 3 planes existen: MENSUAL -> metodos de pago; SEMESTRAL/PERMANENTE -> botonera de paises (sin precios, chat privado). NO se publica al canal.
     [{ text: '🧸 SUSCRIPCIÓN MENSUAL', callback_data: `nav_acqp_mensual__${profileId}` }],
-    [{ text: '💎 SUSCRIPCIÓN 6 MESES', callback_data: `nav_acqp_semestral__${profileId}` }],
-    [{ text: '💙 SUSCRIPCIÓN PERMANENTE', callback_data: `nav_acqp_permanente__${profileId}` }]
+    [{ text: '💎 SUSCRIPCIÓN SEMESTRAL', callback_data: `nav_acqp_semestral__${profileId}` }],
+    [{ text: '💙 SUSCRIPCIÓN PERMANENTE', callback_data: `nav_acqp_permanente__${profileId}` }],
+    [exclusiveButton],
+    [{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
   ];
   return await editMessageContent(chatId, messageId, text, keyboard);
 }
@@ -585,7 +475,7 @@ async function completeNavAcquireRequest(cb: any, plan: string, profileId: strin
   if (duplicate) {
     await editMessageContent(chatId, messageId,
       `✅ *Ya recibimos tu solicitud reciente*\n\nLa Administradora responderá pronto en privado\\. Si necesitas cambiar algo, escríbele directamente\\.`,
-      [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
+      [[{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }], [{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]]);
     return;
   }
 
@@ -652,7 +542,7 @@ async function completeNavAcquireRequest(cb: any, plan: string, profileId: strin
       `📋 Plan: *SUSCRIPCIÓN ${navPlanName(plan)}* · 🌍 ${escapeMarkdownV2(country)}`
     ].join('\n'),
     [
-      [{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }],
+      [{ text: '📲 Hablar con administradora', url: `https://t.me/${getAdminContactUsername()}` }],
       [{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]
     ]);
 }
@@ -735,25 +625,48 @@ async function handleNavCallback(cb: any): Promise<void> {
     return;
   }
 
-  // 💳 Métodos de Pago (botón del canal y del post): abre directamente los planes VIP,
-  // igual que el RequestModal de la Mini App (planes -> país -> confirmación -> solicitud).
+  // Métodos de pago por perfil (solo lectura; el cobro lo hace Telegram/admin en privado)
   if (data.startsWith('nav_pay_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const profileId = resolveProfileIdFromNavData(data) || data.replace('nav_pay_', '');
-    const ok = await renderNavAcquireMenu(chatId, messageId, profileId);
-    if (!ok) await sendMessage(chatId, '⚠️ Contenido no disponible.', { reply_markup: { inline_keyboard: [[{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]] } });
-    return;
-  }
-
-  // Listado de métodos de pago (datos vivos de la BD/B2), igual que el Payments Board de la Mini App
-  if (data.startsWith('nav_paylist_')) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    const profileId = data.replace('nav_paylist_', '');
-    await renderNavPaymentList(chatId, profileId);
+    const profileId = data.replace('nav_pay_', '');
+    const profile = await getProfileById(profileId, true);
+    const methods = (await getPublicPaymentMethods()).filter(m => m.is_active);
+    const keyboard: any[][] = [];
+    const featured = methods.filter(m => m.category !== 'service');
+    const services = methods.filter(m => m.category === 'service');
+    for (const m of featured) keyboard.push([{ text: m.title, callback_data: `nav_pmd_${m.id}__${profileId}` }]);
+    for (let i = 0; i < services.length; i += 2) {
+      keyboard.push(services.slice(i, i + 2).map(m => ({ text: m.title, callback_data: `nav_pmd_${m.id}__${profileId}` })));
+    }
+    keyboard.push([{ text: '🔙 Volver a la Ficha', callback_data: `nav_prof_${profileId}` }, { text: '🏠 Menú', callback_data: 'client_cmd_menu' }]);
+    const text = [
+      `💳 *MÉTODOS DE PAGO*`,
+      '',
+      profile ? `Para *${escapeMarkdownV2(profile.name)}* — Tarifa: *Bs\\. ${escapeMarkdownV2(String(profile.rate_bs || 0))}*/mes` : 'Selecciona tu método de pago favorito:',
+      '',
+      '_Toca un método para ver los datos exactos y enviar tu comprobante en privado_'
+    ].join('\n');
+    const ok = await editMessageContent(chatId, messageId, text, keyboard);
+    if (!ok) await sendMessage(chatId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'MarkdownV2' });
     return;
   }
 
   // ===== FLUJO "ADQUIRIR CONTENIDO" (espejo del RequestModal de la Mini App) =====
+  //// MODIFICACION 005 /// Alias 'nav_vipfree': llega desde el boton "SUSCRIPCION VIP" publicado en el CANAL (deep link /start nav_vipfree).
+  //// Muestra la botonera con las 3 suscripciones (Mensual/Semestral/Permanente). Se usa un perfil REAL activo como contexto para que cada plan muestre su tarifa correctamente;
+  //// si no hay perfiles activos, se abre igualmente el menu sin tarifa. NO expone datos sensibles: solo nombre de plan y tarifa general.
+  if (data === 'nav_vipfree') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    let vipCtxId = '';
+    try {
+      const activeProfiles = await getPublicProfiles();
+      vipCtxId = (activeProfiles || []).find(p => p.status === 'disponible')?.id || activeProfiles?.[0]?.id || '';
+    } catch { /* sin contexto de perfil: el menu tolera profile inexistente */ }
+    const okVip = await renderNavAcquireMenu(chatId, messageId, vipCtxId);
+    if (!okVip) await sendMessage(chatId, '⚠️ Contenido no disponible.', { reply_markup: { inline_keyboard: [[{ text: '🏠 Menú', callback_data: 'client_cmd_menu' }]] } });
+    return;
+  }
+
   // Menú de planes VIP
   if (data.startsWith('nav_acq_') && !data.startsWith('nav_acqp_') && !data.startsWith('nav_acqc_') && !data.startsWith('nav_acqo_') && !data.startsWith('nav_acqs_') && !data.startsWith('nav_acqok_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
@@ -763,30 +676,28 @@ async function handleNavCallback(cb: any): Promise<void> {
     return;
   }
 
-  // Selección de plan: MENSUAL abre los métodos de pago (como la Mini App);
-  // 6 MESES y PERMANENTE pasan por país -> confirmación -> solicitud.
+  // Selección de plan -> pantalla de país
   const acqPlanMatch = data.match(/^nav_acqp_(mensual|semestral|permanente)__(.+)$/);
   if (acqPlanMatch) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
-    if (acqPlanMatch[1] === 'mensual') {
-      await renderNavPaymentList(chatId, acqPlanMatch[2]);
-    } else {
-      await renderNavAcquireCountry(chatId, messageId, acqPlanMatch[1], acqPlanMatch[2]);
-    }
+    await renderNavAcquireCountry(chatId, messageId, acqPlanMatch[1], acqPlanMatch[2]);
     return;
   }
 
-  // País preseleccionado / reconfirmación / confirmación final.
-  // El ID de perfil puede contener guiones bajos, así que el país es SIEMPRE el último
-  // tramo tras "__" y el perfil es todo lo que queda en medio.
-  const acqFlow = parseNavAcqFlowData(data);
-  if (acqFlow) {
-    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, ...(acqFlow.step === 'acqok' ? { text: 'Enviando solicitud...' } : {}) });
-    if (acqFlow.step === 'acqs' || acqFlow.step === 'acqc') {
-      await renderNavAcquireConfirm(chatId, messageId, acqFlow.plan, acqFlow.profileId, acqFlow.country);
-    } else {
-      await completeNavAcquireRequest(cb, acqFlow.plan, acqFlow.profileId, acqFlow.country);
-    }
+  // País preseleccionado -> confirmación
+  const acqSelMatch = data.match(/^nav_acqs_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
+  if (acqSelMatch) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const country = decodeURIComponent(acqSelMatch[3]);
+    await renderNavAcquireConfirm(chatId, messageId, acqSelMatch[1], acqSelMatch[2], country);
+    return;
+  }
+
+  // Reconfirmación directa (desde botón "Reintentar")
+  const acqConfirmMatch = data.match(/^nav_acqc_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
+  if (acqConfirmMatch) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await renderNavAcquireConfirm(chatId, messageId, acqConfirmMatch[1], acqConfirmMatch[2], decodeURIComponent(acqConfirmMatch[3]));
     return;
   }
 
@@ -798,14 +709,23 @@ async function handleNavCallback(cb: any): Promise<void> {
     return;
   }
 
-  // Detalle de método: foto/QR + datos completos en un mensaje nuevo (como la Mini App)
+  // Confirmación final: ÚNICO clic que registra la solicitud (igual que la Mini App)
+  const acqOkMatch = data.match(/^nav_acqok_(mensual|semestral|permanente)__([^_]+)__(.+)$/);
+  if (acqOkMatch) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Enviando solicitud...' });
+    await completeNavAcquireRequest(cb, acqOkMatch[1], acqOkMatch[2], decodeURIComponent(acqOkMatch[3]));
+    return;
+  }
+
+  // Detalle de método dentro del flujo de navegación (nav_pmd_<methodId>__<profileId>)
   if (data.startsWith('nav_pmd_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const payload = data.replace('nav_pmd_', '');
-    const sep = payload.lastIndexOf('__');
-    const methodId = sep >= 0 ? payload.slice(0, sep) : payload;
-    const profileId = sep >= 0 ? payload.slice(sep + 2) : '';
-    await renderNavPaymentMethodDetail(chatId, methodId, profileId);
+    const [methodId, profileId] = payload.split('__');
+    const profile = profileId ? await getProfileById(profileId, true) : null;
+    const backCallback = profileId ? `nav_pay_${profileId}` : 'client_cmd_pagos';
+    const ok = await renderPaymentMethodDetailEditable(chatId, messageId, methodId, backCallback, { profileRateBs: profile?.rate_bs });
+    if (!ok) await showPaymentMethodDetail(chatId, methodId, profile?.rate_bs ? { profileRateBs: profile.rate_bs } : undefined);
     return;
   }
 }
@@ -853,12 +773,21 @@ export function getBotConfig() {
   return { token, username, secret, channelId, adminIds, signingSecret, brandName, baseUrl, appShortName };
 }
 
+// PARCHE (seguridad de contacto admin): el fallback del contacto de administradora
+// es SIEMPRE el bot (siempre puede recibir mensajes). Los usernames heredados o
+// incorrectos (ruti / flavia / iam_danii_vip_bot) NUNCA deben quedar expuestos a
+// los usuarios como contacto admin. El username personal real (p.ej. danii001)
+// se define vía ADMIN_CONTACT_USERNAME (env) o desde el Panel Admin (DB), y tiene
+// prioridad sobre este filtro.
 export function getAdminContactUsername(): string {
   const envValue = (process.env.ADMIN_CONTACT_USERNAME || '').trim();
   const dbValue = (getSystemSetting('admin_contact_username') || '').trim();
   const rawValue = envValue || dbValue || 'Danii_Catalogo_SCZ_bot';
-  const username = rawValue.replace(/^@/, '').trim();
-  if (!username) return 'Danii_Catalogo_SCZ_bot';
+  let username = rawValue.replace(/^@/, '').trim();
+  // Bloqueo explícito: ningún valor ruti|flavia|iam_danii_vip_bot puede usarse como contacto admin.
+  if (!username || /ruti|flavia|iam_danii_vip_bot/i.test(username)) {
+    username = 'Danii_Catalogo_SCZ_bot';
+  }
   return username;
 }
 
@@ -1446,35 +1375,32 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
   let customButtonRows: any[] = [];
   try {
     const customButtons = await getPublicCustomButtons('channel');
-    // Telegram rechaza botones sin URL válida ("Text buttons are not allowed") y hace
-    // caer el post completo: solo se renderizan custom buttons con enlace real. Los de
-    // tipo subscription sin URL siguen funcionando únicamente en la Mini App.
     customButtonRows = customButtons
-      .filter(btn => /^(https?:\/\/|tg:\/\/)/i.test(String(btn.url || '').trim()))
-      .map(btn => [{ text: btn.label, url: String(btn.url).trim() }]);
+      .filter(btn => btn.url && String(btn.url).trim().startsWith('http'))
+      .map(btn => [{ text: btn.label, url: btn.url }]);
   } catch (err) {
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
-  let mode = String(getSystemSetting('post_button_mode') || 'ambos').toLowerCase();
-  if (!['miniapp', 'nativo', 'ambos'].includes(mode)) mode = 'ambos';
+  let mode = String(getSystemSetting('post_button_mode') || 'miniapp').toLowerCase();
+  if (!['miniapp', 'nativo', 'ambos'].includes(mode)) mode = 'miniapp';
 
-  // Telegram-native reactions are configured in the channel settings.
+  //// MODIFICACION 004 /// BOTONERA PUBLICADA AL CANAL (instruccion del usuario): TODO post publicado desde el Panel lleva SIEMPRE exactamente 2 botones en la misma fila:
+  ////   1) "Ver lo exclusivo" -> Mini App (deep link startapp=ver_<perfil>).
+  ////   2) "SUSCRIPCION VIP"  -> deep link nav_vipfree: abre el chat PRIVADO del bot y muestra la botonera con las 3 suscripciones (Mensual/Semestral/Permanente).
+  //// NOTA: los canales de Telegram NO permiten callback_data, por eso se usa URL t.me/<bot>?start=... que el handler /start reenvia al router nav_*.
+  //// El modo anterior (setting post_button_mode: miniapp|nativo|ambos con botones extra Catalogo/Ficha/Metodos de Pago/Novedades) queda INUTILIZADO a proposito: ya no debe publicarse nada mas.
+  //// Los custom buttons activos del Panel ('channel') SI se conservan: los agrega el bloque final ...customButtonRows.
+  void mode; // MODIFICACION 004: post_button_mode ya no decide la botonera publicada (siempre 2 botones fijos).
+  //// El boton "⭐ Suscripcion VIP FREE" NO EXISTE (no hay suscripcion free); se conserva unicamente el token interno 'nav_vipfree' como alias tecnico del menu de planes porque esta documentado en el codigo fuente original.
   const keyboard: any[][] = [];
-  if (mode === 'miniapp' || mode === 'ambos') {
-    keyboard.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }]);
-  }
-  if ((mode === 'nativo' || mode === 'ambos') && cleanBotUser) {
-    // Botonera nativa del canal: SOLO Métodos de Pago. El deep link abre el bot en
-    // privado (nav_pay_<perfil>) donde el cliente ve métodos, envía comprobante y la
-    // coordinación continúa manual entre admin y cliente.
-    keyboard.push([
-      { text: '💳 Métodos de Pago', url: `https://t.me/${cleanBotUser}?start=${encodeURIComponent(`nav_pay_${profile.id}`)}` }
-    ]);
-  }
-  if (keyboard.length === 0) {
-    keyboard.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }]);
-  }
+  const vipDeepLink = cleanBotUser
+    ? `https://t.me/${cleanBotUser}?start=${encodeURIComponent('nav_vipfree')}`
+    : botAppUrl;
+  keyboard.push([
+    { text: 'Ver lo exclusivo 🔥', url: botAppUrl },
+    { text: 'SUSCRIPCION VIP 💎', url: vipDeepLink }
+  ]);
   return {
     inline_keyboard: [
       ...keyboard,
@@ -1484,15 +1410,13 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
 }
 
 export async function sendPhotoToUser(chatId: string | number, photoUrl: string, caption?: string) {
-  const safeCaption = formatTelegramCaptionForMarkdown(caption || '');
   return await callTelegramApi('sendPhoto', {
     chat_id: chatId,
     photo: photoUrl,
-    caption: safeCaption,
-    parse_mode: safeCaption ? 'MarkdownV2' : undefined
+    caption: caption || '',
+    parse_mode: 'Markdown'
   });
 }
-
 
 // Generate Admin Web Magic Link
 export function generateAdminMagicToken(telegramUserId: string | number): string {
@@ -1568,10 +1492,9 @@ export async function uploadBufferToTelegram(
   const formData = new FormData();
   formData.append('chat_id', String(targetChatId));
   formData.append('disable_notification', 'true');
-  const safeCaption = caption ? formatTelegramCaptionForMarkdown(caption) : '';
-  if (safeCaption) {
-      formData.append('caption', safeCaption);
-      formData.append('parse_mode', 'MarkdownV2');
+  if (caption) {
+      formData.append('caption', caption);
+      formData.append('parse_mode', 'Markdown');
     }
     
     // Si el destino es el canal público (fallback) y no es el chat privado del admin, SIEMPRE blindar con spoiler
@@ -1878,13 +1801,6 @@ export async function processTelegramUpdate(update: any) {
     }
     const rawNav = text.replace('/start nav_', '').trim();
     const inner = rawNav.startsWith('nav_') ? rawNav : `nav_${rawNav}`;
-    // 💳 Métodos de Pago desde el post del canal: el cliente recibe el MISMO post
-    // (multimedia + descripción real de la subida) y desde ahí entra a los planes.
-    const payMatch = inner.match(/^nav_pay_([^_]+(?:_[^_]+)*)$/);
-    if (payMatch) {
-      const sent = await sendNavPostView(chatId, payMatch[1]);
-      if (sent) return;
-    }
     const welcomeRes = await sendClientWelcome(chatId, message.from?.first_name || 'Invitado/a');
     const navMessageId = welcomeRes?.result?.message_id;
     if (navMessageId && isPublicTelegramCallbackData(inner)) {
@@ -2932,7 +2848,7 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
   }
 
   const adminUsername = getAdminContactUsername();
-  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/daniis001` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
+  const rows: any[][] = [[{ text: '📲 Hablar con administradora', url: `https://t.me/${adminUsername}` }], [{ text: '🔙 Cambiar país', callback_data: `vip_country_menu_${botonera.id}` }], [{ text: '🏠 Menú principal', callback_data: 'client_cmd_menu' }]];
 
   const text = `*${botonera.country_label || 'País / Bandera'}: ${country?.flag || '🌍'} ${country?.name || countryId || 'Selección'}*\n\n` +
     `*No hay un método de pago activo guardado para este país.*\n\n` +
@@ -2998,7 +2914,7 @@ export async function sendTelegramPlanConfirmation(chatId: string | number, boto
   const plan = (botonera.plans || []).find((item: any) => String(item.id) === String(planId));
   const normalizedPlanType = String(plan?.plan_type || '').toLowerCase();
   const adminUsername = getAdminContactUsername();
-  const adminUrl = `https://t.me/daniis001`;
+  const adminUrl = `https://t.me/${adminUsername}`;
 
   if (normalizedPlanType === 'monthly') {
     const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
@@ -3068,7 +2984,7 @@ export async function showPaymentMethodDetail(
   }
 
   const adminUsername = getAdminContactUsername();
-  const adminContactUrl = `https://t.me/daniis001`;
+  const adminContactUrl = `https://t.me/${adminUsername}`;
   const { baseUrl } = getBotConfig();
   const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
 
@@ -3095,12 +3011,11 @@ export async function showPaymentMethodDetail(
     const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
     const apiMethod = isVideo ? 'sendVideo' : 'sendPhoto';
     const payloadKey = isVideo ? 'video' : 'photo';
-    const safeCaption = formatTelegramCaptionForMarkdown(caption);
     const res = await callTelegramApi(apiMethod, {
       chat_id: chatId,
       [payloadKey]: method.image_url,
-      caption: safeCaption,
-      parse_mode: 'MarkdownV2',
+      caption: caption,
+      parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: inlineKeyboard }
     });
     if (res && res.ok) return res;
@@ -3389,14 +3304,14 @@ async function handleCallbackQuery(cb: any) {
         await addAuditLog('CONFIG', userIdStr, `Modo de botones en posts del canal → ${labels[chosen]}`);
       }
     }
-    const current = String(getSystemSetting('post_button_mode') || 'ambos');
+    const current = String(getSystemSetting('post_button_mode') || 'miniapp');
     const keyboard = modes.map(m => [{ text: `${current === m ? '✅ ' : ''}${labels[m]}`, callback_data: `admin_postmode_${m}` }]);
     keyboard.push([{ text: '🔙 Volver al Menú', callback_data: 'admin_btn_help' }]);
     await sendMessage(chatId,
       '🎛 *MODO DE BOTONES EN POSTS DEL CANAL*\\n\\n' +
       'Define qué botones se generan al publicar contenido:\\n' +
       '• *Solo Mini App:* botón "Ver lo Exclusivo" (comportamiento clásico).\\n' +
-      '• *Solo Nativa:* deep link que abre el bot en privado con los Métodos de Pago (nav_pay), sin escribir en BD.\\n' +
+      '• *Solo Nativa:* deep links que abren el bot en privado con el flujo nav_* (Catálogo/Ficha/Pagos/Novedades), sin escribir en BD.\\n' +
       '• *Ambos:* Mini App + botonera nativa en cada post.\\n\\n' +
       `_Afecta a nuevas publicaciones y ediciones._`,
       { reply_markup: { inline_keyboard: keyboard } });
@@ -3602,14 +3517,7 @@ async function handleListProfiles(chatId: string | number) {
     return;
   }
 
-  let text = '📋 *LISTADO DE PERFILES DEL CANAL VIP FREE*:\n\n';
-  profiles.forEach(p => {
-    const badge = p.status === 'disponible' ? '🟢 Disponible' : p.status === 'ocupada' ? '🔴 Ocupada' : p.status === 'pausada' ? '⏸️ Pausada' : p.status === 'retirada' ? '🗑️ Retirada' : '📁 Borrador';
-    text += `• *${p.name}* - ${badge}\n  ID: \`${p.id}\` | Zona: ${p.zone} | Tarifa: Bs. ${p.rate_bs}\n\n`;
-  });
-
-  text += '_Usa /ver ID o /editar ID para administrar cada uno._';
-  await sendMessage(chatId, text);
+  await sendMessage(chatId, `✅ Total de perfiles registrados en el Canal VIP Free: ${profiles.length}. Usa /ver ID o /editar ID para administrar cada uno.`);
 }
 
 async function handleShowProfileDetail(chatId: string | number, id: string) {
@@ -3621,14 +3529,6 @@ async function handleShowProfileDetail(chatId: string | number, id: string) {
 
   const detail = `
 👤 *FICHA DEL PERFIL*: ${profile.name}
-
-🆔 *ID*: \`${profile.id}\`
-📍 *Zona*: ${profile.zone}
-💰 *Precio VIP*: Bs. ${profile.rate_bs}
-📌 *Estado*: ${profile.status.toUpperCase()}
-📷 *Fotos*: ${profile.photos.length} adjunta(s)
-📲 *Telegram Msg ID*: ${profile.telegram_message_id ? `#${profile.telegram_message_id}` : 'No publicado'}
-📅 *Última Actualización*: ${new Date(profile.updated_at).toLocaleString()}
 
 📝 *Descripción*:
 ${profile.description}
@@ -3693,6 +3593,8 @@ async function handlePromptStatusChange(chatId: string | number, id: string) {
     return;
   }
 
+  //// MODIFICACION 001 /// Botonera de cambio de estado (SOLO ADMIN, via /estado ID o botones del Panel). NO se publica al canal: lo publicado usa buildChannelPostMarkup.
+  //// DETALLE: Se conservo intacta esta botonera; unico parche previo en esta zona = ficha de perfil sin datos sensibles (ID/Zona/Precio/Fotos/etc).
   await sendMessage(chatId, `📌 *Cambiar Estado para ${profile.name}* (Actual: ${profile.status}):`, {
     reply_markup: {
       inline_keyboard: [
@@ -3905,4 +3807,3 @@ export async function createStarsInvoiceLink(title: string, description: string,
   }
   return null;
 }
-

@@ -72,7 +72,7 @@ import {
   getTelegramFilePath,
   uploadBufferToTelegram,
   showPaymentMethodDetail,
-  callTelegramApi, buildChannelPostMarkup, formatTelegramCaptionForMarkdown, isPublicTelegramCallbackData } from './telegram.js';
+  callTelegramApi, buildChannelPostMarkup, isPublicTelegramCallbackData } from './telegram.js';
 
 export const router = express.Router();
 
@@ -1278,8 +1278,6 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
           }
           return null;
         }
-        // Telegram tumba el post completo si llega un botón sin url ni callback_data.
-        if (!button || (!button.url && !button.callback_data)) return null;
         return button;
       }).filter(Boolean));
       replyMarkup.inline_keyboard = replyMarkup.inline_keyboard.filter((row: any[]) => row.length > 0);
@@ -1287,16 +1285,15 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
     const publishResults: Array<{ url: string; messageId?: number; error?: string }> = [];
     for (const media of mediaToPublish) {
       const caption = mediaDescriptions[media.url] || comment;
-      const safeCaption = formatTelegramCaptionForMarkdown(caption);
       const method = media.isVideo ? 'sendVideo' : 'sendPhoto';
       const field = media.isVideo ? 'video' : 'photo';
       const mediaTarget = media.fileId || media.url;
       const sendResult = await callTelegramApi(method, {
         chat_id: config.channelId,
         [field]: mediaTarget,
-        caption: safeCaption,
+        caption,
         has_spoiler: true,
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'Markdown',
         reply_markup: replyMarkup
       });
       if (sendResult.ok && sendResult.result?.message_id) {
@@ -1537,7 +1534,6 @@ router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req
     }
 
     const captionText = profile.media_descriptions?.[media_url] || profile.description || '';
-    const safeCaption = formatTelegramCaptionForMarkdown(captionText);
 
     res.json({ success: true, message: 'Compartido exitosamente en el Canal VIP.' });
 
@@ -1553,9 +1549,9 @@ router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req
         await callTelegramApi(method, {
           chat_id: channelId,
           [field]: mediaTarget,
-          caption: safeCaption,
+          caption: captionText,
           has_spoiler: true,
-          parse_mode: 'MarkdownV2',
+          parse_mode: 'Markdown',
           reply_markup: replyMarkup
         });
         console.log("Compartido en Canal Híbrido finalizado con éxito.");

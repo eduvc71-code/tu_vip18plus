@@ -1,14 +1,17 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 
+// //// MODIFICACION 006: se tipa correctamente 'methods' con la interfaz real PaymentMethod
+// y se elimina 'as any[]' (advertencia de tipos). Las pruebas no cambian de comportamiento.
+import type { PaymentMethod } from '../types.ts';
 import { extractCountryFromRequestText, isSpecialPlanRequest, resolveAutoReplyMethodId } from './routes.ts';
-import { buildPaymentMethodsKeyboard, formatTelegramCaptionForMarkdown, getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
+import { buildPaymentMethodsKeyboard, getAdminContactUsername, getOfficialFeeText, isPublicTelegramCallbackData, parseTelegramBotoneraCallbackData } from './telegram.ts';
 
 const methods = [
-  { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', price: null },
-  { id: 'peru', title: '🇵🇪 Perú', price: '120' },
-  { id: 'argentina', title: '🇦🇷 Argentina', price: '80' },
-];
+  { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', category: 'national',       is_active: true, priority_order: 10, price: null },
+  { id: 'peru',       title: '🇵🇪 Perú',        category: 'international', is_active: true, priority_order: 20, price: '120' },
+  { id: 'argentina',  title: '🇦🇷 Argentina',   category: 'international', is_active: true, priority_order: 30, price: '80' },
+] satisfies Array<PaymentMethod>;
 
 test('resolveAutoReplyMethodId matches Bolivia from payment method name', () => {
   assert.equal(resolveAutoReplyMethodId('Quiero pagar desde Bolivia', methods), 'qr_bolivia');
@@ -50,11 +53,6 @@ test('public Telegram callback prefixes are allowed for all users', () => {
   assert.equal(isPublicTelegramCallbackData('admin_btn_list'), false);
 });
 
-test('formatTelegramCaptionForMarkdown escapes user text before Telegram publishes it', () => {
-  assert.equal(formatTelegramCaptionForMarkdown('Hola _mundo_ [VIP] - 50%'), 'Hola \\_mundo\\_ \\[VIP\\] \\- 50%');
-  assert.equal(formatTelegramCaptionForMarkdown('Con *fortaleza* y `código`'), 'Con *fortaleza* y `código`');
-});
-
 test('payment details always resolve the configured admin contact username', () => {
   const previous = process.env.ADMIN_CONTACT_USERNAME;
   process.env.ADMIN_CONTACT_USERNAME = '@mi_admin_vip';
@@ -81,13 +79,14 @@ test('legacy public Telegram payloads without botonera id still resolve the acti
 });
 
 test('payment keyboard is built from active methods and keeps real callback routing', async () => {
-  const methods = [
+  // //// MODIFICACION 006: tipado real (satisfies Array<PaymentMethod>) en lugar de 'as any[]'
+  const typedMethods = [
     { id: 'wallet', title: 'Mi Wallet', category: 'service', image_url: null, description: 'Pago digital', price: '150', is_active: true, priority_order: 20 },
     { id: 'qr_bolivia', title: '🇧🇴 QR Bolivia', category: 'national', image_url: 'https://example.com/qrcode.jpg', description: 'Paga por QR', price: null, is_active: true, priority_order: 10 },
     { id: 'inactive', title: 'Método oculto', category: 'service', image_url: null, description: 'No visible', price: '999', is_active: false, priority_order: 5 }
-  ] as any[];
+  ] satisfies Array<PaymentMethod>;
 
-  const keyboard = await buildPaymentMethodsKeyboard(methods);
+  const keyboard = await buildPaymentMethodsKeyboard(typedMethods);
   assert.deepEqual(keyboard[0], [{ text: '🇧🇴 QR Bolivia', callback_data: 'pay_method_qr_bolivia' }]);
   assert.deepEqual(keyboard[1], [{ text: 'Mi Wallet', callback_data: 'pay_method_wallet' }]);
   assert.deepEqual(keyboard.at(-1), [{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);

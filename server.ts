@@ -7,7 +7,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { router as apiRouter, startAutoReplyWorker } from './src/server/routes.js';
 import { getDb } from './src/server/db.js';
-import { updateBotMenuButton, registerBotWebhook, getBotConfig } from './src/server/telegram.js';
+import { updateBotMenuButton, registerBotWebhook, getBotConfig } from './src/server/telegram';
 
 async function startServer() {
   // Ensure DB initialized
