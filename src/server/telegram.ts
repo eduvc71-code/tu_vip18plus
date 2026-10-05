@@ -2089,8 +2089,10 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
-    `Aquí podrás explorar avances exclusivos, contenido fotográfico y acceder al contenido oficial sin censura.\n\n` +
-    `👉 *Para no perderte ninguna actualización, únete a nuestro Canal Free y pulsa abajo para abrir la Mini App:*`;
+    `🩷 Veo que te ganó la curiosidad y quieres descubrir más de mí. 😋\n\n` +
+    `¿Te gustaría descubrir mi lado más exclusivo? 🙈 Estoy en el mundo +18 hace 3 años y déjame decirte que lo que tengo para ti es totalmente rico y único.\n\n` +
+    `Te ofrezco una gran variedad de videos y fotos que solo puedes ver en mi canal privado VIP. Solo allí podrás ver lo que no muestro en ningún otro lado. 🍬\n\n` +
+    `👉 *Para no perderte de nada, pulsa "Ver lo Exclusivo y para info de mi Contenido VIP, pulsa "Suscripción Autonmatica" :*`;
 
   const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
   const inlineKeyboard: any[][] = [];
