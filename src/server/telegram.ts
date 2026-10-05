@@ -2168,6 +2168,73 @@ async function sendAutoSubscriptionMenu(chatId: string | number, sourceMessageId
  * [NUEVO] Pide al cliente el nombre de su país para el flujo SUSCRIPCIÓN AUTOMÁTICA.
  * Setea estado VIP_AUTO_PLAN con el plan elegido (mes / seis / permanente).
  */
+const MONTHLY_DEFAULT_COUNTRIES = [
+  'Bolivia', 'Perú', 'Chile', 'Argentina', 'Colombia',
+  'Ecuador', 'México', 'Paraguay', 'Uruguay', 'España', 'Rusia'
+];
+
+async function getMonthlyCountriesList(): Promise<string[]> {
+  const set = new Set<string>();
+
+  try {
+    const methods = await getPublicPaymentMethods();
+    for (const method of methods) {
+      if (!method.is_active) continue;
+      const country = resolveCountryNameFromPaymentMethodTitle(method.title || '');
+      if (country) set.add(country);
+    }
+  } catch {
+    // fallback silencioso
+  }
+
+  for (const c of MONTHLY_DEFAULT_COUNTRIES) {
+    set.add(c);
+  }
+
+  return Array.from(set).filter(c => normalizeTelegramKey(c) !== 'venezuela');
+}
+
+function getCountryFlag(countryName: string): string {
+  const key = normalizeTelegramKey(countryName);
+  const flagMap: Record<string, string> = {
+    'bolivia': '🇧🇴',
+    'peru': '🇵🇪',
+    'chile': '🇨🇱',
+    'argentina': '🇦🇷',
+    'colombia': '🇨🇴',
+    'ecuador': '🇪🇨',
+    'espana': '🇪🇸',
+    'mexico': '🇲🇽',
+    'paraguay': '🇵🇾',
+    'brasil': '🇧🇷',
+    'uruguay': '🇺🇾',
+    'rusia': '🇷🇺',
+    'venezuela': '🇻🇪'
+  };
+  return flagMap[key] || '🌍';
+}
+
+async function buildMonthlyCountriesKeyboard(): Promise<any[][]> {
+  const countries = await getMonthlyCountriesList();
+
+  const rows: any[][] = [];
+  for (let i = 0; i < countries.length; i += 2) {
+    const row: any[] = [];
+    for (const country of countries.slice(i, i + 2)) {
+      const key = normalizeTelegramKey(country);
+      const flag = getCountryFlag(country);
+      row.push({
+        text: `${flag} ${country}`,
+        callback_data: `vip_autoplan_country_${key}`
+      });
+    }
+    rows.push(row);
+  }
+  rows.push([{ text: '🌍 Otros Países', callback_data: 'vip_autoplan_other' }]);
+  rows.push([{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]);
+  return rows;
+}
+
 async function askAutoPlanCountry(
   chatId: string | number,
   planId: string,
@@ -2208,6 +2275,113 @@ async function askAutoPlanCountry(
  *   - Mes         → muestra métodos de pago del país (o "Solicitar Información")
  *   - 6 Meses / Permanente → crea lead directo (proceso idéntico al de "Otros Países")
  */
+async function handleAutoPlanCountrySelected(
+  chatId: string | number,
+  fromUser: any,
+  userIdStr: string,
+  countryId: string,
+  sourceMessageId?: number | string | null
+) {
+  const autoPlanState = await getConversationState(userIdStr);
+  if (!autoPlanState || autoPlanState.step !== 'VIP_AUTO_PLAN') {
+    await sendMessage(chatId, '⚠️ La sesión expiró. Escribe /start vipauto para volver a empezar.');
+    return;
+  }
+
+  const draft = (autoPlanState.draft_data || {}) as any;
+  const planType = String(draft.plan_type || 'monthly');
+  const planLabel = String(draft.plan_label || 'SUSCRIPCIÓN VIP');
+  const planEmoji = String(draft.plan_emoji || '💠');
+
+  const countries = await getMonthlyCountriesList();
+  const matchedCountryName = countries.find(
+    c => normalizeTelegramKey(c) === normalizeTelegramKey(countryId)
+  ) || countryId;
+  const countryName = matchedCountryName;
+
+  if (planType === 'monthly') {
+    const methods = await getRelevantPaymentMethodsForCountry(countryName);
+
+    if (methods.length > 0) {
+      const rows: any[][] = methods.map((m: PaymentMethod) => [
+        { text: m.title, callback_data: `pay_method_${m.id}` }
+      ]);
+      rows.push([{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]);
+
+      await clearConversationState(userIdStr).catch(() => {});
+
+      const text =
+        `${planEmoji} *${planLabel}* ${planEmoji}\n\n` +
+        `${getCountryFlag(countryName)} *País:* ${countryName}\n\n` +
+        `💳 *Selecciona el método de pago que prefieras:*\n\n` +
+        `💳 *Otros Métodos de Pago disponibles:*\n` +
+        `🌐 Western Union · 💸 PayPal · 💰 Remitly · 🪙 CriptoMoneda\n\n` +
+        `📲 _Envía tu comprobante a:_ [@${getAdminContactUsername()}](https://t.me/${getAdminContactUsername()})`;
+
+      return await editOrSend(chatId, sourceMessageId, text, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows }
+      });
+    }
+
+    await clearConversationState(userIdStr).catch(() => {});
+    return await processVipLead({
+      chatId: String(chatId),
+      user: fromUser,
+      country: countryName,
+      planType: 'monthly',
+      planLabel,
+      planEmoji,
+      sourceMessageId
+    });
+  }
+
+  await clearConversationState(userIdStr).catch(() => {});
+  return await processVipLead({
+    chatId: String(chatId),
+    user: fromUser,
+    country: countryName,
+    planType,
+    planLabel,
+    planEmoji,
+    sourceMessageId
+  });
+}
+
+async function askAutoPlanCountryOther(
+  chatId: string | number,
+  sourceMessageId?: number | string | null
+) {
+  const autoPlanState = await getConversationState(String(chatId));
+  if (!autoPlanState || autoPlanState.step !== 'VIP_AUTO_PLAN') {
+    await sendMessage(chatId, '⚠️ La sesión expiró. Escribe /start vipauto para volver a empezar.');
+    return;
+  }
+
+  const draft = (autoPlanState.draft_data || {}) as any;
+
+  await setConversationState(String(chatId), 'VIP_AUTO_PLAN_OTHER', {
+    plan_id: draft.plan_id,
+    plan_type: draft.plan_type,
+    plan_label: draft.plan_label,
+    plan_emoji: draft.plan_emoji
+  } as any);
+
+  const text =
+    `🌍 *OTROS PAÍSES*\n\n` +
+    `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\n\n` +
+    `No lo escribas con @ ni abreviaturas, solo el nombre.`;
+
+  const keyboard = [
+    [{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]
+  ];
+
+  return await editOrSend(chatId, sourceMessageId, text, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
 async function handleAutoPlanCountryText(
   chatId: string | number,
   userIdStr: string,
