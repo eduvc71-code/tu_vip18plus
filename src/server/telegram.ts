@@ -691,6 +691,9 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
   const keyboard = [
     [
       { text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }
+    ],
+    [
+      { text: '⭐ SUSCRIPCIÓN AUTOMÁTICA', url: `https://t.me/${username}?start=vipauto` }
     ]
   ];
   return {
@@ -2114,10 +2117,15 @@ export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
 
 async function askOtherCountry(chatId: string | number, botoneraId: string, sourceMessageId?: number | string | null) {
   await setConversationState(String(chatId), 'VIP_OTHER_COUNTRY', { botonera_id: botoneraId } as any);
-  const text = `🌍 *OTROS PAÍSES*\\n\\n` +
-    `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\\n\\n` +
+  const text = `🌍 *OTROS PAÍSES*\n\n` +
+    `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\n\n` +
     `No lo escribas con @ ni abreviaturas, solo el nombre. Lo enviaremos directo a la Administradora para coordinar tu suscripción 💎`;
-  return await editOrSend(chatId, sourceMessageId, text);
+  const keyboard = [
+    [{ text: '❌ Cancelar', callback_data: `vip_other_cancel_${botoneraId}` }]
+  ];
+  return await editOrSend(chatId, sourceMessageId, text, {
+    reply_markup: { inline_keyboard: keyboard }
+  });
 }
 
 async function handleVipOtherCountryText(chatId: string | number, userIdStr: string, message: any, state: any): Promise<boolean> {
@@ -2185,10 +2193,17 @@ export async function sendTelegramPlanOptions(chatId: string | number, botoneraI
     || normalizeTelegramKey(String(countryId || '')) === 've';
   if (isVenezuelaSelected) {
     await editOrSend(chatId, sourceMessageId,
-      `🌍 *OTROS PAÍSES*\\n\\n` +
-      `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\\n\\n` +
+      `🌍 *OTROS PAÍSES*\n\n` +
+      `Escribe aquí el *nombre de tu país* (por ejemplo: Japón, Italia, Portugal...).\n\n` +
       `Lo enviaremos directo a la Administradora para coordinar tu suscripción 💎`,
-      { parse_mode: 'Markdown' });
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '❌ Cancelar', callback_data: `vip_other_cancel_${botoneraId}` }]
+          ]
+        }
+      });
     await setConversationState(String(chatId), 'VIP_OTHER_COUNTRY', { botonera_id: String(botoneraId), free_country_hint: 'Venezuela' } as any);
     return;
   }
@@ -2338,32 +2353,56 @@ export async function sendTelegramPlanConfirmation(
   const adminUsername = getAdminContactUsername();
   const adminUrl = `https://t.me/${adminUsername}`;
 
-  // [NUEVO] 6 Meses o Permanente → captura de país por texto + notificación admin
+  // [NUEVO] Guardar contexto para el handler del botón "Solicitar Información"
+  // (permite que el callback vip_lead_send sepa qué país, plan y botonera mostrar)
+  try {
+    await setConversationState(String(chatId), 'VIP_LEAD_PENDING', {
+      botonera_id: botoneraId,
+      country_id: countryId,
+      plan_id: planId
+    } as any);
+  } catch {
+    // Si falla guardar el estado, el botón "Solicitar Información" mostrará el mensaje de expiración
+  }
+
+  // [FIX] 6 Meses o Permanente → resolver país y enviar lead directo SIN volver a pedirlo
   if (planType === 'semester' || planType === 'permanent') {
     const meta = planType === 'semester'
       ? { emoji: '💎', label: 'SUSCRIPCIÓN SEMESTRAL (6 MESES)' }
       : { emoji: '💙', label: 'SUSCRIPCIÓN PERMANENTE' };
 
-    // [FIX] Acceso seguro al estado de conversación: se castea draft_data a any
-    // para evitar errores de tipos con propiedades dinámicas (free_country).
-    let existingFreeCountry: string | undefined;
-    try {
-      const convState = await getConversationState(String(chatId));
-      const draftData = (convState?.draft_data || {}) as any;
-      const rawCountry = draftData?.free_country;
-      if (typeof rawCountry === 'string' && rawCountry.trim().length > 0) {
-        existingFreeCountry = rawCountry.trim();
+    // Resolver el país a enviar al lead en este orden:
+    //   1) País REAL de la botonera (el cliente ya lo eligió) → country.name
+    //   2) País escrito en "Otros Países" (flujo free_country)
+    //   3) Si no hay ninguno → pedirlo con askPlanCountry()
+    let resolvedCountry: string | undefined;
+
+    if (country) {
+      const countryName = String(country.name || country.label || '').trim();
+      if (countryName) {
+        resolvedCountry = countryName;
       }
-    } catch {
-      existingFreeCountry = undefined;
     }
 
-    // Si ya tenemos país escrito por el usuario (flujo "Otros Países") → procesar lead directo
-    if (!country && existingFreeCountry && fromUser) {
+    if (!resolvedCountry) {
+      try {
+        const convState = await getConversationState(String(chatId));
+        const draftData = (convState?.draft_data || {}) as any;
+        const rawCountry = draftData?.free_country;
+        if (typeof rawCountry === 'string' && rawCountry.trim().length > 0) {
+          resolvedCountry = rawCountry.trim();
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // Si tenemos país resuelto y usuario válido → procesar lead directo
+    if (resolvedCountry && fromUser) {
       return await processVipLead({
         chatId: String(chatId),
         user: fromUser,
-        country: existingFreeCountry,
+        country: resolvedCountry,
         planType,
         planLabel: meta.label,
         planEmoji: meta.emoji,
@@ -2371,14 +2410,14 @@ export async function sendTelegramPlanConfirmation(
       });
     }
 
-    // Caso normal: pedir país al usuario
+    // Solo pedir país si no hay país en ninguna fuente
     return await askPlanCountry(chatId, botoneraId, countryId, planId, sourceMessageId);
   }
 
   // [MANTENIDO] Mensual con país libre → "Otros Métodos de Pago" (flujo existente)
   if (!country) {
     const rows: any[][] = [
-      [{ text: '💎 Solicitar Información', url: adminUrl }],
+      [{ text: '💎 Solicitar Información', callback_data: 'vip_lead_send' }],
       [{ text: '💳 Otros Métodos de Pago', callback_data: `vip_othermethods_${botonera.id}__${countryId}` }],
       [{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]
     ];
@@ -2395,7 +2434,7 @@ export async function sendTelegramPlanConfirmation(
   const relevantMethods = await getRelevantPaymentMethodsForCountry(country?.name || '');
   const rows: any[][] = relevantMethods.length > 0
     ? relevantMethods.map((method: PaymentMethod) => [{ text: method.title, callback_data: `pay_method_${method.id}` }])
-    : [[{ text: '💎 Solicitar Información', url: adminUrl }]];
+    : [[{ text: '💎 Solicitar Información', callback_data: 'vip_lead_send' }]];
 
   rows.push([{ text: '💳 Otros Métodos de Pago', callback_data: `vip_othermethods_${botonera.id}__${countryId}` }]);
   rows.push([{ text: '🔙 Cambiar plan', callback_data: `vip_country_${botonera.id}__${countryId}` }]);
@@ -2421,7 +2460,7 @@ export async function sendOtherPaymentMethods(chatId: string | number, sourceMes
     `• PIX\n\n` +
     `📲 _Escríbeme al privado y coordinamos tu suscripción:_ [@${adminUsername}](${adminUrl})`;
   const keyboard = [
-    [{ text: '💎 Solicitar Información', url: adminUrl }],
+    [{ text: '💎 Solicitar Información', callback_data: 'vip_lead_send' }],
     [{ text: '🔙 Volver', url: `https://t.me/${String(getBotConfig().username || '').replace(/^@/, '')}?start=vipauto` }]
   ];
   return await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: keyboard }, parse_mode: 'Markdown' });
@@ -2650,6 +2689,27 @@ async function handleCallbackQuery(cb: any) {
     return;
   }
 
+  // [NUEVO] Cancelar el flujo "Otros Países" → volver a la selección de países
+  if (data.startsWith('vip_other_cancel_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const botoneraId = data.slice('vip_other_cancel_'.length);
+    await clearConversationState(userIdStr);
+
+    const items = await getAllTelegramBotoneras();
+    const botonera = items.find(i => i.id === botoneraId) || (await getActiveTelegramBotoneraFlow());
+
+    if (botonera) {
+      const text = `*${botonera.title || 'SUSCRIPCIÓN VIP'}*\n\n${botonera.intro || 'Selecciona tu país para continuar.'}`;
+      const keyboard = buildTelegramBotoneraKeyboard(botonera);
+      await editOrSend(chatId, cb.message?.message_id, text, {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
+    }
+    return;
+  }
+
   if (data.startsWith('vip_other_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const botoneraId = data.slice('vip_other_'.length);
@@ -2661,6 +2721,62 @@ async function handleCallbackQuery(cb: any) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     await sendOtherPaymentMethods(chatId, cb.message?.message_id);
     return;
+  }
+
+  // [NUEVO] Botón "Solicitar Información" → crea lead real y notifica a la admin
+  if (data === 'vip_lead_send') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+
+    // Leer el contexto guardado al mostrar la confirmación
+    const pendingState = await getConversationState(String(chatId));
+    if (!pendingState || pendingState.step !== 'VIP_LEAD_PENDING') {
+      await sendMessage(
+        chatId,
+        '⚠️ La solicitud expiró o no es válida.\n\nEscribe /start vipauto para volver a elegir tu plan VIP.'
+      );
+      return;
+    }
+
+    const draft = (pendingState.draft_data || {}) as any;
+    const botoneraId = String(draft.botonera_id || '');
+    const countryId = String(draft.country_id || '');
+    const planId = String(draft.plan_id || '');
+
+    // Resolver nombre real del país desde la botonera
+    const items = await getAllTelegramBotoneras();
+    const botonera = items.find(i => i.id === botoneraId);
+    const country = botonera?.countries?.find((c: any) => String(c.id) === String(countryId));
+    const countryName = country
+      ? String(country.name || country.label || countryId).trim()
+      : String(countryId || 'No especificado').trim();
+
+    // Detectar tipo de plan para la etiqueta
+    const plan = botonera?.plans?.find((p: any) => String(p.id) === String(planId));
+    const planType = detectPlanType(plan);
+    const planLabel = planType === 'semester'
+      ? 'SUSCRIPCIÓN SEMESTRAL (6 MESES)'
+      : planType === 'permanent'
+      ? 'SUSCRIPCIÓN PERMANENTE'
+      : planType === 'monthly'
+      ? 'SUSCRIPCIÓN MENSUAL'
+      : String(plan?.name || 'SOLICITUD DE INFORMACIÓN VIP').toUpperCase();
+    const planEmoji = planType === 'semester'
+      ? '💎'
+      : planType === 'permanent'
+      ? '💙'
+      : planType === 'monthly'
+      ? '🧸'
+      : '💠';
+
+    return await processVipLead({
+      chatId: String(chatId),
+      user: cb.from,
+      country: countryName,
+      planType: planType === 'unknown' ? 'info' : planType,
+      planLabel,
+      planEmoji,
+      sourceMessageId: cb.message?.message_id
+    });
   }
 
   if (data.startsWith('vip_plan_')) {
