@@ -1330,7 +1330,6 @@ router.post('/admin/profiles/:id/content/free', requireAdminAuth, upload.array('
         chat_id: config.channelId,
         [field]: mediaTarget,
         caption,
-        has_spoiler: true,
         parse_mode: 'Markdown',
         reply_markup: replyMarkup
       });
@@ -1588,7 +1587,6 @@ router.post('/admin/profiles/:id/share-to-channel', requireAdminAuth, async (req
           chat_id: channelId,
           [field]: mediaTarget,
           caption: captionText,
-          has_spoiler: true,
           parse_mode: 'Markdown',
           reply_markup: replyMarkup
         });

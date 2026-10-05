@@ -637,7 +637,6 @@ export async function syncProfileToChannel(profileId: string, performer: string 
       chat_id: channelId,
       [field]: mediaTarget,
       caption,
-      has_spoiler: true,
       parse_mode: 'Markdown',
       reply_markup: replyMarkup
     });
@@ -792,9 +791,7 @@ export async function uploadBufferToTelegram(
       formData.append('parse_mode', 'Markdown');
     }
     
-    if (String(targetChatId) === channelId) {
-      formData.append('has_spoiler', 'true');
-    }
+    // has_spoiler removido: el filtro de desenfoque era solo cosmético
 
   const blob = new Blob([new Uint8Array(buffer)], { type: mimeType });
   formData.append(fieldName, blob, fileName);
@@ -1485,9 +1482,11 @@ export async function processTelegramUpdate(update: any) {
       anyPendingState?.step === 'VIP_OTHER_COUNTRY' ||
       anyPendingState?.step === 'VIP_LEAD_COUNTRY' ||
       anyPendingState?.step === 'VIP_AUTO_PLAN' ||
-      anyPendingState?.step === 'VIP_AUTO_PLAN_OTHER';
+      anyPendingState?.step === 'VIP_AUTO_PLAN_OTHER' ||
+      anyPendingState?.step === 'DIRECT_OTHER_COUNTRY';
     if (isWaitingForCountryText && text.startsWith('/')) {
       await clearConversationState(userIdStr).catch(() => {});
+      
       // No hacemos return: dejamos que el flujo normal procese el comando
     }
   }
@@ -1508,6 +1507,17 @@ export async function processTelegramUpdate(update: any) {
     const vipLeadState = await getConversationState(userIdStr);
     if (vipLeadState?.step === 'VIP_LEAD_COUNTRY' && typeof message.text === 'string') {
       await handleConversationStep(chatId, userIdStr, message, vipLeadState);
+      return;
+    }
+  }
+
+  // [NUEVO] Captura texto libre de país para el flujo DIRECTO (Otros Países)
+  {
+    const directOtherState = await getConversationState(userIdStr);
+    console.log(`[DirectFlow] Estado actual del usuario ${userIdStr}: ${directOtherState?.step || 'ninguno'}`);
+    if (directOtherState?.step === 'DIRECT_OTHER_COUNTRY' && typeof message.text === 'string') {
+      console.log(`[DirectFlow] 🎯 Detectado DIRECT_OTHER_COUNTRY para "${message.text}"`);
+      await handleConversationStep(chatId, userIdStr, message, directOtherState);
       return;
     }
   }
@@ -1781,32 +1791,46 @@ export async function processTelegramUpdate(update: any) {
 // Conversation Steps Processor
 async function handleConversationStep(chatId: string | number, userId: string, message: any, state: any) {
   const text = message.text ? message.text.trim() : '';
+  console.log(`[handleConversationStep] Step=${state.step} | text="${text}"`);
 
   switch (state.step) {
 
     case 'DIRECT_OTHER_COUNTRY': {
-      const rawCountry = String(text || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 80);
-      if (!rawCountry) {
-        await sendMessage(chatId, '✍️ Por favor escribe el nombre de tu país o método de pago.');
-        return;
-      }
+  const rawCountry = String(text || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 80);
+  if (!rawCountry) {
+    await sendMessage(chatId, '✍️ Por favor escribe el nombre de tu país o método de pago.');
+    return;
+  }
 
-      if (message.message_id) {
-        await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: message.message_id }).catch(() => {});
-      }
+  // Borrar el mensaje del usuario (el país escrito) para mantener el chat limpio
+  if (message.message_id) {
+    await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: message.message_id }).catch(() => {});
+  }
 
-      await clearConversationState(userId).catch(() => {});
+  // Enviar confirmación INMEDIATA al cliente ANTES de procesar el lead
+  const { brandName } = getBotConfig();
+  const firstName = message.from?.first_name || 'Cliente';
+  await sendMessage(
+    chatId,
+    `✅ *¡Anotado: ${rawCountry}!*\n\n` +
+    `Gracias, *${firstName}*. La *Administradora* de *${brandName || 'IAM Danii VIP'}* recibió tu solicitud y te contactará por este mismo chat con el precio exacto y las coordenadas de pago para tu suscripción mensual. 🌍💎\n\n` +
+    `_Te recomendamos no compartir datos de pago con nadie más. Toda la coordinación es 100% privada con la Administradora._`
+  ).catch(() => {});
 
-      return await processVipLead({
-        chatId: String(chatId),
-        user: message.from || { id: userId },
-        country: rawCountry,
-        planType: 'monthly',
-        planLabel: 'SUSCRIPCIÓN MENSUAL (OTRO PAÍS)',
-        planEmoji: '🌍',
-        sourceMessageId: null
-      });
-    }
+  // Procesar el lead (crea la solicitud en BD + notifica a la admin)
+  await processVipLead({
+    chatId: String(chatId),
+    user: message.from || { id: userId },
+    country: rawCountry,
+    planType: 'monthly',
+    planLabel: 'SUSCRIPCIÓN MENSUAL (OTRO PAÍS)',
+    planEmoji: '🌍',
+    sourceMessageId: null
+  });
+
+  await clearConversationState(userId).catch(() => {});
+  return;
+}
 
     case 'NEW_NAME': {
       if (!text) {
@@ -2745,6 +2769,7 @@ async function sendDirectPaymentMethods(chatId: string | number, sourceMessageId
 
 async function sendDirectOtherCountriesPrompt(chatId: string | number, sourceMessageId?: number) {
   await setConversationState(String(chatId), 'DIRECT_OTHER_COUNTRY', {} as any);
+  console.log(`[DirectFlow] 🎯 Estado DIRECT_OTHER_COUNTRY guardado para chatId=${chatId}`);
   
   const text = `🌍 *OTROS PAÍSES / MÉTODOS*\n\n` +
     `Escribe el nombre de tu país o el método de pago que usas (Ej: Japón, Italia, PayPal, Cripto...).\n\n` +
