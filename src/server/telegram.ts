@@ -688,14 +688,15 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
-  const keyboard = [
+    const keyboard = [
     [
-      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: botAppUrl }
+      { text: 'Ver lo Exclusivo 🔥', url: botAppUrl }
     ],
     [
-      { text: '⭐ SUSCRIPCIÓN AUTOMÁTICA', url: `https://t.me/${username}?start=vipauto` }
+      { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
     ]
   ];
+
   return {
     inline_keyboard: [
       ...keyboard,
@@ -1244,6 +1245,14 @@ export async function processTelegramUpdate(update: any) {
     if (fromId) {
       await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
     }
+        // 👇 NUEVO: Verificar el modo de botonera
+    const botoneraMode = getSystemSetting('telegram_botonera_mode') || 'legacy';
+    if (botoneraMode === 'direct') {
+      await sendDirectMenu(chatId, message.from?.first_name || 'Cliente');
+      return;
+    }
+    // 👆 Fin de la verificación
+
     const rawParam = text.replace(/^\/start\s+/, '').trim();
     const payload = rawParam.startsWith('vipc_') ? rawParam.slice('vipc_'.length) : (rawParam.startsWith('nav_') ? rawParam.slice('nav_'.length) : rawParam.replace(/^vipauto/i, ''));
     {
@@ -1289,7 +1298,12 @@ export async function processTelegramUpdate(update: any) {
     if (fromId) {
       await registerSubscriber(String(fromId), message.from?.username, message.from?.first_name).catch(() => {});
     }
-    await sendClientPagos(chatId);
+        const botoneraMode = getSystemSetting('telegram_botonera_mode') || 'legacy';
+    if (botoneraMode === 'direct') {
+      await sendDirectPaymentMethods(chatId);
+    } else {
+      await sendClientPagos(chatId);
+    }
     return;
   }
 
@@ -1770,6 +1784,30 @@ async function handleConversationStep(chatId: string | number, userId: string, m
 
   switch (state.step) {
 
+    case 'DIRECT_OTHER_COUNTRY': {
+      const rawCountry = String(text || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 80);
+      if (!rawCountry) {
+        await sendMessage(chatId, '✍️ Por favor escribe el nombre de tu país o método de pago.');
+        return;
+      }
+
+      if (message.message_id) {
+        await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: message.message_id }).catch(() => {});
+      }
+
+      await clearConversationState(userId).catch(() => {});
+
+      return await processVipLead({
+        chatId: String(chatId),
+        user: message.from || { id: userId },
+        country: rawCountry,
+        planType: 'monthly',
+        planLabel: 'SUSCRIPCIÓN MENSUAL (OTRO PAÍS)',
+        planEmoji: '🌍',
+        sourceMessageId: null
+      });
+    }
+
     case 'NEW_NAME': {
       if (!text) {
         await sendMessage(chatId, '⚠️ Por favor envía un nombre válido.');
@@ -2096,13 +2134,14 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
 
   const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
   const inlineKeyboard: any[][] = [];
+  
   inlineKeyboard.push([
-    { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
+    { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }
   ]);
   inlineKeyboard.push([
-    { text: '⭐ SUSCRIPCIÓN AUTOMÁTICA', url: `https://t.me/${botUser || 'Danii_Catalogo_SCZ_bot'}?start=vipauto` }
+    { text: '💳 Métodos de Pago', callback_data: 'direct_show_payments' }
   ]);
-
+  
   const welcomeMediaUrl = getSystemSetting('welcome_media_url');
   const welcomeMediaType = getSystemSetting('welcome_media_type');
 
@@ -2597,6 +2636,129 @@ export async function sendTelegramBotoneraFlow(chatId: string | number, sourceMe
     reply_markup: { inline_keyboard: keyboard }
   });
 }
+
+// ==========================================
+// ⚡ NUEVO FLUJO DIRECTO (SOLO MENSUAL)
+// ==========================================
+
+function getDirectMethodFlag(method: PaymentMethod | string): string {
+  const title = typeof method === 'string' ? method : (method.title || '');
+  const id = typeof method === 'string' ? method : (method.id || '');
+  const lower = `${title} ${id}`.toLowerCase();
+  
+  const flagMatch = title.match(/^(\p{Regional_Indicator}{2}|\p{Emoji})/u);
+  if (flagMatch && !/^[A-Z0-9]/i.test(flagMatch[0])) return flagMatch[0];
+
+  if (lower.includes('bolivia') || /\bbo\b/i.test(lower)) return '🇧🇴';
+  if (lower.includes('peru') || lower.includes('perú') || /\bpe\b/i.test(lower)) return '🇵🇪';
+  if (lower.includes('chile') || /\bcl\b/i.test(lower)) return '🇨🇱';
+  if (lower.includes('argentina') || /\bar\b/i.test(lower)) return '🇦🇷';
+  if (lower.includes('espana') || lower.includes('españa') || /\bes\b/i.test(lower)) return '🇪🇸';
+  if (lower.includes('mexico') || lower.includes('méxico') || /\bmx\b/i.test(lower)) return '🇲🇽';
+  if (lower.includes('paraguay') || /\bpy\b/i.test(lower)) return '🇵🇾';
+  if (lower.includes('brasil') || lower.includes('brazil') || /\bbr\b/i.test(lower)) return '🇧🇷';
+  if (lower.includes('uruguay') || /\buy\b/i.test(lower)) return '🇺🇾';
+  if (lower.includes('colombia') || /\bco\b/i.test(lower)) return '🇨🇴';
+  if (lower.includes('rusia') || lower.includes('russia') || /\bru\b/i.test(lower)) return '🇷🇺';
+  if (lower.includes('ecuador') || /\bec\b/i.test(lower)) return '🇪🇨';
+  if (lower.includes('venezuela') || /\bve\b/i.test(lower)) return '🇻🇪';
+  if (lower.includes('zelle') || lower.includes('estados unidos') || /\bus\b/i.test(lower)) return '🇺🇸';
+  if (lower.includes('cripto') || lower.includes('usdt') || lower.includes('bitcoin') || lower.includes('binance')) return '🪙';
+  if (lower.includes('paypal')) return '💸';
+  if (lower.includes('estrella') || lower.includes('stars')) return '⭐';
+  if (lower.includes('tigo')) return '☎️';
+  if (lower.includes('western') || lower.includes('remitly') || lower.includes('moneygram')) return '🌐';
+  return '💳';
+}
+
+function getDirectCleanTitle(method: PaymentMethod): string {
+  const raw = method.title || '';
+  return raw.replace(/^([A-Z]{2}\s*[-–:]\s*)/i, '').replace(/^(\p{Regional_Indicator}{2}|\p{Emoji})\s*/u, '').trim();
+}
+
+async function sendDirectMenu(chatId: string | number, firstName: string) {
+  const { baseUrl } = getBotConfig();
+  const text = `✨ *¡Hola ${firstName}!* ✨\n\n` +
+    `Bienvenido a mi espacio exclusivo VIP (+18).\n\n` +
+    `Selecciona una opción para continuar:`;
+
+  const inlineKeyboard = [
+    [{ text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }],
+    [{ text: '💳 Métodos de Pago', callback_data: 'direct_show_payments' }]
+  ];
+
+  await sendMessage(chatId, text, { reply_markup: { inline_keyboard: inlineKeyboard } });
+}
+
+async function sendDirectPaymentMethods(chatId: string | number, sourceMessageId?: number) {
+  const methods = await getPublicPaymentMethods();
+  const activeMethods = methods.filter(m => m.is_active);
+
+  if (activeMethods.length === 0) {
+    await editOrSend(chatId, sourceMessageId,
+      `⚠️ *No hay métodos de pago configurados aún.*\n\nPuedes escribir tu país o método directamente para que la administradora te contacte.`,
+      {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🌍 Otros Países / No encuentro mi método', callback_data: 'direct_other_countries' }],
+            [{ text: '🔙 Volver al Menú', callback_data: 'direct_back_menu' }]
+          ]
+        }
+      });
+    return;
+  }
+
+  const boliviaRate = await getBoliviaOfficialRateFromServer();
+
+  const sorted = activeMethods.sort((a, b) => {
+    if (a.id === 'qr_bolivia') return -1;
+    if (b.id === 'qr_bolivia') return 1;
+    return (a.priority_order || 0) - (b.priority_order || 0);
+  });
+
+  const rows: any[][] = [];
+  for (const method of sorted) {
+    const flag = getDirectMethodFlag(method);
+    const cleanTitle = getDirectCleanTitle(method);
+    
+    let priceText = '';
+    if (method.id === 'qr_bolivia' || /bolivia/i.test(method.title || '')) {
+      priceText = boliviaRate ? ` - Bs. ${boliviaRate} / mes` : '';
+    } else if (method.price) {
+      priceText = ` - ${method.price}`;
+    }
+    
+    const label = `${flag} ${cleanTitle}${priceText}`;
+    rows.push([{ text: label, callback_data: `direct_pay_${method.id}` }]);
+  }
+
+  rows.push([{ text: '🌍 Otros Países / No encuentro mi método', callback_data: 'direct_other_countries' }]);
+  rows.push([{ text: '🔙 Volver al Menú', callback_data: 'direct_back_menu' }]);
+
+  const text = `💳 *MÉTODOS DE PAGO DISPONIBLES*\n\n` +
+    `Selecciona el método de tu preferencia para ver los datos y realizar tu suscripción mensual.\n\n` +
+    `_¿No encuentras tu país o método? Toca la última opción._`;
+
+  await editOrSend(chatId, sourceMessageId, text, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
+}
+
+async function sendDirectOtherCountriesPrompt(chatId: string | number, sourceMessageId?: number) {
+  await setConversationState(String(chatId), 'DIRECT_OTHER_COUNTRY', {} as any);
+  
+  const text = `🌍 *OTROS PAÍSES / MÉTODOS*\n\n` +
+    `Escribe el nombre de tu país o el método de pago que usas (Ej: Japón, Italia, PayPal, Cripto...).\n\n` +
+    `El bot lo registrará y la administradora te contactará para coordinar tu suscripción mensual.`;
+
+  await editOrSend(chatId, sourceMessageId, text, {
+    reply_markup: { inline_keyboard: [[{ text: '❌ Cancelar', callback_data: 'direct_back_menu' }]] },
+    parse_mode: 'Markdown'
+  });
+}
+
+// ==========================================
+// FIN NUEVO FLUJO DIRECTO
+// ==========================================
 
 export async function sendTelegramPlanOptions(chatId: string | number, botoneraId: string, countryId: string, sourceMessageId?: number | string | null) {
   const items = await getAllTelegramBotoneras();
@@ -3270,6 +3432,32 @@ async function handleCallbackQuery(cb: any) {
   if (isPublicTelegramCallbackData(data)) {
     console.info('[TelegramCallbackPublicAllowed]', { data, fromId, chatId });
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    return;
+  }
+
+  if (data === 'direct_show_payments') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await sendDirectPaymentMethods(chatId, cb.message?.message_id);
+    return;
+  }
+
+  if (data === 'direct_other_countries') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await sendDirectOtherCountriesPrompt(chatId, cb.message?.message_id);
+    return;
+  }
+
+  if (data === 'direct_back_menu') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await clearConversationState(userIdStr);
+    await sendDirectMenu(chatId, cb.from?.first_name || 'Cliente');
+    return;
+  }
+
+  if (data.startsWith('direct_pay_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const methodId = data.replace('direct_pay_', '');
+    await showPaymentMethodDetail(chatId, methodId, { sourceMessageId: cb.message?.message_id });
     return;
   }
 

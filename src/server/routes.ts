@@ -288,9 +288,27 @@ router.get('/info', (_req: Request, res: Response) => {
     welcome_media_type: getSystemSetting('welcome_media_type') || '',
     splash_description: getSystemSetting('splash_description') || '',
     operating_mode: getSystemSetting('operating_mode') || 'solo_bot',
+    telegram_botonera_mode: getSystemSetting('telegram_botonera_mode') || 'legacy',
     legal_notice: 'Galería privada y contenido exclusivo para mayores de 18 años.'
   });
 });
+
+// POST Cambiar el modo de la botonera de Telegram (Legacy vs Directo)
+router.post('/admin/settings/botonera-mode', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { mode } = req.body;
+    const cleanMode = mode === 'direct' ? 'direct' : 'legacy';
+    saveSystemSetting('telegram_botonera_mode', cleanMode);
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_BOTONERA_MODE', adminId, `Modo de botonera cambiado a: ${cleanMode.toUpperCase()}`);
+    
+    res.json({ success: true, mode: cleanMode });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cambiar el modo de la botonera' });
+  }
+});
+
 
 // GET Public Profiles
 router.get('/profiles', async (_req: Request, res: Response) => {
@@ -1907,7 +1925,42 @@ router.post('/admin/settings/pinned', requireAdminAuth, async (req: Request, res
   }
 });
 
+// POST Cambiar el modo de la botonera de Telegram (Legacy vs Directo)
+router.post('/admin/settings/botonera-mode', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { mode } = req.body;
+    const cleanMode = mode === 'direct' ? 'direct' : 'legacy';
+    saveSystemSetting('telegram_botonera_mode', cleanMode);
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_BOTONERA_MODE', adminId, `Modo de botonera cambiado a: ${cleanMode.toUpperCase()}`);
+    
+    res.json({ success: true, mode: cleanMode });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cambiar el modo de la botonera' });
+  }
+});
+
+// POST Cambiar el modo de la botonera de Telegram (Legacy vs Directo)
+router.post('/admin/settings/botonera-mode', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { mode } = req.body;
+    const cleanMode = mode === 'direct' ? 'direct' : 'legacy';
+    saveSystemSetting('telegram_botonera_mode', cleanMode);
+    
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('UPDATE_BOTONERA_MODE', adminId, `Modo de botonera cambiado a: ${cleanMode.toUpperCase()}`);
+    
+    res.json({ success: true, mode: cleanMode });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al cambiar el modo de la botonera' });
+  }
+});
+
+// POST Upload Welcome Media
+
 // POST Upload Welcome Media (Photo or Video for Bot onboarding)
+
 router.post('/admin/settings/welcome-media', requireAdminAuth, upload.single('welcome_media'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {

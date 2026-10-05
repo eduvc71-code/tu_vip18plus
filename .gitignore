@@ -7,3 +7,29 @@ PLAN_MAESTRO_100_TELEGRAM.txt
 # Bases de datos locales
 *.sqlite-shm
 *.sqlite-wal
+
+# Bases de datos principales
+*.sqlite
+*.db
+
+# Carpeta de datos completa
+data/
+
+# Uploads y caché de Telegram
+public/uploads/
+public/uploads/tg_cache/
+
+# Backups locales
+backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Archivos temporales
+*.tmp
+*.temp

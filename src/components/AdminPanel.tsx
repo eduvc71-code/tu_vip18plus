@@ -718,6 +718,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // Operating Mode state (Modo A: solo_bot / Modo B: bot_and_channel)
   const [operatingMode, setOperatingMode] = useState<'solo_bot' | 'bot_and_channel'>('solo_bot');
+  const [botoneraMode, setBotoneraMode] = useState<'legacy' | 'direct'>('legacy');
   const [updatingMode, setUpdatingMode] = useState(false);
 
   // Previsualizador de Pantallas state (Mini App y Telegram)
@@ -848,6 +849,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (infoData.welcome_media_type !== undefined) setWelcomeMediaType(infoData.welcome_media_type || 'photo');
         if (infoData.splash_description !== undefined) setSplashDescription(infoData.splash_description || '');
         if (infoData.operating_mode) setOperatingMode(infoData.operating_mode);
+        if (infoData.telegram_botonera_mode) setBotoneraMode(infoData.telegram_botonera_mode);
+        if (infoData.telegram_botonera_mode) setBotoneraMode(infoData.telegram_botonera_mode);
       }
       
     } catch {
@@ -1496,7 +1499,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleRegisterWebhook = async () => {
+const handleToggleBotoneraMode = async (newMode: 'legacy' | 'direct') => {
+  try {
+    setBotoneraMode(newMode);
+    await fetch('/api/admin/settings/botonera-mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ mode: newMode })
+    });
+    setMessage({ type: 'success', text: `Modo de botonera: ${newMode === 'direct' ? '⚡ Directo (Solo Mensual)' : '📋 Tradicional (Completo)'}` });
+  } catch {
+    setMessage({ type: 'error', text: 'Error al cambiar el modo de la botonera' });
+  }
+};
+
+const handleRegisterWebhook = async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/webhook/setup', {
@@ -4343,6 +4360,102 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           <span className="text-emerald-400 font-bold">✓</span> Permite difusión masiva y viralidad en Telegram.
                         </li>
                       </ul>
+                    </button>
+                  </div>
+                </div>
+
+                {/* SELECTOR DE MODO DE BOTONERA */}
+                <div className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
+                  <div>
+                    <h4 className="text-base font-extrabold text-white flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-amber-400" /> Modo de Botonera en Telegram
+                    </h4>
+                    <p className="text-zinc-400 text-xs mt-0.5">
+                      Elige cómo verán los clientes el menú de planes al tocar "Suscripción Automática".
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBotoneraMode('legacy')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        botoneraMode === 'legacy'
+                          ? 'bg-amber-500/15 border-amber-500 shadow-lg shadow-amber-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white">📋 Tradicional (Completo)</span>
+                        {botoneraMode === 'legacy' && <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />}
+                      </div>
+                      <p className="text-amber-300/90 text-[11px] font-bold mt-1">Planes: Mensual, 6 Meses, Permanente</p>
+                      <p className="text-[11px] text-zinc-400 mt-2">Mantiene la botonera compleja con múltiples pasos y países.</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBotoneraMode('direct')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        botoneraMode === 'direct'
+                          ? 'bg-emerald-500/15 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white">⚡ Directo (Solo Mensual)</span>
+                        {botoneraMode === 'direct' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+                      </div>
+                      <p className="text-emerald-300/90 text-[11px] font-bold mt-1">Planes: Solo Mensual</p>
+                      <p className="text-[11px] text-zinc-400 mt-2">Menú rápido de 3 botones: Ver Exclusivo, Pagos, Otros Países.</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* SELECTOR DE MODO DE BOTONERA */}
+                <div className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
+                  <div>
+                    <h4 className="text-base font-extrabold text-white flex items-center gap-2">
+                      <Sliders className="w-5 h-5 text-amber-400" /> Modo de Botonera en Telegram
+                    </h4>
+                    <p className="text-zinc-400 text-xs mt-0.5">
+                      Elige cómo verán los clientes el menú de planes al tocar "Suscripción Automática".
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBotoneraMode('legacy')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        botoneraMode === 'legacy'
+                          ? 'bg-amber-500/15 border-amber-500 shadow-lg shadow-amber-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white">📋 Tradicional (Completo)</span>
+                        {botoneraMode === 'legacy' && <CheckCircle2 className="w-5 h-5 text-amber-400 shrink-0" />}
+                      </div>
+                      <p className="text-amber-300/90 text-[11px] font-bold mt-1">Planes: Mensual, 6 Meses, Permanente</p>
+                      <p className="text-[11px] text-zinc-400 mt-2">Mantiene la botonera compleja con múltiples pasos y países.</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleBotoneraMode('direct')}
+                      className={`p-4 rounded-2xl border-2 text-left transition-all cursor-pointer relative ${
+                        botoneraMode === 'direct'
+                          ? 'bg-emerald-500/15 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                          : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 opacity-70 hover:opacity-100'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-sm text-white">⚡ Directo (Solo Mensual)</span>
+                        {botoneraMode === 'direct' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />}
+                      </div>
+                      <p className="text-emerald-300/90 text-[11px] font-bold mt-1">Planes: Solo Mensual</p>
+                      <p className="text-[11px] text-zinc-400 mt-2">Menú rápido: Ver Exclusivo, Pagos, Otros Países.</p>
                     </button>
                   </div>
                 </div>
