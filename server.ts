@@ -23,6 +23,15 @@ async function startServer() {
   app.use(express.json({ limit: '60mb' }));
   app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
+  // 🔎 PEGA EL RASTREADOR JUSTO AQUÍ:
+  app.use((req, _res, next) => {
+    if (!req.url.startsWith('/uploads') && !req.url.startsWith('/assets')) {
+      const userAgent = req.headers['user-agent'] || 'Sin User-Agent';
+      console.log(`[BOT HUNT] Método: ${req.method} | Ruta: ${req.url} | User-Agent: ${userAgent}`);
+    }
+    next();
+  });
+
   // Ensure data/uploads exists (important for persistent volumes like Fly.io where public/uploads is a symlink to data/uploads)
   const dataUploadsPath = path.join(process.cwd(), 'data', 'uploads');
   if (!fs.existsSync(dataUploadsPath)) {
