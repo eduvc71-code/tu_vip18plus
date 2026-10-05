@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { B2Manager } from './B2Manager';
 import { Cloud } from 'lucide-react';
-import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, TelegramBotonera, TelegramBotoneraCountry, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
+import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
 import { SplashScreen } from './SplashScreen';
@@ -742,139 +742,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
   const [savingButton, setSavingButton] = useState(false);
 
-  const sanitizeTelegramBotoneraFlow = (botonera: Partial<TelegramBotonera> | null | undefined): Partial<TelegramBotonera> | null | undefined => {
-    if (!botonera) return botonera;
-    return {
-      ...botonera,
-      countries: Array.isArray(botonera.countries) ? botonera.countries.filter(country => country.active) : [],
-      plans: Array.isArray(botonera.plans) ? botonera.plans.filter(plan => plan.active) : []
-    };
-  };
-
-  const buildTelegramCountriesFromPaymentMethods = (methods: PaymentMethod[]): TelegramBotoneraCountry[] => {
-    const countryMap: Record<string, { flag: string; name: string; label: string }> = {
-      bolivia: { flag: '🇧🇴', name: 'Bolivia', label: 'Bolivia' },
-      peru: { flag: '🇵🇪', name: 'Perú', label: 'Perú' },
-      'perú': { flag: '🇵🇪', name: 'Perú', label: 'Perú' },
-      argentina: { flag: '🇦🇷', name: 'Argentina', label: 'Argentina' },
-      chile: { flag: '🇨🇱', name: 'Chile', label: 'Chile' },
-      mexico: { flag: '🇲🇽', name: 'México', label: 'México' },
-      'méxico': { flag: '🇲🇽', name: 'México', label: 'México' },
-      espana: { flag: '🇪🇸', name: 'España', label: 'España' },
-      'españa': { flag: '🇪🇸', name: 'España', label: 'España' },
-      paraguay: { flag: '🇵🇾', name: 'Paraguay', label: 'Paraguay' },
-      brasil: { flag: '🇧🇷', name: 'Brasil', label: 'Brasil' },
-      uruguay: { flag: '🇺🇾', name: 'Uruguay', label: 'Uruguay' },
-      colombia: { flag: '🇨🇴', name: 'Colombia', label: 'Colombia' },
-      ecuador: { flag: '🇪🇨', name: 'Ecuador', label: 'Ecuador' },
-      venezuela: { flag: '🇻🇪', name: 'Venezuela', label: 'Venezuela' },
-      rusia: { flag: '🇷🇺', name: 'Rusia', label: 'Rusia' }
-    };
-
-    const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-
-    const items = methods
-      .filter(method => method.is_active && (method.category === 'national' || method.category === 'international'))
-      .map(method => {
-        const raw = method.title
-          .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '')
-          .trim();
-
-        const normalized = normalize(raw);
-        const matchedKey = Object.keys(countryMap).find(countryKey => normalized.includes(normalize(countryKey)));
-        return matchedKey ? countryMap[matchedKey] : null;
-      })
-      .filter((country): country is { flag: string; name: string; label: string } => Boolean(country));
-
-    const uniqueCountries = items.filter((country, index, self) =>
-      index === self.findIndex(item => item.name === country.name)
-    );
-
-    return uniqueCountries.map((country, index) => ({
-      id: country.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-      flag: country.flag,
-      name: country.name,
-      label: country.label,
-      order: index + 1,
-      active: true
-    }));
-  };
-
-  const normalizeTelegramCountryValue = (value: string) => value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-
-  const matchesCountryMethod = (countryName: string, method: PaymentMethod) => {
-    if (!countryName || !method?.title) return false;
-    const normalizedCountry = normalizeTelegramCountryValue(countryName);
-    const normalizedTitle = normalizeTelegramCountryValue(method.title);
-    if (!normalizedCountry || !normalizedTitle) return false;
-    if (method.id === 'qr_bolivia' && normalizedCountry === 'bolivia') return true;
-
-    const aliases: Record<string, string[]> = {
-      bolivia: ['bolivia', 'bo'],
-      peru: ['peru', 'perú', 'pe'],
-      chile: ['chile', 'cl'],
-      argentina: ['argentina', 'ar'],
-      espana: ['espana', 'españa', 'es'],
-      mexico: ['mexico', 'méxico', 'mx'],
-      paraguay: ['paraguay', 'py'],
-      brasil: ['brasil', 'br'],
-      uruguay: ['uruguay', 'uy'],
-      colombia: ['colombia', 'co'],
-      ecuador: ['ecuador', 'ec'],
-      venezuela: ['venezuela', 've'],
-      rusia: ['rusia', 'ru']
-    };
-
-    const aliasSet = aliases[normalizedCountry] || [normalizedCountry];
-    return aliasSet.some(alias => normalizedTitle.includes(alias));
-  };
-
-  const buildDefaultTelegramBotonera = (methods: PaymentMethod[] = []): TelegramBotonera => ({
-    id: '',
-    name: 'Botonera VIP',
-    status: 'draft',
-    target: 'channel',
-    title: 'SUSCRIPCIÓN VIP',
-    intro: 'Selecciona tu país para continuar con tu suscripción VIP.',
-    country_label: 'País / Bandera',
-    plan_label: 'Elige tu plan',
-    confirmation_title: 'Solicitar información',
-    confirmation_text: 'Tu solicitud sera atendida en breve. La administradora te enviará un mensaje privado.',
-    contact_text: 'Escríbeme, por Telegram en privado.',
-    is_active: true,
-    countries: buildTelegramCountriesFromPaymentMethods(methods),
-    plans: [
-      { id: 'mes', name: 'SUSCRIPCION MES', plan_type: 'monthly', price: '', description: 'Acceso por 1 mes.', order: 1, active: true },
-      { id: 'seis', name: 'SUSCRIPCION 6 MESES', plan_type: 'semester', price: '', description: 'Acceso por 6 meses.', order: 2, active: true },
-      { id: 'permanente', name: 'SUSCRIPCION PERMANENTE', plan_type: 'permanent', price: '', description: 'Acceso permanente.', order: 3, active: true }
-    ],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    published_message_id: null
-  });
-
-  const [telegramBotoneras, setTelegramBotoneras] = useState<TelegramBotonera[]>([]);
-  const [telegramBotoneraDraft, setTelegramBotoneraDraft] = useState<TelegramBotonera>(buildDefaultTelegramBotonera());
-  const [selectedTelegramPreviewCountryId, setSelectedTelegramPreviewCountryId] = useState<string | null>(null);
-  const [savingTelegramBotonera, setSavingTelegramBotonera] = useState(false);
-  const [publishingTelegramBotonera, setPublishingTelegramBotonera] = useState(false);
-
-  useEffect(() => {
-    const activeCountries = telegramBotoneraDraft.countries.filter(country => country.active);
-    if (activeCountries.length === 0) {
-      setSelectedTelegramPreviewCountryId(null);
-      return;
-    }
-
-    if (!selectedTelegramPreviewCountryId || !activeCountries.some(country => country.id === selectedTelegramPreviewCountryId)) {
-      setSelectedTelegramPreviewCountryId(activeCountries[0].id || null);
-    }
-  }, [telegramBotoneraDraft.countries, selectedTelegramPreviewCountryId]);
-
   // Dynamic polls state
   const [dynamicPolls, setDynamicPolls] = useState<DynamicPoll[]>([]);
   const [editingPoll, setEditingPoll] = useState<Partial<DynamicPoll> | null>(null);
@@ -896,20 +763,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (channelId) setChannelIdInput(channelId);
   }, [channelId]);
 
-  useEffect(() => {
-    if (paymentMethods.length > 0) {
-      setTelegramBotoneraDraft(prev => {
-        const derivedCountries = buildTelegramCountriesFromPaymentMethods(paymentMethods);
-        const nextBase = buildDefaultTelegramBotonera(paymentMethods);
-        return {
-          ...nextBase,
-          ...prev,
-          countries: prev.countries.length > 0 ? prev.countries : derivedCountries,
-          plans: prev.plans.length > 0 ? prev.plans : nextBase.plans
-        };
-      });
-    }
-  }, [paymentMethods]);
 
   // Sincronizar automáticamente el perfil activo para que nunca aparezca en blanco
   useEffect(() => {
@@ -933,13 +786,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setLoading(true);
     try {
       const headers = { Authorization: `Bearer ${tok}` };
-      const [resP, resR, resL, resI, resB, resBotoneras, resPolls, resPay, resBot] = await Promise.all([
+      const [resP, resR, resL, resI, resB, resPolls, resPay, resBot] = await Promise.all([
         fetch('/api/admin/profiles?t=' + Date.now(), { headers }),
         fetch('/api/admin/requests', { headers }),
         fetch('/api/admin/logs', { headers }),
         fetch('/api/info'),
         fetch('/api/admin/buttons', { headers }),
-        fetch('/api/admin/telegram-botoneras', { headers }),
         fetch('/api/admin/polls', { headers }),
         fetch('/api/admin/payment-methods', { headers }),
         fetch('/api/admin/bot-queue', { headers })
@@ -973,14 +825,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         setSyncErrors(logsData.sync_errors || []);
       }
       if (resB.ok) setCustomButtons(await resB.json());
-      if (resBotoneras.ok) {
-        const botoneras = (await resBotoneras.json()) || [];
-        const sanitizedBotoneras = botoneras.map((botonera: TelegramBotonera) => sanitizeTelegramBotoneraFlow(botonera) as TelegramBotonera);
-        setTelegramBotoneras(sanitizedBotoneras);
-        if (sanitizedBotoneras.length > 0 && !telegramBotoneraDraft.id) {
-          setTelegramBotoneraDraft(sanitizeTelegramBotoneraFlow(sanitizedBotoneras[0]) as TelegramBotonera);
-        }
-      }
       if (resPolls.ok) setDynamicPolls(await resPolls.json());
       if (resPay && resPay.ok) {
         const payData = await resPay.json();
@@ -1542,80 +1386,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
-  const handleSaveTelegramBotonera = async (e?: React.SyntheticEvent) => {
-    e?.preventDefault();
-    if (!telegramBotoneraDraft.name.trim()) {
-      setMessage({ type: 'error', text: 'Debes poner un nombre para la botonera.' });
-      return;
-    }
-    if (!telegramBotoneraDraft.title.trim()) {
-      setMessage({ type: 'error', text: 'El título principal es obligatorio.' });
-      return;
-    }
-    if (!telegramBotoneraDraft.countries.some(country => country.active)) {
-      setMessage({ type: 'error', text: 'Debe haber al menos un país activo en la botonera.' });
-      return;
-    }
-    if (!telegramBotoneraDraft.plans.some(plan => plan.active)) {
-      setMessage({ type: 'error', text: 'Debe haber al menos un plan activo.' });
-      return;
-    }
-
-    const sanitizedBotonera = {
-      ...telegramBotoneraDraft,
-      countries: telegramBotoneraDraft.countries.filter(country => country.active),
-      plans: telegramBotoneraDraft.plans.filter(plan => plan.active)
-    };
-
-    setSavingTelegramBotonera(true);
-    try {
-      const res = await fetch('/api/admin/telegram-botoneras', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(sanitizedBotonera)
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setMessage({ type: 'success', text: `✅ Botonera guardada: ${data.botonera.name}` });
-        setTelegramBotoneraDraft(data.botonera);
-        fetchData();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al guardar la botonera' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de red al guardar la botonera.' });
-    } finally {
-      setSavingTelegramBotonera(false);
-    }
-  };
-
-  const handlePublishTelegramBotonera = async (id: string) => {
-    setPublishingTelegramBotonera(true);
-    try {
-      const res = await fetch(`/api/admin/telegram-botoneras/${id}/publish`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const publishedBotonera = data.botonera || { ...telegramBotoneraDraft, id, status: 'published' };
-        setTelegramBotoneras(prev => {
-          const withoutCurrent = prev.filter(item => item.id !== id);
-          return [publishedBotonera, ...withoutCurrent];
-        });
-        setTelegramBotoneraDraft(publishedBotonera);
-        setMessage({ type: 'success', text: '📢 Botonera publicada en Telegram correctamente.' });
-        await fetchData();
-      } else {
-        setMessage({ type: 'error', text: data.error || 'Error al publicar la botonera' });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Error de red al publicar la botonera.' });
-    } finally {
-      setPublishingTelegramBotonera(false);
-    }
-  };
-
+  
   // Dynamic Polls Handlers
   const handleSavePoll = async (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -5756,260 +5527,6 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   )}
                 </div>
 
-                {/* Nueva pantalla: Botonera VIP Rápida */}
-                <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-bold text-white text-xs flex items-center gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-pink-400" /> Botonera VIP Rápida (Legado)
-                      </h4>
-                      <p className="text-[11px] text-zinc-400">⚠️ Flujo legado país → plan, en desuso desde la Fase 5. El flujo recomendado es la botonera nativa nav_* (Catálogo/Ficha/Pagos con edición en el mismo mensaje, sin registros por clic). Úsalo solo si necesitas mantener publicaciones antiguas del canal con deep links vipc_&lt;país&gt;. Puedes desactivarlo con ADMIN_FEATURES_JSON {'{'}"legacyVipCountryFlow": false{'}'}.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setTelegramBotoneraDraft(buildDefaultTelegramBotonera())}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-[10px] uppercase tracking-wide"
-                    >
-                      Nuevo
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-4">
-                    <form onSubmit={(e) => handleSaveTelegramBotonera(e)} className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label className="block">
-                          <span className="block text-zinc-400 mb-1 font-semibold">Nombre de la botonera</span>
-                          <input
-                            type="text"
-                            value={telegramBotoneraDraft.name}
-                            onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, name: e.target.value })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="block text-zinc-400 mb-1 font-semibold">Destino</span>
-                          <select
-                            value={telegramBotoneraDraft.target}
-                            onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, target: e.target.value as 'channel' | 'bot' | 'both' })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs"
-                          >
-                            <option value="channel">Canal</option>
-                            <option value="bot">Bot</option>
-                            <option value="both">Canal + Bot</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <label className="block">
-                        <span className="block text-zinc-400 mb-1 font-semibold">Título principal</span>
-                        <input
-                          type="text"
-                          value={telegramBotoneraDraft.title}
-                          onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, title: e.target.value.toUpperCase() })}
-                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs uppercase"
-                        />
-                      </label>
-
-                      <label className="block">
-                        <span className="block text-zinc-400 mb-1 font-semibold">Texto de introducción</span>
-                        <textarea
-                          value={telegramBotoneraDraft.intro}
-                          onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, intro: e.target.value })}
-                          rows={3}
-                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs resize-none"
-                        />
-                      </label>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <label className="block">
-                          <span className="block text-zinc-400 mb-1 font-semibold">Etiqueta de países</span>
-                          <input
-                            type="text"
-                            value={telegramBotoneraDraft.country_label}
-                            onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, country_label: e.target.value })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs"
-                          />
-                        </label>
-                        <label className="block">
-                          <span className="block text-zinc-400 mb-1 font-semibold">Etiqueta de planes</span>
-                          <input
-                            type="text"
-                            value={telegramBotoneraDraft.plan_label}
-                            onChange={(e) => setTelegramBotoneraDraft({ ...telegramBotoneraDraft, plan_label: e.target.value })}
-                            className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white text-xs"
-                          />
-                        </label>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-zinc-300">Países disponibles</span>
-                          <span className="text-[10px] uppercase tracking-wide text-zinc-500">Automático</span>
-                        </div>
-                        <div className="space-y-2">
-                          {telegramBotoneraDraft.countries.filter(item => item.active).map((country, index) => (
-                            <div key={country.id || index} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-zinc-800 bg-zinc-900/70 text-xs text-zinc-200">
-                              <span className="font-medium">{country.flag} {country.name}</span>
-                              <span className="text-[10px] uppercase tracking-wide text-zinc-500">País</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-zinc-300">Planes de suscripción</span>
-                          <span className="text-[10px] uppercase tracking-wide text-zinc-500">Fijos</span>
-                        </div>
-                        <div className="space-y-2">
-                          {telegramBotoneraDraft.plans.filter(item => item.active).map((plan, index) => (
-                            <div key={plan.id || index} className="flex items-center justify-between gap-2 p-2 rounded-xl border border-zinc-800 bg-zinc-900/70 text-xs text-zinc-200">
-                              <span className="font-medium uppercase">{plan.name}</span>
-                              <span className="text-[10px] uppercase tracking-wide text-zinc-500">{plan.plan_type}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 pt-2">
-                        <button
-                          type="submit"
-                          disabled={savingTelegramBotonera}
-                          className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs disabled:opacity-50"
-                        >
-                          {savingTelegramBotonera ? 'Guardando...' : 'Guardar botonera'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!telegramBotoneraDraft.id) {
-                              setMessage({ type: 'error', text: 'Guarda la botonera antes de publicarla.' });
-                              return;
-                            }
-                            handlePublishTelegramBotonera(telegramBotoneraDraft.id);
-                          }}
-                          disabled={publishingTelegramBotonera || !telegramBotoneraDraft.id}
-                          className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-bold text-xs disabled:opacity-50"
-                        >
-                          {publishingTelegramBotonera ? 'Publicando...' : 'Publicar en Telegram'}
-                        </button>
-                      </div>
-                    </form>
-
-                    <div className="space-y-3">
-                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-                        <h5 className="text-[11px] uppercase tracking-[0.18em] text-zinc-400 font-bold">Vista previa</h5>
-                        <div className="mt-3 rounded-2xl border border-amber-500/30 bg-gradient-to-b from-zinc-900 to-zinc-950 p-3">
-                          <div className="text-center text-[11px] font-bold text-amber-300 uppercase tracking-wide">{telegramBotoneraDraft.title || 'SUSCRIPCIÓN VIP'}</div>
-                          <div className="mt-2 text-[10px] text-zinc-300 text-center">{telegramBotoneraDraft.intro}</div>
-
-                          <div className="mt-3 grid grid-cols-2 gap-2">
-                            {telegramBotoneraDraft.countries.filter(item => item.active).map((country, index) => {
-                              const isSelected = selectedTelegramPreviewCountryId === country.id;
-                              return (
-                                <button
-                                  key={`${country.id}-${index}`}
-                                  type="button"
-                                  onClick={() => setSelectedTelegramPreviewCountryId(country.id)}
-                                  className={`px-2 py-2 rounded-lg border text-[10px] truncate transition-colors ${isSelected ? 'border-amber-400 bg-amber-500/15 text-amber-200' : 'border-zinc-700 bg-zinc-900 text-white'}`}
-                                >
-                                  {country.flag} {country.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {(() => {
-                            const activeCountries = telegramBotoneraDraft.countries.filter(item => item.active);
-                            const selectedCountry = activeCountries.find(country => country.id === selectedTelegramPreviewCountryId) || activeCountries[0] || null;
-                            const selectedMethods = selectedCountry
-                              ? paymentMethods.filter(method => method.is_active && matchesCountryMethod(selectedCountry.name, method))
-                              : [];
-
-                            if (!selectedCountry) {
-                              return (
-                                <div className="mt-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 p-3 text-center">
-                                  <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 font-bold">
-                                    Preview no disponible
-                                  </div>
-                                  <div className="mt-2 text-[9px] text-zinc-400 leading-relaxed">
-                                    No hay países activos en esta botonera todavía. Agrega al menos un país para ver los datos del flujo de pago.
-                                  </div>
-                                </div>
-                              );
-                            }
-
-                            return (
-                              <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
-                                <div className="text-[10px] uppercase tracking-[0.16em] text-emerald-300 font-bold">
-                                  {selectedCountry.flag} {selectedCountry.name}
-                                </div>
-                                <div className="mt-2 space-y-2">
-                                  {selectedMethods.length > 0 ? selectedMethods.slice(0, 4).map((method, index) => (
-                                    <div key={`${method.id}-${index}`} className="rounded-lg border border-emerald-500/20 bg-zinc-950/60 p-2">
-                                      <div className="flex items-start gap-2">
-                                        {method.image_url ? (
-                                          <img
-                                            src={method.image_url}
-                                            alt={method.title}
-                                            className="w-12 h-12 object-cover rounded-md border border-emerald-500/20 bg-zinc-900"
-                                          />
-                                        ) : (
-                                          <div className="w-12 h-12 rounded-md border border-emerald-500/20 bg-zinc-900 flex items-center justify-center text-[10px] font-bold text-emerald-300">
-                                            QR
-                                          </div>
-                                        )}
-                                        <div className="min-w-0 flex-1">
-                                          <div className="text-[10px] font-bold text-emerald-200">{method.title}</div>
-                                          {method.price && (
-                                            <div className="mt-1 text-[9px] font-black text-amber-300">
-                                              {method.price}
-                                            </div>
-                                          )}
-                                          {method.description && (
-                                            <div className="mt-1 text-[9px] text-zinc-300 leading-relaxed">{method.description}</div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )) : (
-                                    <div className="text-[9px] text-zinc-300">Sin métodos activos para este país.</div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
-                        <h5 className="text-[11px] uppercase tracking-[0.18em] text-zinc-400 font-bold">Guardadas</h5>
-                        <div className="mt-3 space-y-2 max-h-64 overflow-y-auto pr-1">
-                          {telegramBotoneras.length === 0 ? (
-                            <p className="text-[11px] text-zinc-500">Aún no hay botoneras guardadas.</p>
-                          ) : (
-                            telegramBotoneras.map((botonera) => (
-                              <button
-                                key={botonera.id}
-                                type="button"
-                                onClick={() => setTelegramBotoneraDraft(botonera)}
-                                className="w-full text-left p-2 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800 transition-colors"
-                              >
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[11px] font-bold text-white">{botonera.name}</span>
-                                  <span className={`text-[9px] px-2 py-0.5 rounded-full ${botonera.status === 'published' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}`}>
-                                    {botonera.status}
-                                  </span>
-                                </div>
-                                <div className="mt-1 text-[10px] text-zinc-400">{botonera.title}</div>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
 
