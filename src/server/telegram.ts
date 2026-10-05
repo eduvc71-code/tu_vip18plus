@@ -1440,7 +1440,8 @@ export async function processTelegramUpdate(update: any) {
     const isWaitingForCountryText =
       anyPendingState?.step === 'VIP_OTHER_COUNTRY' ||
       anyPendingState?.step === 'VIP_LEAD_COUNTRY' ||
-      anyPendingState?.step === 'VIP_AUTO_PLAN';
+      anyPendingState?.step === 'VIP_AUTO_PLAN' ||
+      anyPendingState?.step === 'VIP_AUTO_PLAN_OTHER';
     if (isWaitingForCountryText && text.startsWith('/')) {
       await clearConversationState(userIdStr).catch(() => {});
       // No hacemos return: dejamos que el flujo normal procese el comando
@@ -1467,11 +1468,11 @@ export async function processTelegramUpdate(update: any) {
     }
   }
 
-  // [NUEVO] Captura texto libre de país para el flujo SUSCRIPCIÓN AUTOMÁTICA (menú directo)
+  // [NUEVO] Captura texto libre de país para el flujo SUSCRIPCIÓN AUTOMÁTICA (Otros Países)
   {
-    const autoPlanState = await getConversationState(userIdStr);
-    if (autoPlanState?.step === 'VIP_AUTO_PLAN' && typeof message.text === 'string') {
-      const handled = await handleAutoPlanCountryText(chatId, userIdStr, message, autoPlanState);
+    const autoPlanOtherState = await getConversationState(userIdStr);
+    if (autoPlanOtherState?.step === 'VIP_AUTO_PLAN_OTHER' && typeof message.text === 'string') {
+      const handled = await handleAutoPlanCountryText(chatId, userIdStr, message, autoPlanOtherState);
       if (handled) return;
     }
   }
@@ -2256,13 +2257,9 @@ async function askAutoPlanCountry(
 
   const text =
     `${meta.emoji} *${meta.label}* ${meta.emoji}\n\n` +
-    `Para darte el *precio exacto y las coordenadas de pago*, necesitamos saber tu país.\n\n` +
-    `✍️ *Escribe el nombre de tu país* (ej: Bolivia, Japón, Italia...):`;
+    `🌍 *Selecciona tu país* para continuar:`;
 
-  const keyboard = [
-    [{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]
-  ];
-
+  const keyboard = await buildMonthlyCountriesKeyboard();
   return await editOrSend(chatId, sourceMessageId, text, {
     parse_mode: 'Markdown',
     reply_markup: { inline_keyboard: keyboard }
@@ -2795,7 +2792,7 @@ export async function sendTelegramPlanConfirmation(
       `¡Bienvenido a la zona exclusiva!\n\n` +
       `🌍 País: *${String(countryId).slice(0, 80)}*\n` +
       `🧸 ${plan?.name || 'SUSCRIPCIÓN MENSUAL'}${plan?.price ? ` — ${plan.price}` : ''}\n\n` +
-      `💳 *OTROS MÉTODOS DE PAGO:* Western Union, PayPal, Remitly, CriptoMoneda, PIX\n\n` +
+      `💳 *OTROS MÉTODOS DE PAGO:* Western Union, PayPal, Remitly, CriptoMoneda\n\n` +
       `📲 _Escríbeme al privado y coordinamos tu suscripción:_ [@${adminUsername}](${adminUrl})`;
     return await editOrSend(chatId, sourceMessageId, freeText, { reply_markup: { inline_keyboard: rows }, parse_mode: 'Markdown' });
   }
@@ -3071,6 +3068,38 @@ async function handleCallbackQuery(cb: any) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const planId = data.replace('vip_autoplan_', ''); // 'mes' | 'seis' | 'permanente'
     await askAutoPlanCountry(chatId, planId, cb.message?.message_id);
+    return;
+  }
+
+  // [NUEVO] SUSCRIPCIÓN AUTOMÁTICA — Cliente tocó un país de la botonera
+  if (data.startsWith('vip_autoplan_country_')) {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const countryKey = data.slice('vip_autoplan_country_'.length);
+    await handleAutoPlanCountrySelected(chatId, cb.from, userIdStr, countryKey, cb.message?.message_id);
+    return;
+  }
+
+  // [NUEVO] SUSCRIPCIÓN AUTOMÁTICA — Cliente toca "Otros Países"
+  if (data === 'vip_autoplan_other') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await askAutoPlanCountryOther(chatId, cb.message?.message_id);
+    return;
+  }
+
+  // [NUEVO] SUSCRIPCIÓN AUTOMÁTICA — "Otros Métodos de Pago" (informativo)
+  if (data === 'vip_autoplan_othermethods') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const infoText =
+      `💳 *OTROS MÉTODOS DE PAGO*\n\n` +
+      `🌐 Western Union\n` +
+      `💸 PayPal\n` +
+      `💰 Remitly\n` +
+      `🪙 CriptoMoneda\n\n` +
+      `📲 _Escríbeme al privado y coordinamos tu suscripción:_ [@${getAdminContactUsername()}](https://t.me/${getAdminContactUsername()})`;
+    await editOrSend(chatId, cb.message?.message_id, infoText, {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: [[{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]] }
+    });
     return;
   }
 
