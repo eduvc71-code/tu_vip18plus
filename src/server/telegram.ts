@@ -2299,13 +2299,28 @@ async function handleAutoPlanCountrySelected(
   if (planType === 'monthly') {
     const methods = await getRelevantPaymentMethodsForCountry(countryName);
 
+    // Caso A: hay métodos → mostrar detalle si es 1, o botones si son varios
     if (methods.length > 0) {
+      await clearConversationState(userIdStr).catch(() => {});
+
+      // Sub-caso A1: 1 solo método → ir directo al detalle (QR + instrucciones)
+      if (methods.length === 1) {
+        const preferredMethod = methods[0];
+        const boliviaRate = preferredMethod.id === 'qr_bolivia' ? await getBoliviaOfficialRateFromServer() : null;
+
+        // Borrar el mensaje previo (botonera de países) para no acumular
+        if (Number.isFinite(Number(sourceMessageId)) && Number(sourceMessageId) > 0) {
+          try { await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: Number(sourceMessageId) }); } catch {}
+        }
+
+        return await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: boliviaRate ?? undefined });
+      }
+
+      // Sub-caso A2: varios métodos → mostrar botones para elegir
       const rows: any[][] = methods.map((m: PaymentMethod) => [
         { text: m.title, callback_data: `pay_method_${m.id}` }
       ]);
       rows.push([{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]);
-
-      await clearConversationState(userIdStr).catch(() => {});
 
       const text =
         `${planEmoji} *${planLabel}* ${planEmoji}\n\n` +
@@ -2321,6 +2336,7 @@ async function handleAutoPlanCountrySelected(
       });
     }
 
+    // Caso B: sin métodos → crear lead
     await clearConversationState(userIdStr).catch(() => {});
     return await processVipLead({
       chatId: String(chatId),
