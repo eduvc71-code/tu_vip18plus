@@ -10,6 +10,7 @@ import { TelegramGate } from './components/TelegramGate';
 import { PaymentMethodsModal } from './components/PaymentMethodsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2, CreditCard } from 'lucide-react';
+import { useAutoOfflineCache } from './hooks/useAutoOfflineCache';
 
 export default function App() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -62,6 +63,10 @@ export default function App() {
     );
   });
   const [isAdminClosed, setIsAdminClosed] = useState(false);
+
+  // [NUEVO] Cacheo silencioso de fotos en segundo plano.
+  // Se ejecuta UNA vez por sesión cuando el SW está listo y hay perfiles.
+  useAutoOfflineCache(profiles);
 
   // Telegram User Context state
   const [tgUser, setTgUser] = useState<TelegramUserContext | null>(null);

@@ -402,6 +402,14 @@ export function extractCountryFromRequestText(notes: string): string {
   return 'No especificado';
 }
 
+export function detectSpecialPlanType(notes: string): 'semester' | 'permanent' | null {
+  const text = (notes || '').trim();
+  if (!text) return null;
+  if (/SUSCRIPCIÓN\s*SEMESTRAL|SEMESTRAL|\b6\s*meses?\b/i.test(text)) return 'semester';
+  if (/SUSCRIPCIÓN\s*PERMANENTE|PERMANENTE|\bPERM\b/i.test(text)) return 'permanent';
+  return null;
+}
+
 /**
  * Construye un enlace privado de Telegram a partir de un username, ID numérico
  * o URL ya existente. Devuelve `undefined` si el valor no es utilizable.
@@ -572,7 +580,28 @@ router.post('/requests', async (req: Request, res: Response) => {
     const clientHandle = safeClientTelegram
       ? (safeClientTelegram.startsWith('@') || safeClientTelegram.startsWith('ID:') ? safeClientTelegram : `@${safeClientTelegram}`)
       : '';
-    const adminNotice = `
+    const specialPlanType = detectSpecialPlanType(purchaseMessage);
+    const extractedCountry = specialPlanType ? extractCountryFromRequestText(purchaseMessage) : null;
+
+    let adminNotice: string;
+    if (specialPlanType) {
+      const planLabel = specialPlanType === 'semester'
+        ? 'SUSCRIPCIÓN SEMESTRAL (6 MESES) ⭐'
+        : 'SUSCRIPCIÓN PERMANENTE 💎';
+      adminNotice = `
+🔔 *NUEVO LEAD — ${planLabel}* 🔔
+
+👤 *Cliente*: ${safeClientName || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
+🆔 *Telegram ID*: \`${safeUserId || 'No detectado'}\`
+🌍 *País*: *${extractedCountry || 'No especificado'}*
+📦 *Plan*: ${specialPlanType === 'semester' ? '6 Meses' : 'Permanente'}
+💬 *Mensaje*: ${purchaseMessage}
+📅 *Fecha*: ${new Date().toLocaleString()}
+
+⚠️ _Plan especial: precio a negociar en privado. No enviar QR automático ni tarifa mensual._
+      `;
+    } else {
+      adminNotice = `
 🔔 *NUEVA SOLICITUD DE ACCESO VIP* 🔔
 
 👤 *Cliente*: ${safeClientName || 'Anónimo'} ${clientHandle ? `(${clientHandle})` : ''}
@@ -583,7 +612,8 @@ router.post('/requests', async (req: Request, res: Response) => {
 📅 *Fecha*: ${new Date().toLocaleString()}
 
 🔒 _Toda respuesta, envío de QR y validación debe realizarse por privado. El acceso al Grupo VIP no forma parte de este sistema._
-    `;
+      `;
+    }
 
     let deliveredToAdmin = false;
     for (const adminId of adminIds) {

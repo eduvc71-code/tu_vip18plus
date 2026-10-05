@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock , ZoomIn } from 'lucide-react';
+import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock, ZoomIn, Play } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -74,16 +74,8 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   const isCurrentImageEphemeral = Boolean(selectedImage && profile.ephemeral_config?.[selectedImage]?.enabled);
   const currentImageDuration = (selectedImage && profile.ephemeral_config?.[selectedImage]?.duration_seconds) || 5;
 
-    
-    
-  // Auto-deslizante de Imágenes cada 4 segundos garantizado: Foto 1 -> Foto N -> Foto 1
-  useEffect(() => {
-    if (images.length <= 1) return;
-    const interval = setInterval(() => {
-      setImageIndex(prev => (prev + 1) % images.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [images.length]);
+  // [MODIFICADO] Auto-slide de fotos ELIMINADO para evitar sobrecarga del servidor.
+  // La navegación es 100% manual con las flechas laterales.
 
   // Asegurar que el índice de imagen no quede fuera de rango
   useEffect(() => {
@@ -92,14 +84,15 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
     }
   }, [images.length, imageIndex]);
 
-  // Auto-deslizante de Videos cada 4 segundos: Video 1 -> Video N -> Video 1
+  // Asegurar que el índice de video no quede fuera de rango
   useEffect(() => {
-    if (videos.length <= 1) return;
-    const interval = setInterval(() => {
-      setVideoIndex(prev => (prev + 1) % videos.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [videos.length]);
+    if (videoIndex >= videos.length && videos.length > 0) {
+      setVideoIndex(0);
+    }
+  }, [videos.length, videoIndex]);
+
+  // [MODIFICADO] Auto-slide de videos ELIMINADO para evitar sobrecarga del servidor.
+  // La navegación es 100% manual con las flechas laterales.
 
   const moveImage = (direction: -1 | 1) => {
     if (images.length < 2) return;
@@ -117,10 +110,10 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
       className="overflow-hidden rounded-2xl sm:rounded-3xl border border-zinc-800/90 bg-zinc-900/90 shadow-2xl shadow-black/40"
     >
       <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
-        
+
         {/* Columna Multimedia: Imágenes ARRIBA y Videos DEBAJO */}
         <div className="bg-zinc-950 p-2 sm:p-4 space-y-1">
-          
+
           {/* 1. SECCIÓN IMÁGENES */}
           <div>
             {/* Etiqueta reducida de Fotos arriba con contador n/n a la derecha */}
@@ -173,7 +166,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 </div>
               )}
 
-
               {selectedImage && profile.media_stars?.[selectedImage] && (
                 <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black bg-amber-500 text-zinc-950 shadow-lg uppercase tracking-wide">
@@ -182,19 +174,28 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 </div>
               )}
 
-              {/* Controles al pie: {< .......... >} centrados y SUPERPUESTOS */}
+              {/* [NUEVO] Flechas laterales grandes para navegación manual de fotos */}
               {images.length > 1 && (
-                <div className="absolute bottom-2 left-0 right-0 z-20 flex items-center justify-center gap-2.5 pointer-events-none">
+                <>
                   <button
                     type="button"
-                    style={{ pointerEvents: 'auto' }}
                     onClick={(e) => { e.stopPropagation(); moveImage(-1); }}
                     aria-label="Foto anterior"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/80 bg-black/65 backdrop-blur-sm text-white shadow-lg transition-all hover:bg-black/85 hover:border-amber-500/60 hover:text-amber-300 cursor-pointer active:scale-95"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <ChevronLeft className="h-5 w-5" />
                   </button>
-                  <div className="flex gap-1 bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); moveImage(1); }}
+                    aria-label="Foto siguiente"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/80 bg-black/65 backdrop-blur-sm text-white shadow-lg transition-all hover:bg-black/85 hover:border-amber-500/60 hover:text-amber-300 cursor-pointer active:scale-95"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+
+                  {/* Puntos indicadores al pie centrados */}
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1 bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
                     {images.map((_, idx) => (
                       <span
                         key={idx}
@@ -202,16 +203,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                       />
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    style={{ pointerEvents: 'auto' }}
-                    onClick={(e) => { e.stopPropagation(); moveImage(1); }}
-                    aria-label="Foto siguiente"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                </>
               )}
             </div>
           </div>
@@ -239,22 +231,31 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
                 title="Toca para ampliar video"
               >
+                {/* [MODIFICADO] Video: sin autoplay, con preload metadata para mostrar
+                    primer frame como miniatura. Sin loop, sin muted activo (solo preload). */}
                 <video
-                    key={selectedVideo}
-                    src={selectedVideo}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  {showEnlargeIcon && videos.length > 0 && (
-                    <div className="absolute top-2.5 right-2.5 z-30 pointer-events-none animate-bounce">
-                      <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-full border border-white/20 shadow-xl">
-                        <ZoomIn className="w-4 h-4 text-white drop-shadow-md" />
-                      </div>
+                  key={selectedVideo}
+                  src={selectedVideo}
+                  preload="metadata"
+                  muted
+                  playsInline
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+
+                {/* [NUEVO] Ícono Play grande al centro que indica que es un video */}
+                <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+                  <div className="w-14 h-14 rounded-full bg-black/55 backdrop-blur-sm border-2 border-white/85 flex items-center justify-center shadow-xl shadow-black/50 transition-transform duration-300 group-hover:scale-110">
+                    <Play className="w-6 h-6 text-white ml-0.5" fill="white" strokeWidth={0} />
+                  </div>
+                </div>
+
+                {showEnlargeIcon && videos.length > 0 && (
+                  <div className="absolute top-2.5 right-2.5 z-30 pointer-events-none animate-bounce">
+                    <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-full border border-white/20 shadow-xl">
+                      <ZoomIn className="w-4 h-4 text-white drop-shadow-md" />
                     </div>
-                  )}
+                  </div>
+                )}
 
                 {selectedVideo && profile.media_stars?.[selectedVideo] && (
                   <div className="absolute top-2.5 left-2.5 z-10 pointer-events-none">
@@ -264,19 +265,28 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                   </div>
                 )}
 
-                {/* Controles al pie: {< .......... >} centrados y SUPERPUESTOS */}
+                {/* [NUEVO] Flechas laterales grandes para navegación manual de videos */}
                 {videos.length > 1 && (
-                  <div className="absolute bottom-2 left-0 right-0 z-20 flex items-center justify-center gap-2.5 pointer-events-none">
+                  <>
                     <button
                       type="button"
-                      style={{ pointerEvents: 'auto' }}
                       onClick={(e) => { e.stopPropagation(); moveVideo(-1); }}
                       aria-label="Video anterior"
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/80 bg-black/65 backdrop-blur-sm text-white shadow-lg transition-all hover:bg-black/85 hover:border-amber-500/60 hover:text-amber-300 cursor-pointer active:scale-95"
                     >
-                      <ChevronLeft className="h-3.5 w-3.5" />
+                      <ChevronLeft className="h-5 w-5" />
                     </button>
-                    <div className="flex gap-1 bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
+                      aria-label="Video siguiente"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/80 bg-black/65 backdrop-blur-sm text-white shadow-lg transition-all hover:bg-black/85 hover:border-amber-500/60 hover:text-amber-300 cursor-pointer active:scale-95"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+
+                    {/* Puntos indicadores al pie centrados */}
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex gap-1 bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm pointer-events-none">
                       {videos.map((_, idx) => (
                         <span
                           key={idx}
@@ -284,16 +294,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                         />
                       ))}
                     </div>
-                    <button
-                      type="button"
-                      style={{ pointerEvents: 'auto' }}
-                      onClick={(e) => { e.stopPropagation(); moveVideo(1); }}
-                      aria-label="Video siguiente"
-                      className="flex h-7 w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900/90 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-300 cursor-pointer active:scale-95"
-                    >
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  </>
                 )}
               </div>
             </div>
@@ -304,7 +305,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         {/* Columna de Información y Botones de Acción */}
         <div className="flex flex-col justify-between p-4 sm:p-5">
           <div className="space-y-3">
-            
+
             {/* Descripción del Perfil (excluye textos de bienvenida heredados) */}
             {profile.description &&
              !/holis|bienvenida|opciones que te salen abajo/i.test(profile.description) && (
