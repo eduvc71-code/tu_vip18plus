@@ -2092,7 +2092,7 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     `🩷 Veo que te ganó la curiosidad y quieres descubrir más de mí. 😋\n\n` +
     `¿Te gustaría descubrir mi lado más exclusivo? 🙈 Estoy en el mundo +18 hace 3 años y déjame decirte que lo que tengo para ti es totalmente rico y único.\n\n` +
     `Te ofrezco una gran variedad de videos y fotos que solo puedes ver en mi canal privado VIP. Solo allí podrás ver lo que no muestro en ningún otro lado. 🍬\n\n` +
-    `👉 *Para no perderte de nada, pulsa "Ver lo Exclusivo" y para info de mi Contenido VIP, pulsa "Suscripción Automática" :*`;
+    `👉 *Para no perderte de nada, pulsa "Ver lo Exclusivo"git y para info de mi Contenido VIP, pulsa "Suscripción Automática" :*`;
 
   const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
   const inlineKeyboard: any[][] = [];
