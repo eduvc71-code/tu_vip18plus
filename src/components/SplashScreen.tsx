@@ -31,7 +31,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
   );
 
   const cleanDescription = (splashDescription || '').trim() ||
-    'Bienvenido a mi espacio exclusivo y confidencial. Disfruta de material único y de alta calidad (+18).';
+    '';
 
   const cleanTitle = (modelName || '').trim() || 'TÚ • ESPACIO VIP';
 
@@ -166,7 +166,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
 
           <div className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-400 uppercase tracking-widest bg-amber-500/10 px-3 py-0.5 rounded-full border border-amber-500/20">
             <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-            <span>Canal VIP Oficial (+18)</span>
+            <span>Canal VIP FREE Oficial (+18)</span>
           </div>
         </div>
 
@@ -182,7 +182,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           {!isPreview && (
             <div className="w-full bg-zinc-900/80 rounded-full h-1.5 overflow-hidden border border-zinc-800">
               <div
-                className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 h-full transition-all duration-75 ease-linear rounded-full shadow-sm shadow-amber-400/50"
+                className="bg-gradient-to-r from-ambegir-500 via-amber-400 to-amber-600 h-full transition-all duration-75 ease-linear rounded-full shadow-sm shadow-amber-400/50"
                 style={{ width: `${progress}%` }}
               />
             </div>
