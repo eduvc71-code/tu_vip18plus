@@ -1225,6 +1225,15 @@ export async function processTelegramUpdate(update: any) {
         return;
       }
     }
+    // [NUEVO] Si el cliente pidió "vipauto" PURO (sin país codificado),
+    // mostramos directo el menú con los 3 planes (Mes / 6 Meses / Permanente).
+    // El país se pedirá después según el plan elegido.
+    const isPureVipAuto = /^\/start\s+vipauto\s*$/i.test(text);
+    if (isPureVipAuto) {
+      await sendAutoSubscriptionMenu(chatId);
+      return;
+    }
+
     const knownCountries = ['bo', 'pe', 'cl', 'ar', 'py', 'uy', 'ec', 'co', 'mx', 'es', 'us', 'br', 'ru'];
     const tail = payload.includes('_') ? payload.split('_').pop()!.toLowerCase() : '';
     const vipCountryId = knownCountries.includes(tail) ? tail : '';
@@ -1422,11 +1431,47 @@ export async function processTelegramUpdate(update: any) {
     }
   }
 
+  // [FIX] Blindaje anti-comandos: si el usuario está en un flujo que espera texto
+  // libre (país) y escribe un comando (algo que empieza con "/"), limpiamos el
+  // estado y dejamos que el comando se procese normalmente más abajo.
+  // Esto evita crear leads basura con país="/help", país="/pagos", etc.
+  {
+    const anyPendingState = await getConversationState(userIdStr);
+    const isWaitingForCountryText =
+      anyPendingState?.step === 'VIP_OTHER_COUNTRY' ||
+      anyPendingState?.step === 'VIP_LEAD_COUNTRY' ||
+      anyPendingState?.step === 'VIP_AUTO_PLAN';
+    if (isWaitingForCountryText && text.startsWith('/')) {
+      await clearConversationState(userIdStr).catch(() => {});
+      // No hacemos return: dejamos que el flujo normal procese el comando
+    }
+  }
+
   // [Flujo "Otros Países"] Captura texto libre de país
   {
     const vipOtherState = await getConversationState(userIdStr);
     if (vipOtherState?.step === 'VIP_OTHER_COUNTRY' && typeof message.text === 'string') {
       const handled = await handleVipOtherCountryText(chatId, userIdStr, message, vipOtherState);
+      if (handled) return;
+    }
+  }
+
+  // [FIX] Captura texto libre de país para leads 6 Meses / Permanente
+  // Antes se procesaba DESPUÉS del guard de admin, así que los clientes
+  // no-admin nunca llegaban a crear el lead. Ahora se procesa antes.
+  {
+    const vipLeadState = await getConversationState(userIdStr);
+    if (vipLeadState?.step === 'VIP_LEAD_COUNTRY' && typeof message.text === 'string') {
+      await handleConversationStep(chatId, userIdStr, message, vipLeadState);
+      return;
+    }
+  }
+
+  // [NUEVO] Captura texto libre de país para el flujo SUSCRIPCIÓN AUTOMÁTICA (menú directo)
+  {
+    const autoPlanState = await getConversationState(userIdStr);
+    if (autoPlanState?.step === 'VIP_AUTO_PLAN' && typeof message.text === 'string') {
+      const handled = await handleAutoPlanCountryText(chatId, userIdStr, message, autoPlanState);
       if (handled) return;
     }
   }
@@ -2090,6 +2135,155 @@ export async function sendClientPagos(chatId: string | number) {
   });
 }
 
+/**
+ * [NUEVO] Menú directo de planes para "SUSCRIPCIÓN AUTOMÁTICA".
+ * Muestra los 3 planes (Mes / 6 Meses / Permanente) SIN pedir país primero.
+ * El país se pide después, según el plan elegido:
+ *   - Mes         → pide país → muestra métodos de pago del país
+ *   - 6 Meses     → pide país → crea lead (precio negociado con admin)
+ *   - Permanente  → pide país → crea lead (precio negociado con admin)
+ */
+async function sendAutoSubscriptionMenu(chatId: string | number, sourceMessageId?: number | string | null) {
+  const text =
+    `💎 *SUSCRIPCIÓN VIP* 💎\n\n` +
+    `Elige el plan que deseas adquirir:\n\n` +
+    `🧸  *1 Mes*  ·  Acceso por 30 días\n` +
+    `💎  *6 Meses*  ·  Acceso por 180 días\n` +
+    `💙  *Permanente*  ·  Acceso de por vida\n\n` +
+    `_Toca un plan para continuar._`;
+
+  const keyboard: any[][] = [
+    [{ text: '🧸  Suscripción 1 Mes', callback_data: 'vip_autoplan_mes' }],
+    [{ text: '💎  Suscripción 6 Meses', callback_data: 'vip_autoplan_seis' }],
+    [{ text: '💙  Acceso Permanente', callback_data: 'vip_autoplan_permanente' }],
+    [{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]
+  ];
+
+  return await editOrSend(chatId, sourceMessageId, text, {
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+/**
+ * [NUEVO] Pide al cliente el nombre de su país para el flujo SUSCRIPCIÓN AUTOMÁTICA.
+ * Setea estado VIP_AUTO_PLAN con el plan elegido (mes / seis / permanente).
+ */
+async function askAutoPlanCountry(
+  chatId: string | number,
+  planId: string,
+  sourceMessageId?: number | string | null
+) {
+  const planType = planId === 'mes' ? 'monthly' : planId === 'seis' ? 'semester' : 'permanent';
+  const meta = planType === 'monthly'
+    ? { emoji: '🧸', label: 'SUSCRIPCIÓN MENSUAL' }
+    : planType === 'semester'
+    ? { emoji: '💎', label: 'SUSCRIPCIÓN SEMESTRAL (6 MESES)' }
+    : { emoji: '💙', label: 'SUSCRIPCIÓN PERMANENTE' };
+
+  await setConversationState(String(chatId), 'VIP_AUTO_PLAN', {
+    plan_id: planId,
+    plan_type: planType,
+    plan_label: meta.label,
+    plan_emoji: meta.emoji
+  } as any);
+
+  const text =
+    `${meta.emoji} *${meta.label}* ${meta.emoji}\n\n` +
+    `Para darte el *precio exacto y las coordenadas de pago*, necesitamos saber tu país.\n\n` +
+    `✍️ *Escribe el nombre de tu país* (ej: Bolivia, Japón, Italia...):`;
+
+  const keyboard = [
+    [{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]
+  ];
+
+  return await editOrSend(chatId, sourceMessageId, text, {
+    parse_mode: 'Markdown',
+    reply_markup: { inline_keyboard: keyboard }
+  });
+}
+
+/**
+ * [NUEVO] Procesa el país que el cliente escribió para el flujo SUSCRIPCIÓN AUTOMÁTICA.
+ * Según el plan elegido:
+ *   - Mes         → muestra métodos de pago del país (o "Solicitar Información")
+ *   - 6 Meses / Permanente → crea lead directo (proceso idéntico al de "Otros Países")
+ */
+async function handleAutoPlanCountryText(
+  chatId: string | number,
+  userIdStr: string,
+  message: any,
+  state: any
+): Promise<boolean> {
+  const rawCountry = String(message.text || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 80);
+  if (!rawCountry) {
+    await sendMessage(chatId, '✍️ Por favor escribe el nombre de tu país (ej: Bolivia, Japón, Italia...).');
+    return true;
+  }
+
+  const draft = state.draft_data || {};
+  const planType = String(draft.plan_type || 'monthly');
+  const planLabel = String(draft.plan_label || 'SUSCRIPCIÓN VIP');
+  const planEmoji = String(draft.plan_emoji || '💠');
+
+  // Borrar el mensaje del usuario (el país escrito) para mantener el chat limpio
+  if (message.message_id) {
+    await callTelegramApi('deleteMessage', {
+      chat_id: chatId,
+      message_id: message.message_id
+    }).catch(() => {});
+  }
+
+  // Caso 1: 6 Meses o Permanente → lead directo (mismo mecanismo que processVipLead)
+  if (planType === 'semester' || planType === 'permanent') {
+    return await processVipLead({
+      chatId: String(chatId),
+      user: message.from || { id: userIdStr },
+      country: rawCountry,
+      planType,
+      planLabel,
+      planEmoji,
+      sourceMessageId: null
+    });
+  }
+
+  // Caso 2: Mensual → buscar métodos de pago del país
+  const methods = await getRelevantPaymentMethodsForCountry(rawCountry);
+
+  if (methods.length > 0) {
+    // Mostrar el primer método de pago (o lista si hay varios)
+    if (methods.length === 1) {
+      const preferredMethod = methods[0];
+      const boliviaRate = preferredMethod.id === 'qr_bolivia' ? await getBoliviaOfficialRateFromServer() : null;
+      await showPaymentMethodDetail(chatId, preferredMethod.id, { profileRateBs: boliviaRate ?? undefined });
+    } else {
+      const rows: any[][] = methods.map((m: PaymentMethod) => [
+        { text: m.title, callback_data: `pay_method_${m.id}` }
+      ]);
+      rows.push([{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]);
+      await sendMessage(
+        chatId,
+        `💳 *Métodos de pago disponibles para ${rawCountry}:*\n\nToca el que prefieras:`,
+        { reply_markup: { inline_keyboard: rows } }
+      );
+    }
+
+    await clearConversationState(userIdStr).catch(() => {});
+    return true;
+  }
+
+  // Sin métodos de pago para ese país → crear lead (igual que "Solicitar Información")
+  await clearConversationState(userIdStr).catch(() => {});
+  return await processVipLead({
+    chatId: String(chatId),
+    user: message.from || { id: userIdStr },
+    country: rawCountry,
+    planType: 'monthly',
+    planLabel: 'SUSCRIPCIÓN MENSUAL',
+    planEmoji: '🧸',
+    sourceMessageId: null
+  });
+}
+
 export async function getActiveTelegramBotoneraFlow(): Promise<any | null> {
   const items = await getAllTelegramBotoneras();
   return items.filter(item => item.is_active && item.status !== 'draft').sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))[0] || null;
@@ -2112,6 +2306,8 @@ export function buildTelegramBotoneraKeyboard(botonera: any): any[][] {
     rows.push(row);
   }
   rows.push([{ text: '🌍 Otros Países', callback_data: `vip_other_${botonera.id}` }]);
+  // [NUEVO] Botón Cancelar al pie para salir del flujo
+  rows.push([{ text: '❌ Cancelar', callback_data: 'vip_autoplan_cancel' }]);
   return rows;
 }
 
@@ -2686,6 +2882,21 @@ async function handleCallbackQuery(cb: any) {
         await sendTelegramPlanOptions(chatId, fallbackBotoneraId, parsed.countryId, cb.message?.message_id);
       }
     }
+    return;
+  }
+
+  // [NUEVO] SUSCRIPCIÓN AUTOMÁTICA — Menú directo de planes
+  if (data === 'vip_autoplan_cancel') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await clearConversationState(userIdStr);
+    await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
+    return;
+  }
+
+  if (data === 'vip_autoplan_mes' || data === 'vip_autoplan_seis' || data === 'vip_autoplan_permanente') {
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    const planId = data.replace('vip_autoplan_', ''); // 'mes' | 'seis' | 'permanente'
+    await askAutoPlanCountry(chatId, planId, cb.message?.message_id);
     return;
   }
 
