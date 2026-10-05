@@ -932,11 +932,14 @@ async function processVipLead(params: {
   const notes = `Hola, estoy interesado en la ${planLabel}. Soy de ${country}. Solicito Información VIP por favor.`;
 
   // 1. Crear lead en BD
+  let leadCreated = false;
   try {
     const profiles = await getAllProfiles().catch(() => [] as any[]);
     const fallbackProfile = profiles[0];
-    await createCustomerRequest({
-      profile_id: fallbackProfile?.id || 'vip_lead',
+    const fallbackProfileId = fallbackProfile?.id || 'vip_lead_info';
+
+    const created = await createCustomerRequest({
+      profile_id: fallbackProfileId,
       profile_name: `${planLabel} — ${country}`,
       telegram_user_id: userId,
       telegram_username: user.username,
@@ -944,8 +947,35 @@ async function processVipLead(params: {
       notes,
       status: 'pendiente'
     });
-  } catch (err) {
-    console.error('[VIP Lead] Error creating customer request:', err);
+
+    leadCreated = Boolean(created?.id);
+
+    if (leadCreated) {
+      console.log(`[VIP Lead] ✅ Lead creado: ${created.id} | Plan: ${planLabel} | País: ${country} | User: ${userId}`);
+    } else {
+      console.error(`[VIP Lead] ❌ createCustomerRequest no devolvió un ID válido para User ${userId}`);
+    }
+  } catch (err: any) {
+    console.error('[VIP Lead] ❌ Error crítico al crear customer request:', err?.message || err);
+    console.error('[VIP Lead] Stack:', err?.stack);
+    // Intentar notificar al admin del fallo (aunque no haya lead en BD)
+    try {
+      const { adminIds } = getBotConfig();
+      for (const adminId of adminIds) {
+        if (adminId) {
+          await sendMessage(adminId,
+            `⚠️ *FALLO AL CREAR LEAD*\n\n` +
+            `👤 Cliente: ${user.first_name || 'Cliente'} (${userId})\n` +
+            `📦 Plan: ${planLabel}\n` +
+            `🌍 País: ${country}\n\n` +
+            `⚠️ Error: ${err?.message || 'desconocido'}\n\n` +
+            `_Coordina manualmente por privado con este cliente._`
+          ).catch(() => {});
+        }
+      }
+    } catch {
+      // no hacer nada si falla el aviso de fallo
+    }
   }
 
   // 2. Notificar a todas las administradoras
@@ -2281,9 +2311,11 @@ async function handleAutoPlanCountrySelected(
 ) {
   const autoPlanState = await getConversationState(userIdStr);
   if (!autoPlanState || autoPlanState.step !== 'VIP_AUTO_PLAN') {
+    console.warn(`[AutoPlan] ⚠️ Estado no encontrado para User ${userIdStr}. Step actual: ${autoPlanState?.step || 'null'}`);
     await sendMessage(chatId, '⚠️ La sesión expiró. Escribe /start vipauto para volver a empezar.');
     return;
   }
+  console.log(`[AutoPlan] ✅ Estado encontrado para User ${userIdStr}. Plan: ${(autoPlanState.draft_data as any)?.plan_type || '?'}`);
 
   const draft = (autoPlanState.draft_data || {}) as any;
   const planType = String(draft.plan_type || 'monthly');
@@ -3091,6 +3123,7 @@ async function handleCallbackQuery(cb: any) {
   if (data.startsWith('vip_autoplan_country_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     const countryKey = data.slice('vip_autoplan_country_'.length);
+    console.log(`[AutoPlan] 🌍 País seleccionado: "${countryKey}" | User: ${userIdStr}`);
     await handleAutoPlanCountrySelected(chatId, cb.from, userIdStr, countryKey, cb.message?.message_id);
     return;
   }
