@@ -7,7 +7,7 @@ warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by
      keyboard: [[m
        [[m
          { text: '👑 Abrir Panel Web' },[m
-[31m-        { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[31m-        { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
 [32m+[m[32m        { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
        ],[m
        [[m
@@ -16,7 +16,7 @@ warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by
          reply_markup: {[m
            inline_keyboard: [[m
              [[m
-[31m-              { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: profileUrl } }[m
+[31m-              { text: 'Ver lo Exclusivo 🔥', web_app: { url: profileUrl } }[m
 [32m+[m[32m              { text: 'Ver lo Exclusivo 🔥', web_app: { url: profileUrl } }[m
              ][m
            ][m
@@ -25,7 +25,7 @@ warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by
          inline_keyboard: [[m
            [[m
              { text: '🌐 Ver en Panel Web', web_app: { url: adminLink } },[m
-[31m-            { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[31m-            { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
 [32m+[m[32m            { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
            ][m
          ][m
@@ -34,7 +34,7 @@ warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by
    const inlineKeyboard = [[m
      [m
      [[m
-[31m-      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }[m
+[31m-      { text: 'Ver lo Exclusivo 🔥', url: directMiniAppUrl }[m
 [32m+[m[32m      { text: 'Ver lo Exclusivo 🔥', url: directMiniAppUrl }[m
      ][m
    ];[m
@@ -43,7 +43,7 @@ warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by
            { text: '🌐 Abrir Panel Admin', web_app: { url: adminLink } }[m
          ],[m
          [[m
-[31m-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[31m-          { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
 [32m+[m[32m          { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
          ],[m
          [[m
