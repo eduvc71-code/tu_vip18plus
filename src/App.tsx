@@ -50,6 +50,9 @@ export default function App() {
   });
   const [showAgeModal, setShowAgeModal] = useState(false);
 
+    // [FIX BUCLE] Flag para procesar el deep link UNA SOLA VEZ por sesión
+  const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
+
   const [isAdminView, setIsAdminView] = useState(() => {
     if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
@@ -224,20 +227,25 @@ export default function App() {
         setProfiles(data);
 
         // Soporte de Deep Links via startapp / start_param de Telegram
-        try {
-          const tgApp = (window as any).Telegram?.WebApp;
-          const urlParams = new URLSearchParams(window.location.search);
-          const sp = String(tgApp?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || '').trim();
-          if (sp === 'pagos' || sp === 'métodos') {
-            setShowPaymentModal(true);
-          } else if (sp.startsWith('ver_')) {
-            const targetId = sp.replace('ver_', '').trim();
-            const found = data.find((p: any) => String(p.id) === targetId);
-            if (found) {
-              setSelectedProfile(found);
+        // ⚠️ SOLO SE EJECUTA UNA VEZ POR SESIÓN (evita que el modal se abra en bucle)
+        if (!deepLinkProcessed) {
+          try {
+            const tgApp = (window as any).Telegram?.WebApp;
+            const urlParams = new URLSearchParams(window.location.search);
+            const sp = String(tgApp?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || '').trim();
+            if (sp === 'pagos' || sp === 'métodos') {
+              setShowPaymentModal(true);
+            } else if (sp.startsWith('ver_')) {
+              const targetId = sp.replace('ver_', '').trim();
+              const found = data.find((p: any) => String(p.id) === targetId);
+              if (found) {
+                setSelectedMediaUrl(undefined);
+                setSelectedProfile(found);
+              }
             }
-          }
-        } catch {}
+          } catch {}
+          setDeepLinkProcessed(true);
+        }
       }
       if (resButtons.ok) {
         setCustomButtons(await resButtons.json());

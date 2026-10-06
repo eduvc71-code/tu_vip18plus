@@ -86,8 +86,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       hideIndicatorsTimerRef.current = null;
     }
 
-
-
     setShowSlideIndicators(true);
 
     // Ciclo de 10s: 5s visible, 5s oculto
@@ -317,55 +315,61 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     }
   };
 
+  // Altura máxima uniforme para imagen Y video (evita saltos de tamaño)
+  const MEDIA_MAX_HEIGHT = '72vh';
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black text-zinc-100 select-none overflow-hidden">
       
-      {/* Barra Superior Flotante Estilo Telegram (Overlaid, no quita espacio a la foto) */}
-      {/* [FIX SOLAPAMIENTO] Se agregó +56px al paddingTop para bajar los botones debajo del header nativo de Telegram */}
+      {/* [FIX] Barra Superior Flotante con botones TRANSLÚCIDOS y padding-top 80px */}
       <div 
-        className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 py-2.5 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-auto"
+        className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 pb-2.5 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-auto"
         style={{
           paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 80px)'
         }}
       >
-        {/* Botón Volver */}
+        {/* Botón Volver [TRANSLÚCIDO] */}
         <button
           type="button"
           onClick={onClose}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-200 hover:text-white transition-all backdrop-blur-md shadow-md text-xs font-bold cursor-pointer active:scale-95"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-black/35 hover:bg-black/55 border border-white/20 text-white hover:text-white transition-all backdrop-blur-xl shadow-lg text-xs font-bold cursor-pointer active:scale-95"
           title="Volver a la galería"
         >
           <ArrowLeft className="w-3.5 h-3.5 text-amber-400" />
           <span>Volver</span>
         </button>
 
-        {/* Contador Discreto y Stars */}
+        {/* Contador Discreto y Stars [TRANSLÚCIDO] */}
         <div className="flex items-center gap-1.5">
           {currentStars && currentStars > 0 && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/20 border border-amber-500/40 text-amber-300 backdrop-blur-md shadow-sm">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-500/30 border border-amber-400/50 text-amber-200 backdrop-blur-xl shadow-sm">
               ⭐ {currentStars}
             </span>
           )}
-          <span className="px-2.5 py-0.5 rounded-full bg-black/60 border border-zinc-800/80 text-[11px] font-mono text-zinc-300 font-semibold backdrop-blur-md">
+          <span className="px-2.5 py-0.5 rounded-full bg-black/40 border border-white/20 text-[11px] font-mono text-white font-semibold backdrop-blur-xl">
             {activePhotoIdx + 1} / {media.length}
           </span>
         </div>
 
-        {/* Botón Cerrar (X) */}
+        {/* Botón Cerrar (X) [TRANSLÚCIDO] */}
         <button
           type="button"
           onClick={onClose}
           aria-label="Cerrar visor"
-          className="p-1.5 rounded-full bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-700/60 text-zinc-300 hover:text-white transition-colors cursor-pointer active:scale-95 backdrop-blur-md"
+          className="p-1.5 rounded-full bg-black/35 hover:bg-black/55 border border-white/20 text-white hover:text-white transition-colors cursor-pointer active:scale-95 backdrop-blur-xl shadow-lg"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Zona Multimedia Inmersiva de Pantalla Completa */}
+      {/* [FIX] Zona Multimedia con padding-top y padding-bottom para no solaparse con las barras */}
       <div
         onClick={!isCurrentMediaLocked ? toggleCaption : undefined}
         className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden bg-black cursor-pointer"
+        style={{
+          paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 90px)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 90px)'
+        }}
       >
         {/* Spinner sutil de carga (sin textos invasivos) */}
         {isLoadingMedia && !hasMediaError && !isCurrentMediaLocked && (
@@ -395,7 +399,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           </div>
         )}
 
-        {/* CONTENIDO BLOQUEADO CON ESTRELLAS ESTILO TELEGRAM (Preview nítido de silueta + Candado centrado sin estorbar) */}
+        {/* CONTENIDO BLOQUEADO CON ESTRELLAS (Preview borroso + Candado) */}
         {isCurrentMediaLocked ? (
           <div className="relative w-full h-full flex items-center justify-center overflow-hidden select-none">
             {isVideo ? (
@@ -406,21 +410,23 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 loop
                 muted
                 playsInline
-                className="w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
+                className={`w-full h-full object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none`}
+                style={{ maxHeight: MEDIA_MAX_HEIGHT }}
               />
             ) : (
               <img
                 src={currentMediaUrl}
                 alt="Vista previa exclusiva"
                 draggable={false}
-                className="w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none"
+                className={`w-full h-full object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none`}
+                style={{ maxHeight: MEDIA_MAX_HEIGHT }}
               />
             )}
             <div className="absolute inset-0 bg-black/25 pointer-events-none" />
 
-            {/* Insignia Central Ultra Compacta Estilo Nativo Telegram (Centrada, no toca flechas) */}
+            {/* Insignia Central (Candado + Estrellas) */}
             <div className="absolute z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none">
-              <div className="w-13 h-13 rounded-full bg-black/75 backdrop-blur-xl border border-amber-400/50 flex items-center justify-center shadow-2xl mb-1.5">
+              <div className="w-14 h-14 rounded-full bg-black/75 backdrop-blur-xl border border-amber-400/50 flex items-center justify-center shadow-2xl mb-1.5">
                 <Lock className="w-5 h-5 text-amber-400 animate-pulse" />
               </div>
               <div className="px-3 py-1 rounded-full bg-black/85 backdrop-blur-md border border-amber-500/40 text-amber-300 font-extrabold text-[11px] shadow-lg flex items-center gap-1 whitespace-nowrap">
@@ -430,12 +436,14 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             </div>
           </div>
         ) : isVideo ? (
+          /* [FIX] Video con max-height uniforme y controles sin descarga */
           <video
             key={currentMediaUrl}
             src={currentMediaUrl}
             autoPlay
             muted={isMuted}
             controls
+            controlsList="nodownload noplaybackrate"
             playsInline
             loop
             onTimeUpdate={handleVideoTimeUpdate}
@@ -443,9 +451,11 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             onLoadedData={() => setIsLoadingMedia(false)}
             onCanPlay={() => setIsLoadingMedia(false)}
             onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
-            className={`w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-contain mx-auto transition-opacity duration-300 ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+            style={{ maxHeight: MEDIA_MAX_HEIGHT }}
           />
         ) : (
+          /* [FIX] Imagen con max-height uniforme (igual que el video) */
           <img
             key={currentMediaUrl}
             src={currentMediaUrl}
@@ -454,11 +464,12 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             draggable={false}
             onLoad={() => setIsLoadingMedia(false)}
             onError={() => { setIsLoadingMedia(false); setHasMediaError(true); }}
-            className={`w-full h-full max-h-[84vh] sm:max-h-[88vh] object-contain mx-auto transition-opacity duration-300 select-none ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+            className={`w-full h-full object-contain mx-auto transition-opacity duration-300 select-none ${isLoadingMedia ? 'opacity-0' : 'opacity-100'}`}
+            style={{ maxHeight: MEDIA_MAX_HEIGHT }}
           />
         )}
 
-        {/* Flechas Laterales con desvanecimiento suave */}
+        {/* Flechas Laterales */}
         {media.length > 1 && (
           <>
             <button
@@ -506,7 +517,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           <div className="flex items-center gap-2">
             {currentStars && currentStars > 0 ? (
               isCurrentMediaLocked ? (
-                /* Botón Único de Desbloqueo con Estrellas */
+                /* Botón de Desbloqueo con Estrellas */
                 <button
                   type="button"
                   onClick={(e) => {
@@ -525,7 +536,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 </div>
               )
             ) : (
-              /* Botón Único Mínimo de Métodos de Pago */
+              /* Botón Métodos de Pago */
               <button
                 type="button"
                 onClick={(e) => {
@@ -542,7 +553,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
               </button>
             )}
 
-            {/* Solo icono para activar sonido al lado de Métodos de Pago / Desbloqueo */}
+            {/* Botón Sonido (solo videos) */}
             {isVideo && !isCurrentMediaLocked && (
               <button
                 type="button"
@@ -560,7 +571,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
             )}
           </div>
 
-          {/* Puntos Indicadores Compactos */}
+          {/* Puntos Indicadores */}
           {media.length > 1 && (
             <div className={`flex items-center justify-center gap-1.5 mt-0.5 transition-opacity duration-500 ${
               showSlideIndicators ? 'opacity-100' : 'opacity-0 pointer-events-none'
