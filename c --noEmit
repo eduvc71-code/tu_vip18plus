@@ -1,0 +1,50 @@
+warning: in the working copy of 'src/server/telegram.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/src/server/telegram.ts b/src/server/telegram.ts[m
+[1mindex d8067f7..4f77076 100644[m
+[1m--- a/src/server/telegram.ts[m
+[1m+++ b/src/server/telegram.ts[m
+[36m@@ -394,7 +394,7 @@[m [mexport async function getAdminReplyKeyboard(adminLink: string, baseUrl: string)[m
+     keyboard: [[m
+       [[m
+         { text: '👑 Abrir Panel Web' },[m
+[31m-        { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[32m+[m[32m        { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
+       ],[m
+       [[m
+         { text: btnCanal },[m
+[36m@@ -1222,7 +1222,7 @@[m [mexport async function processTelegramUpdate(update: any) {[m
+         reply_markup: {[m
+           inline_keyboard: [[m
+             [[m
+[31m-              { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: profileUrl } }[m
+[32m+[m[32m              { text: 'Ver lo Exclusivo 🔥', web_app: { url: profileUrl } }[m
+             ][m
+           ][m
+         }[m
+[36m@@ -2128,7 +2128,7 @@[m [masync function handleProfileMediaUploadFromTelegram(chatId: string | number, use[m
+         inline_keyboard: [[m
+           [[m
+             { text: '🌐 Ver en Panel Web', web_app: { url: adminLink } },[m
+[31m-            { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[32m+[m[32m            { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
+           ][m
+         ][m
+       }[m
+[36m@@ -3178,7 +3178,7 @@[m [mexport async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m[m
+   const inlineKeyboard = [[m
+     [m
+     [[m
+[31m-      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }[m
+[32m+[m[32m      { text: 'Ver lo Exclusivo 🔥', url: directMiniAppUrl }[m
+     ][m
+   ];[m
+ [m
+[36m@@ -3652,7 +3652,7 @@[m [masync function sendAdminWelcome(chatId: string | number, name: string) {[m
+           { text: '🌐 Abrir Panel Admin', web_app: { url: adminLink } }[m
+         ],[m
+         [[m
+[31m-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }[m
+[32m+[m[32m          { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }[m
+         ],[m
+         [[m
+           { text: btnNuevo, callback_data: 'admin_btn_new' },[m

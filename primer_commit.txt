@@ -1,1 +1,0 @@
-Si tu espacio de trabajo está limpio (working tree clean), significa que no hay modificaciones pendientes en tu computadora, sin importar que tu repositorio ya tenga un proyecto completo con muchos archivos. Git solo hace commits de los archivos que han cambiado desde la última vez que se guardaron.

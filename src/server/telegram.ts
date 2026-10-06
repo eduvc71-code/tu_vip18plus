@@ -394,7 +394,7 @@ export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) 
     keyboard: [
       [
         { text: '👑 Abrir Panel Web' },
-        { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
+        { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }
       ],
       [
         { text: btnCanal },
@@ -1222,7 +1222,7 @@ export async function processTelegramUpdate(update: any) {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: profileUrl } }
+              { text: 'Ver lo Exclusivo 🔥', web_app: { url: profileUrl } }
             ]
           ]
         }
@@ -2124,15 +2124,13 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
       `_El contenido ya está guardado en tu galería. Para gestionarlo abre el Panel Web o usa /publicar ${targetProfile.id}._`;
 
     await sendMessage(chatId, reply, {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            { text: '🌐 Ver en Panel Web', web_app: { url: adminLink } },
-            { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
-          ]
-        ]
-      }
-    });
+  reply_markup: {
+    inline_keyboard: [
+      [{ text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }]
+    ]
+  }
+});
+
   } catch (error: any) {
     console.error('[Telegram Profile Media Upload Error]:', error);
     await sendMessage(chatId, `❌ *Error al agregar contenido*: ${error.message || 'Error desconocido'}`);
@@ -3178,7 +3176,7 @@ export async function publishPaymentMethodsToChannel(): Promise<{ ok: boolean; m
   const inlineKeyboard = [
     
     [
-      { text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }
+      { text: 'Ver lo Exclusivo 🔥', url: directMiniAppUrl }
     ]
   ];
 
@@ -3652,7 +3650,7 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
           { text: '🌐 Abrir Panel Admin', web_app: { url: adminLink } }
         ],
         [
-          { text: 'Ver lo Exclusivo 🔥🔥🔥', web_app: { url: baseUrl } }
+          { text: 'Ver lo Exclusivo 🔥', web_app: { url: baseUrl } }
         ],
         [
           { text: btnNuevo, callback_data: 'admin_btn_new' },
