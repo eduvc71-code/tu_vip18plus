@@ -299,23 +299,64 @@ export default function App() {
     }
   };
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // [FIX BUCLE] SSE con debounce y sin refrescos si hay modales abiertos
+  // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     fetchProfiles();
 
-    // Subscribe to SSE for live real-time updates when Administrator updates profiles on Telegram
     const eventSource = new EventSource('/api/events');
-    eventSource.onmessage = () => {
-      fetchProfiles();
+
+    // Debounce: evita múltiples fetch en ráfaga y NO refresca si hay modal abierto
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const debouncedRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        // No refrescar mientras haya un modal abierto (evita el bucle infinito)
+        const modalOpen = Boolean(
+          document.querySelector('[role="dialog"]') ||
+          document.querySelector('.fixed.inset-0.z-50')
+        );
+        if (!modalOpen) {
+          fetchProfiles();
+        }
+      }, 1500);
     };
-    eventSource.addEventListener('PROFILE_UPDATED', () => fetchProfiles());
-    eventSource.addEventListener('PROFILE_DELETED', () => fetchProfiles());
-    eventSource.addEventListener('TELEGRAM_UPDATE', () => fetchProfiles());
-    eventSource.addEventListener('PAYMENT_METHOD_UPDATED', () => fetchProfiles());
+
+    eventSource.onmessage = debouncedRefresh;
+    eventSource.addEventListener('PROFILE_UPDATED', debouncedRefresh);
+    eventSource.addEventListener('PROFILE_DELETED', debouncedRefresh);
+    eventSource.addEventListener('TELEGRAM_UPDATE', debouncedRefresh);
+    eventSource.addEventListener('PAYMENT_METHOD_UPDATED', debouncedRefresh);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       eventSource.close();
     };
   }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // [FIX BUCLE] Re-sincronizar selectedProfile cuando profiles cambia,
+  // pero SOLO si el contenido realmente cambió (comparación por JSON).
+  // Esto evita que el modal se re-abra en bucle por el SSE.
+  // ═══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!selectedProfile) return;
+    const updated = profiles.find(p => p.id === selectedProfile.id);
+    if (!updated) {
+      // El perfil desapareció (fue eliminado). Cerrar el modal.
+      setSelectedProfile(null);
+      setSelectedMediaUrl(undefined);
+      return;
+    }
+    // Solo actualizar si CAMBIÓ el contenido (comparación por JSON)
+    const prevJson = JSON.stringify(selectedProfile);
+    const nextJson = JSON.stringify(updated);
+    if (prevJson !== nextJson) {
+      setSelectedProfile(updated);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profiles]);
 
   // Restauración activa del scroll táctil en la pantalla principal al cerrar cualquier modal
   useEffect(() => {
