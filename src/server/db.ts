@@ -708,7 +708,7 @@ function seedPaymentMethods(database: any): void {
       },
       {
         id: 'tigo_money',
-        title: 'â˜Žï¸ TIGO MONEY',
+        title: '📲 TIGO MONEY',  // o el emoji que prefieras
         category: 'service',
         image_url: null,
         description: 'Envío directo por Tigo Money Bolivia al número de la administradora.',
@@ -1114,6 +1114,36 @@ export async function findRecentDuplicateCustomerRequest(
   const row = stmt.getAsObject() as unknown as CustomerRequest;
   stmt.free();
   return row;
+}
+
+export async function deleteCustomerRequestsByIds(ids: string[]): Promise<number> {
+  if (!Array.isArray(ids) || ids.length === 0) return 0;
+  const database = await getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  const stmt = database.prepare(`DELETE FROM customer_requests WHERE id IN (${placeholders})`);
+  const result = stmt.run(...ids);
+  saveDb();
+  return result?.changes || 0;
+}
+
+export async function deleteCustomerRequestsByStatus(status: string): Promise<number> {
+  const database = await getDb();
+  let result;
+
+  if (status === 'all') {
+    const stmt = database.prepare(`DELETE FROM customer_requests`);
+    result = stmt.run();
+  } else if (status === 'responded') {
+    // "responded" agrupa todos los que ya no están pendientes
+    const stmt = database.prepare(`DELETE FROM customer_requests WHERE status != 'pendiente'`);
+    result = stmt.run();
+  } else {
+    const stmt = database.prepare(`DELETE FROM customer_requests WHERE status = ?`);
+    result = stmt.run(status);
+  }
+
+  saveDb();
+  return result?.changes || 0;
 }
 
 export async function getCustomerRequests(): Promise<CustomerRequest[]> {
@@ -1867,8 +1897,6 @@ export async function vacuumAndCompactDb(): Promise<{
     message: `Base de datos compactada con éxito: pasó de ${beforeStats.fileSizeFormatted} a ${afterStats.fileSizeFormatted}.`
   };
 }
-
-
 
 export async function getAllSubscribers(): Promise<any[]> {
   const database = await getDb();

@@ -1668,6 +1668,39 @@ router.delete('/admin/bot-queue/:id', requireAdminAuth, async (req: Request, res
   }
 });
 
+// DELETE Bulk delete of customer requests (by ids or filter)
+router.delete('/admin/requests/bulk', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const { ids, filter } = req.body;
+    const adminId = (req as any).adminUserId || 'Admin Web';
+
+    let deletedCount = 0;
+
+    if (Array.isArray(ids) && ids.length > 0) {
+      // Borrar por IDs específicos
+      const { deleteCustomerRequestsByIds } = await import('./db.js');
+      deletedCount = await deleteCustomerRequestsByIds(ids);
+      await addAuditLog('DELETE_REQUESTS_BULK', adminId, `${deletedCount} solicitud(es) eliminada(s) por selección manual.`);
+    } else if (filter && typeof filter === 'string') {
+      // Borrar por filtro de estado
+      const { deleteCustomerRequestsByStatus } = await import('./db.js');
+      deletedCount = await deleteCustomerRequestsByStatus(filter);
+      await addAuditLog('DELETE_REQUESTS_FILTER', adminId, `${deletedCount} solicitud(es) eliminada(s) con filtro: ${filter}.`);
+    } else {
+      res.status(400).json({ error: 'Debes enviar "ids" (array) o "filter" (string).' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      deletedCount,
+      message: `${deletedCount} solicitud(es) eliminada(s) correctamente.`
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar solicitudes', details: err?.message });
+  }
+});
+
 // GET Customer Requests
 router.get('/admin/requests', requireAdminAuth, async (_req: Request, res: Response) => {
   try {
