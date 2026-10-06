@@ -321,11 +321,11 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black text-zinc-100 select-none overflow-hidden">
       
-      {/* [FIX] Barra Superior Flotante con botones TRANSLÚCIDOS y padding-top 80px */}
+      {/* [FIX] Barra Superior Flotante con botones TRANSLÚCIDOS y padding-top 60px */}
       <div 
         className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 pb-2.5 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-auto"
         style={{
-          paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 80px)'
+          paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 60px)'
         }}
       >
         {/* Botón Volver [TRANSLÚCIDO] */}
