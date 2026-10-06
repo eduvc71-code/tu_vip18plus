@@ -325,7 +325,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       <div 
         className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 py-2.5 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-auto"
         style={{
-          paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 56px)'
+          paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 80px)'
         }}
       >
         {/* Botón Volver */}
