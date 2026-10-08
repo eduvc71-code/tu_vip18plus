@@ -2731,7 +2731,6 @@ async function sendDirectPaymentMethods(chatId: string | number, sourceMessageId
     return;
   }
 
-  const boliviaRate = await getBoliviaOfficialRateFromServer();
 
   const sorted = activeMethods.sort((a, b) => {
     if (a.id === 'qr_bolivia') return -1;
@@ -2744,14 +2743,7 @@ async function sendDirectPaymentMethods(chatId: string | number, sourceMessageId
     const flag = getDirectMethodFlag(method);
     const cleanTitle = getDirectCleanTitle(method);
     
-    let priceText = '';
-    if (method.id === 'qr_bolivia' || /bolivia/i.test(method.title || '')) {
-      priceText = boliviaRate ? ` - Bs. ${boliviaRate} / mes` : '';
-    } else if (method.price) {
-      priceText = ` - ${method.price}`;
-    }
-    
-    const label = `${flag} ${cleanTitle}${priceText}`;
+    const label = `${flag} ${cleanTitle}`;
     rows.push([{ text: label, callback_data: `direct_pay_${method.id}` }]);
   }
 

@@ -2237,7 +2237,7 @@ router.post('/admin/telegram-botoneras/:id/publish', requireAdminAuth, async (re
     }
     rows.push([{ text: '💳 Ver todos los métodos de pago', url: startUrl('pagos') }]);
     rows.push([{ text: 'Solicitar Información a mi privado', url: `https://t.me/${botUser}` }]);
-    rows.push([{ text: 'Ver lo Exclusivo 🔥🔥🔥', url: directMiniAppUrl }]);
+    rows.push([{ text: 'Ver lo Exclusivo 🔥', url: directMiniAppUrl }]);
 
     const resolvedTitle = 'HOLI MIS AMORES HOLI 💖🔥APROVECHEN LA PROMOCION, SUSCRIPCIONES MENSUAL, ULTIMAS PLAZAS..';
     const resolvedIntro = 'Selecciona tu país para continuar con tu suscripción VIP.';
