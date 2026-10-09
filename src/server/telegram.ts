@@ -692,7 +692,7 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
       { text: 'Ver lo Exclusivo 🔥', url: botAppUrl }
     ],
     [
-      { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
+      { text: '💳 Suscripción Automática', url: `https://t.me/${username}?start=pagos` }
     ]
   ];
 
