@@ -14,6 +14,8 @@ import { listAllB2Files, listB2ObjectsForAudit, deleteB2Backup, obliterateB2Medi
 import {
   getPublicProfiles, getAllProfiles,
   getAllSubscribers,
+  deleteSubscriber,
+  clearAllSubscribers,
   getProfileById,
   saveProfile,
   deleteProfile,
@@ -2506,6 +2508,53 @@ router.get('/admin/system/database-stats', requireAdminAuth, async (_req: Reques
     res.json({ ok: true, stats });
   } catch (err: any) {
     res.status(500).json({ error: 'Error al obtener estadísticas de la base de datos', details: err?.message });
+  }
+});
+
+// ==========================================
+// Gestión de Suscriptores (Admin solo por ID)
+// ==========================================
+
+// GET Listado de suscriptores registrados por el bot
+router.get('/admin/subscribers', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const subscribers = await getAllSubscribers();
+    res.json({ ok: true, count: subscribers.length, subscribers });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al obtener suscriptores', details: err?.message });
+  }
+});
+
+// DELETE Eliminar un suscriptor concreto (se le volverá a dar la bienvenida al interactuar)
+router.delete('/admin/subscribers/:userId', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.params.userId || '').trim();
+    if (!userId) {
+      res.status(400).json({ error: 'ID de Telegram requerido' });
+      return;
+    }
+    const deleted = await deleteSubscriber(userId);
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('SUBSCRIBER_DELETED', adminId, `Suscriptor eliminado de la BD: ${userId}`);
+    res.json({ ok: true, deleted, message: deleted ? `Suscriptor ${userId} eliminado. El bot le dará la bienvenida cuando vuelva a interactuar.` : 'Suscriptor no encontrado.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al eliminar suscriptor', details: err?.message });
+  }
+});
+
+// POST VACIAR todos los suscriptores (requiere confirmación explícita)
+router.post('/admin/subscribers/clear', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    if (req.body?.confirm !== 'VACIAR') {
+      res.status(400).json({ error: 'Confirmación requerida: envía confirm="VACIAR"' });
+      return;
+    }
+    const removed = await clearAllSubscribers();
+    const adminId = (req as any).adminUserId || 'Admin Web';
+    await addAuditLog('SUBSCRIBERS_CLEARED', adminId, `Tabla de suscriptores vaciada. Registros eliminados: ${removed}`);
+    res.json({ ok: true, removed, message: `Se vació la base de datos de suscriptores (${removed} registros eliminados). Todos recibirán la bienvenida del bot al volver a interactuar.` });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al vaciar suscriptores', details: err?.message });
   }
 });
 

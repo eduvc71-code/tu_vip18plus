@@ -1,10 +1,190 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search, SearchCode, ShieldAlert } from 'lucide-react';
+import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search, SearchCode, ShieldAlert, Users, RefreshCw } from 'lucide-react';
 import { B2File } from '../types';
 
 interface B2ManagerProps {
   token: string;
 }
+
+interface SubscriberRow {
+  telegram_user_id: string;
+  telegram_username?: string | null;
+  telegram_first_name?: string | null;
+  created_at?: string;
+  last_seen?: string;
+}
+
+// Gestor de base de datos de SUSCRIPTORES (solo visible para el admin maestro).
+// Permite listar, eliminar suscriptores individuales o VACIAR toda la tabla
+// para que el bot vuelva a dar la bienvenida a todos al interactuar de nuevo.
+export const SubscribersManager: React.FC<B2ManagerProps> = ({ token }) => {
+  const [subscribers, setSubscribers] = useState<SubscriberRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [filter, setFilter] = useState('');
+
+  const fetchSubscribers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/subscribers', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setSubscribers(data.subscribers || []);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al cargar suscriptores' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al cargar suscriptores' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void fetchSubscribers(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteOne = async (userId: string) => {
+    if (!confirm(`¿Eliminar al suscriptor ${userId} de la base de datos? El bot le dará la bienvenida completa cuando vuelva a interactuar.`)) return;
+    try {
+      const res = await fetch(`/api/admin/subscribers/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessage({ type: 'success', text: data.message || 'Suscriptor eliminado.' });
+        setSubscribers((prev) => prev.filter((s) => String(s.telegram_user_id) !== String(userId)));
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al eliminar suscriptor' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar suscriptor' });
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm('⚠️ ¿VACIAR por completo la base de datos de suscriptores? Se eliminarán TODOS los registros. Todos volverán a recibir la bienvenida del bot al interactuar de nuevo. Esta acción no se puede deshacer.')) return;
+    if (!confirm('Confirmación final: escribe OK mentalmente y pulsa "Aceptar" para VACIAR la tabla de suscriptores.')) return;
+    setClearing(true);
+    try {
+      const res = await fetch('/api/admin/subscribers/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ confirm: 'VACIAR' })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMessage({ type: 'success', text: data.message || 'Base de datos de suscriptores vaciada.' });
+        setSubscribers([]);
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al vaciar suscriptores' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al vaciar suscriptores' });
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const q = filter.trim().toLowerCase();
+  const filtered = q
+    ? subscribers.filter((s) =>
+        String(s.telegram_user_id).includes(q) ||
+        String(s.telegram_username || '').toLowerCase().includes(q) ||
+        String(s.telegram_first_name || '').toLowerCase().includes(q))
+    : subscribers;
+
+  return (
+    <div className="space-y-4 text-xs">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+          <Users className="w-4 h-4 text-emerald-400" /> Base de Datos de Suscriptores
+        </h3>
+        <button
+          onClick={() => { void fetchSubscribers(); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold transition-all cursor-pointer"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Actualizar
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-red-500/30 bg-zinc-950 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div>
+          <h4 className="font-bold text-red-300">VACIAR base de datos de suscriptores</h4>
+          <p className="text-[10px] text-zinc-400 mt-1">
+            Elimina TODOS los registros de la tabla <code>subscribers</code>. No afecta a los miembros del canal de Telegram;
+            el bot volverá a registrar y dar la bienvenida a cada usuario cuando vuelva a interactuar (o pulse /start).
+          </p>
+        </div>
+        <button
+          onClick={() => { void handleClearAll(); }}
+          disabled={clearing || loading || subscribers.length === 0}
+          className="shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold transition-all cursor-pointer"
+        >
+          <Trash2 className="w-4 h-4" /> {clearing ? 'Vaciando...' : `VACIAR (${subscribers.length})`}
+        </button>
+      </div>
+
+      {message && (
+        <div className={`rounded-xl px-4 py-3 font-semibold ${message.type === 'success' ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30' : 'bg-red-500/10 text-red-300 border border-red-500/30'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-bold text-zinc-200">Listado ({filtered.length} de {subscribers.length})</span>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Buscar por ID, @usuario o nombre..."
+            className="flex-1 max-w-xs px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/50"
+          />
+        </div>
+        {loading ? (
+          <div className="py-8 text-center text-zinc-500">Cargando suscriptores...</div>
+        ) : filtered.length === 0 ? (
+          <div className="py-8 text-center text-zinc-500">{subscribers.length === 0 ? 'No hay suscriptores registrados. 🎉 La base está vacía.' : 'Sin resultados para la búsqueda.'}</div>
+        ) : (
+          <div className="overflow-x-auto max-h-[50vh] overflow-y-auto rounded-xl border border-zinc-800/60">
+            <table className="w-full text-left">
+              <thead className="sticky top-0 bg-zinc-900 text-zinc-400 uppercase text-[10px] tracking-wider">
+                <tr>
+                  <th className="px-3 py-2">ID Telegram</th>
+                  <th className="px-3 py-2">Usuario</th>
+                  <th className="px-3 py-2">Nombre</th>
+                  <th className="px-3 py-2">Última actividad</th>
+                  <th className="px-3 py-2 text-right">Acción</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {filtered.map((s) => (
+                  <tr key={s.telegram_user_id} className="hover:bg-zinc-900/60">
+                    <td className="px-3 py-2 font-mono text-zinc-300">{s.telegram_user_id}</td>
+                    <td className="px-3 py-2 text-sky-300">{s.telegram_username ? `@${s.telegram_username}` : '—'}</td>
+                    <td className="px-3 py-2 text-zinc-300">{s.telegram_first_name || '—'}</td>
+                    <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">{s.last_seen ? new Date(s.last_seen).toLocaleString() : '—'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => { void handleDeleteOne(String(s.telegram_user_id)); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-300 font-bold border border-red-500/30 transition-all cursor-pointer"
+                        title="Eliminar de la BD (recibirá bienvenida al volver)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
   const [files, setFiles] = useState<B2File[]>([]);
