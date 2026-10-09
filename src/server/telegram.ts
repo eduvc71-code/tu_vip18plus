@@ -687,12 +687,14 @@ export async function buildChannelPostMarkup(profile: Profile, _baseUrl: string,
     console.warn('[Telegram] Could not load custom buttons for channel:', err);
   }
 
+    // [Ajuste] El segundo botón del post del canal ahora se llama "Suscripción Automática".
+    // Solo cambia el TEXTO del botón; el enlace/deep link (?start=pagos) y el backend siguen igual.
     const keyboard = [
     [
       { text: 'Ver lo Exclusivo 🔥', url: botAppUrl }
     ],
     [
-      { text: '💳 Métodos de Pago', url: `https://t.me/${username}?start=pagos` }
+      { text: '💳 Suscripción Automática', url: `https://t.me/${username}?start=pagos` }
     ]
   ];
 
