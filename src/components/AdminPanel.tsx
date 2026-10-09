@@ -276,7 +276,7 @@ const SkeletonBlock: React.FC<{ className?: string }> = ({ className = '' }) => 
 
 const RequestSkeleton: React.FC = () => (
   <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl space-y-3" aria-hidden="true">
-    <div className="flex items-center gap-2"><SkeletonBlock className="w-6 h-6 rounded-full !bg-zinc-800/70" /><SkeletonBlock className="h-3.5 w-32" /><SkeletonBlock className="h-3 w-20" /></div>
+    <div className="flex items-center gap-2"><SkeletonBlock className="w-6 h-6 rounded-full bg-zinc-800/70!" /><SkeletonBlock className="h-3.5 w-32" /><SkeletonBlock className="h-3 w-20" /></div>
     <SkeletonBlock className="h-3 w-2/3" />
     <SkeletonBlock className="h-3 w-1/3" />
     <div className="flex justify-end"><SkeletonBlock className="h-8 w-40 rounded-xl" /></div>
@@ -292,7 +292,7 @@ const ListRowSkeleton: React.FC = () => (
 
 const TileSkeleton: React.FC<{ aspectClass?: string }> = ({ aspectClass = 'aspect-square' }) => (
   <div className={`relative rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950 ${aspectClass}`} aria-hidden="true">
-    <SkeletonBlock className="absolute inset-0 h-full w-full !rounded-none !bg-zinc-800/60" />
+    <SkeletonBlock className="absolute inset-0 h-full w-full rounded-none! bg-zinc-800/60!" />
   </div>
 );
 
@@ -306,14 +306,14 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose, active
   if (!isOpen) return null;
   const guide = TAB_HELP[activeTab] || TAB_HELP['profiles'];
   return (
-    <div role="dialog" aria-modal="true" aria-label="Guía práctica del administrador" className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" aria-label="Guía práctica del administrador" className="fixed inset-0 z-120 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full sm:max-w-lg bg-zinc-950 border-t sm:border border-zinc-800 sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[88vh]">
         <div className="flex justify-center pt-3 pb-1 sm:hidden shrink-0">
           <div className="w-10 h-1 rounded-full bg-zinc-700" />
         </div>
         <div className="px-4 pb-3 pt-1 sm:pt-4 sm:pb-4 border-b border-zinc-800/80 flex items-start justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/30 to-amber-600/10 border border-amber-500/40 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-linear-to-br from-amber-500/30 to-amber-600/10 border border-amber-500/40 flex items-center justify-center shrink-0">
               <HelpCircle className="w-5 h-5 text-amber-400" />
             </div>
             <div>
@@ -351,7 +351,7 @@ const AdminHelpModal: React.FC<AdminHelpModalProps> = ({ isOpen, onClose, active
         </div>
         <div className="px-4 py-3 border-t border-zinc-800/80 bg-zinc-950 flex items-center justify-between gap-3 shrink-0">
           <p className="text-[10px] text-zinc-500">Guía contextual · Pestaña activa</p>
-          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20">
             ¡Entendido!
           </button>
         </div>
@@ -2137,7 +2137,7 @@ const handleSendReply = async (requestId: string) => {
               href={`https://t.me/${botUsername}?start=admin_login`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full min-h-12 rounded-2xl bg-gradient-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer px-3 text-center"
+              className="w-full min-h-12 rounded-2xl bg-linear-to-r from-sky-500 via-sky-600 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-sky-500/25 flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer px-3 text-center"
             >
               <Send className="w-4 h-4 text-white shrink-0" />
               <span>Ingresar con Telegram (Sin Contraseña)</span>
@@ -2148,9 +2148,9 @@ const handleSendReply = async (requestId: string) => {
           </div>
 
           <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-zinc-800"></div>
-            <span className="flex-shrink mx-3 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">o ingresa con tu PIN</span>
-            <div className="flex-grow border-t border-zinc-800"></div>
+            <div className="grow border-t border-zinc-800"></div>
+            <span className="shrink mx-3 text-[10px] font-mono text-zinc-500 uppercase tracking-widest">o ingresa con tu PIN</span>
+            <div className="grow border-t border-zinc-800"></div>
           </div>
 
           {/* 2. Formulario alternativo de PIN / ID */}
@@ -2186,7 +2186,7 @@ const handleSendReply = async (requestId: string) => {
             <button
               type="submit"
               disabled={authLoading || !pinInput.trim()}
-              className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full min-h-11 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs uppercase tracking-wider transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
             >
               {authLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
               <span>{authLoading ? 'Verificando...' : 'Entrar con PIN'}</span>
@@ -2227,7 +2227,7 @@ const handleSendReply = async (requestId: string) => {
 
         {/* Modal de Instrucciones de Instalación iOS Safari */}
         {showIosInstallGuide && (
-          <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="fixed inset-0 z-130 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
             <div className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center">
                 <Smartphone className="w-6 h-6" />
@@ -2278,11 +2278,11 @@ const handleSendReply = async (requestId: string) => {
   const tabs = allTabs.filter(t => (t.id === 'audit' || t.id === 'b2' || t.id === 'subscribers') ? isMasterAdmin : true);
 
   return (
-    <div className="admin-panel-viewport fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-[100dvh] max-h-[100dvh] overflow-hidden sm:items-stretch">
+    <div className="admin-panel-viewport fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-dvh max-h-dvh overflow-hidden sm:items-stretch">
       <div className={`relative w-full h-full max-h-full min-h-0 bg-zinc-900 text-zinc-100 flex flex-col overflow-hidden transition-all duration-200 ${
         isFullScreen
           ? 'h-screen w-screen max-h-screen max-w-none rounded-none border-none'
-          : 'sm:mx-auto sm:max-w-6xl xl:max-w-[1600px] sm:rounded-2xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[calc(100dvh-1rem)] lg:rounded-3xl rounded-none border-none'
+          : 'sm:mx-auto sm:max-w-6xl xl:max-w-400 sm:rounded-2xl sm:border sm:border-zinc-800 sm:shadow-2xl sm:max-h-[calc(100dvh-1rem)] lg:rounded-3xl rounded-none border-none'
       }`}>
 
         {/* ── Header ── */}
@@ -2384,7 +2384,7 @@ const handleSendReply = async (requestId: string) => {
         <button
           type="button"
           onClick={() => setShowHelpGuide(true)}
-          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-40 w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xl shadow-2xl shadow-amber-500/40 border-2 border-amber-300 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all"
+          className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] z-40 w-11 h-11 rounded-full bg-linear-to-tr from-amber-500 to-amber-400 text-zinc-950 font-black text-xl shadow-2xl shadow-amber-500/40 border-2 border-amber-300 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all"
           title="Guía Práctica del Administrador"
         >
           <span>?</span>
@@ -2395,7 +2395,7 @@ const handleSendReply = async (requestId: string) => {
 
         {/* ── Global Floating Toast Notification ── */}
         {message && (
-          <div role="status" aria-live="polite" className="fixed top-5 left-1/2 -translate-x-1/2 z-[100] max-w-md w-[92%] pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
+          <div role="status" aria-live="polite" className="fixed top-5 left-1/2 -translate-x-1/2 z-100 max-w-md w-[92%] pointer-events-none animate-in fade-in slide-in-from-top-4 duration-300">
             <div className={`px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-xl border flex items-center gap-3 text-xs font-semibold ${
               message.type === 'success'
                 ? 'bg-zinc-950/95 border-emerald-500/50 text-emerald-300 shadow-emerald-500/20'
@@ -2472,7 +2472,7 @@ const handleSendReply = async (requestId: string) => {
                         }
                         setProfileStep(2);
                       }}
-                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 font-sans"
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1.5 bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 font-sans"
                       title="Carga directa de contenido al servidor"
                     >
                       <Upload className="w-3.5 h-3.5" />
@@ -2612,7 +2612,7 @@ const handleSendReply = async (requestId: string) => {
                               type="button"
                               disabled={savingDescriptionOnly}
                               onClick={handleSaveDescriptionOnly}
-                              className="py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-bold text-xs shadow-md disabled:opacity-50"
+                              className="py-2 px-3 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 text-zinc-950 font-bold text-xs shadow-md disabled:opacity-50"
                             >
                               {savingDescriptionOnly ? 'Guardando...' : 'Guardar descripción'}
                             </button>
@@ -2625,7 +2625,7 @@ const handleSendReply = async (requestId: string) => {
                       <button
                         type="submit"
                         disabled={loading || !formData.name.trim()}
-                        className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-lg shadow-amber-500/20 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Guardar y Continuar a Galería (Paso 2) ➔
@@ -2678,7 +2678,7 @@ const handleSendReply = async (requestId: string) => {
                             onClick={() => setStep2Tab('vip')}
                             className={`flex-1 py-1.5 px-2 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                               step2Tab === 'vip'
-                                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black shadow-md shadow-amber-500/20'
+                                ? 'bg-linear-to-r from-amber-500 to-amber-600 text-zinc-950 font-black shadow-md shadow-amber-500/20'
                                 : 'text-zinc-400 hover:text-white'
                             }`}
                           >
@@ -2803,7 +2803,7 @@ const handleSendReply = async (requestId: string) => {
 
                             {/* Descripción obligatoria de la publicación Free */}
                             <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
-                              <label className="block text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                              <label className="flex items-center gap-1.5">
                                 <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
                                 Descripción de la publicación <span className="text-rose-400">(Obligatoria)</span>
                               </label>
@@ -2872,7 +2872,7 @@ const handleSendReply = async (requestId: string) => {
                         
 {/* ── SUB-PESTAÑA 2: SUBIR CONTENIDO VIP ── */}
                         {step2Tab === 'vip' && (
-                          <div className="space-y-3.5 bg-gradient-to-br from-amber-500/10 via-zinc-900/60 to-zinc-950 p-3 sm:p-4 rounded-xl border border-amber-500/30">
+                          <div className="space-y-3.5 bg-linear-to-br from-amber-500/10 via-zinc-900/60 to-zinc-950 p-3 sm:p-4 rounded-xl border border-amber-500/30">
                             {/* Indicador de Etapa Compacto */}
                             <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
                               <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
@@ -2993,7 +2993,7 @@ const handleSendReply = async (requestId: string) => {
                                     type="button"
                                     onClick={() => handleUploadVipMedia(editingProfile.id)}
                                     disabled={uploadingVip}
-                                    className="w-full py-3 px-5 rounded-xl font-extrabold text-sm cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all mt-3"
+                                    className="w-full py-3 px-5 rounded-xl font-extrabold text-sm cursor-pointer bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all mt-3"
                                   >
                                     <HardDrive className="w-5 h-5" />
                                     {uploadingVip ? 'Guardando en Telegram...' : '💾 Guardar en Telegram y DB ➔'}
@@ -3030,7 +3030,7 @@ const handleSendReply = async (requestId: string) => {
                                     {isVideoUrl(vipDraftMediaUrl) ? (
                                       <div className="w-full h-full flex items-center justify-center blur-md opacity-50 bg-black">
                                         <div className="w-12 h-12 rounded-full border-4 border-amber-500 flex items-center justify-center">
-                                          <div className="w-0 h-0 border-t-8 border-t-transparent border-l-[12px] border-l-amber-500 border-b-8 border-b-transparent ml-1"></div>
+                                          <div className="w-0 h-0 border-t-8 border-t-transparent border-l-3 border-l-amber-500 border-b-8 border-b-transparent ml-1"></div>
                                         </div>
                                       </div>
                                     ) : (
@@ -3071,7 +3071,7 @@ const handleSendReply = async (requestId: string) => {
                                       type="button"
                                       onClick={() => handlePublishVipMedia(editingProfile.id)}
                                       disabled={publishingVip}
-                                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all"
+                                      className="flex-1 py-3 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all"
                                     >
                                       <Send className="w-4 h-4" />
                                       {publishingVip ? 'Publicando...' : 'Publicar Ahora ➔'}
@@ -3373,7 +3373,7 @@ const handleSendReply = async (requestId: string) => {
                         <button
                           type="button"
                           onClick={() => setProfileStep(3)}
-                          className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
+                          className="flex-1 py-3 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all shadow-md cursor-pointer flex items-center justify-center gap-2"
                         >
                           Continuar para ver la vista previa (Paso 3) ➔
                         </button>
@@ -3390,7 +3390,7 @@ const handleSendReply = async (requestId: string) => {
                   return (
                     <div className="space-y-4 text-xs">
                       {/* Resumen del Perfil */}
-                      <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5">
+                      <div className="p-5 bg-linear-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-xl shadow-amber-500/5">
                         <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
                           <h4 className="font-bold text-white flex items-center gap-2 text-xs">
                           <Eye className="w-4 h-4 text-amber-400" /> Paso 3: Vista previa
@@ -3440,7 +3440,7 @@ const handleSendReply = async (requestId: string) => {
                         </div>
 
                         {/* Previsualizar Pantallas antes de Publicar */}
-                        <div className="p-3.5 bg-gradient-to-r from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                        <div className="p-3.5 bg-linear-to-r from-amber-500/15 via-zinc-900 to-zinc-900 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
                           <div className="space-y-0.5">
                             <h5 className="font-bold text-white text-xs flex items-center gap-1.5">
                               <Eye className="w-4 h-4 text-amber-400" /> Previsualizar Pantallas antes de Publicar
@@ -3543,7 +3543,7 @@ const handleSendReply = async (requestId: string) => {
                                             <MessageSquare className="w-3 h-3 text-amber-400" /> Descripción:
                                           </span>
                                           {desc ? (
-                                            <span className="text-zinc-300 font-mono text-[9px] truncate max-w-[140px] italic">
+                                            <span className="text-zinc-300 font-mono text-[9px] truncate max-w-35 italic">
                                               "{desc}"
                                             </span>
                                           ) : (
@@ -3660,7 +3660,7 @@ const handleSendReply = async (requestId: string) => {
 
                   return (
                     <div
-                      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
+                      className="fixed inset-0 z-70 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 sm:p-4 overflow-y-auto"
                       onClick={() => setPreviewModeModal(null)}
                     >
                       <div
@@ -3798,7 +3798,7 @@ const handleSendReply = async (requestId: string) => {
                                   {/* Botón de Suscripción */}
                                   <button
                                     type="button"
-                                    className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 pointer-events-none"
+                                    className="w-full py-2.5 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs shadow-lg shadow-amber-500/20 flex items-center justify-center gap-1.5 pointer-events-none"
                                   >
                                     💎 Suscribirse a {formData.name || 'Perfil VIP'}
                                   </button>
@@ -3824,7 +3824,7 @@ const handleSendReply = async (requestId: string) => {
                               <div className="bg-[#182533] border border-[#2b394a] rounded-2xl overflow-hidden shadow-2xl space-y-0 text-white">
                                 <div className="px-3.5 py-2.5 bg-[#17212b] border-b border-[#2b394a] flex items-center justify-between">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-zinc-950 font-bold text-xs">
+                                    <div className="w-7 h-7 rounded-full bg-linear-to-br from-amber-400 to-amber-600 flex items-center justify-center text-zinc-950 font-bold text-xs">
                                       VIP
                                     </div>
                                     <div>
@@ -3900,7 +3900,7 @@ const handleSendReply = async (requestId: string) => {
                               handlePublishToChannel(editingProfile?.id);
                             }}
                             disabled={publishing || loading}
-                            className="py-2 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs cursor-pointer transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
+                            className="py-2 px-4 rounded-xl bg-linear-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-xs cursor-pointer transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
                           >
                             <Send className="w-3.5 h-3.5" />
                             {publishing ? 'Publicando...' : '🚀 Todo Listo: Publicar Ahora'}
@@ -3914,7 +3914,7 @@ const handleSendReply = async (requestId: string) => {
                     {/* MODAL VISTA AMPLIADA Y CONFIGURACIÓN (SUGESTIVA & DESCRIPCIÓN) */}
                     {enlargedMediaUrl && editingProfile && (
                       <div
-                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
+                        className="fixed inset-0 z-60 flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
                         onClick={() => setEnlargedMediaUrl(null)}
                       >
                         <div
@@ -3988,7 +3988,7 @@ const handleSendReply = async (requestId: string) => {
                           </div>
 
                           {/* Large Media Display Container */}
-                          <div className="relative flex-1 bg-black/95 flex items-center justify-center p-2 sm:p-4 min-h-[220px] max-h-[50vh] overflow-hidden select-none">
+                          <div className="relative flex-1 bg-black/95 flex items-center justify-center p-2 sm:p-4 min-h-55 max-h-[50vh] overflow-hidden select-none">
                             {isVideoUrl(enlargedMediaUrl) ? (
                               <video
                                 src={enlargedMediaUrl}
@@ -4217,7 +4217,7 @@ const handleSendReply = async (requestId: string) => {
                     {/* MODAL PUBLICAR CONTENIDO DE PAGO CON TELEGRAM STARS */}
                     {paidModalMediaUrl && (
                       <div
-                        className="fixed inset-0 z-[70] flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
+                        className="fixed inset-0 z-70 flex items-center justify-center bg-black/95 backdrop-blur-md p-3 sm:p-5 overflow-y-auto"
                         onClick={() => !publishingPaidMedia && setPaidModalMediaUrl(null)}
                       >
                         <div
@@ -4225,7 +4225,7 @@ const handleSendReply = async (requestId: string) => {
                           onClick={(e) => e.stopPropagation()}
                         >
                           {/* Header */}
-                          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-gradient-to-r from-amber-500/20 via-zinc-950 to-zinc-950">
+                          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-linear-to-r from-amber-500/20 via-zinc-950 to-zinc-950">
                             <div className="flex items-center gap-2.5">
                               <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                 <Star className="w-5 h-5 fill-amber-400" />
@@ -4341,7 +4341,7 @@ const handleSendReply = async (requestId: string) => {
                               type="button"
                               disabled={publishingPaidMedia || paidModalStarCount === '' || paidModalStarCount <= 0}
                               onClick={handlePublishPaidMediaSubmit}
-                              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
+                              className="px-5 py-2.5 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs cursor-pointer transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50"
                             >
                               {publishingPaidMedia ? (
                                 <>
@@ -4368,7 +4368,7 @@ const handleSendReply = async (requestId: string) => {
               <div className="space-y-6 text-xs">
 
                 {/* SELECTOR MODO DE OPERACIÓN: MODO A (SOLO BOT) / MODO B (HÍBRIDO BOT + CANAL) */}
-                <div className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
+                <div className="p-5 bg-linear-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-800">
                     <div>
                       <h4 className="text-base font-extrabold text-white flex items-center gap-2">
@@ -4453,7 +4453,7 @@ const handleSendReply = async (requestId: string) => {
                 </div>
 
                 {/* SELECTOR DE MODO DE BOTONERA */}
-                <div className="p-5 bg-gradient-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
+                <div className="p-5 bg-linear-to-br from-zinc-900 to-zinc-950 border-2 border-amber-500/30 rounded-2xl space-y-4 shadow-xl shadow-black/40">
                   <div>
                     <h4 className="text-base font-extrabold text-white flex items-center gap-2">
                       <Sliders className="w-5 h-5 text-amber-400" /> Modo de Botonera en Telegram
@@ -4502,7 +4502,7 @@ const handleSendReply = async (requestId: string) => {
 
 
                 {/* PANTALLA DE INICIO / SPLASH PREVIEW & BIENVENIDA */}
-                <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
+                <div className="p-5 bg-linear-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-base font-extrabold text-amber-400 flex items-center gap-2">
                       <Sparkles className="w-5 h-5" /> Pantalla de Inicio / Splash Preview & Bienvenida
@@ -4604,7 +4604,7 @@ const handleSendReply = async (requestId: string) => {
                         type="button"
                         onClick={handleSaveSplashDescription}
                         disabled={savingSplashDescription}
-                        className="py-2 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs tracking-wide shadow-md cursor-pointer disabled:opacity-50 active:scale-95 transition-all flex items-center gap-1.5"
+                        className="py-2 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs tracking-wide shadow-md cursor-pointer disabled:opacity-50 active:scale-95 transition-all flex items-center gap-1.5"
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         <span>{savingSplashDescription ? 'Guardando...' : 'Guardar Descripción del Splash'}</span>
@@ -4614,7 +4614,7 @@ const handleSendReply = async (requestId: string) => {
                 </div>
 
                 {/* QR COMISIÓN */}
-                <div className="p-5 bg-gradient-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
+                <div className="p-5 bg-linear-to-br from-amber-500/10 via-zinc-950 to-zinc-950 border-2 border-amber-500/40 rounded-2xl space-y-4 shadow-lg shadow-amber-500/5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-base font-extrabold text-amber-400 flex items-center gap-2">
                       <QrCode className="w-5 h-5" /> Imagen QR de Suscripción VIP
@@ -5135,7 +5135,7 @@ const handleSendReply = async (requestId: string) => {
                                   Consulta por: <strong className="text-amber-300">{reqItem.profile_name}</strong>
                                 </p>
                                 {reqItem.notes && (
-                                  <p className="text-zinc-500 text-[11px] bg-zinc-900 px-2 py-1 rounded-lg break-words">
+                                  <p className="text-zinc-500 text-[11px] bg-zinc-900 px-2 py-1 rounded-lg wrap-break-word">
                                     "{reqItem.notes}"
                                   </p>
                                 )}
@@ -5179,7 +5179,7 @@ const handleSendReply = async (requestId: string) => {
                                       setLoading(false);
                                     }
                                   }}
-                                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-zinc-950 font-extrabold shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5 text-xs"
+                                  className="px-3.5 py-2 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-zinc-950 font-extrabold shadow-lg shadow-emerald-500/20 transition-all cursor-pointer flex items-center gap-1.5 text-xs"
                                 >
                                   <Banknote className="w-3.5 h-3.5" /> Marcar Pago
                                 </button>
@@ -5270,7 +5270,7 @@ const handleSendReply = async (requestId: string) => {
                       type="button"
                       onClick={handlePublishPaymentsToChannel}
                       disabled={publishingPaymentsToChannel}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-bold transition-all shadow-md shadow-pink-500/20 cursor-pointer disabled:opacity-60"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-bold transition-all shadow-md shadow-pink-500/20 cursor-pointer disabled:opacity-60"
                       title="Publicar menú interactivo de métodos de pago en el canal de Telegram"
                     >
                       <Send className="w-3.5 h-3.5" />
@@ -5427,7 +5427,7 @@ const handleSendReply = async (requestId: string) => {
                         {/* Columna Izquierda: Carga Imagen / QR */}
                         <div className="md:col-span-5 p-3.5 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col justify-between space-y-3">
                           <div>
-                            <label className="block text-zinc-300 font-bold mb-1.5 text-xs flex items-center justify-between">
+                            <label className="flex items-center justify-between">
                               <span>🖼️ Imagen o Código QR</span>
                               {paymentImagePreview && (
                                 <span className="text-[10px] text-amber-400 font-normal">Nueva imagen lista</span>
@@ -5477,7 +5477,7 @@ const handleSendReply = async (requestId: string) => {
                                 type="button"
                                 disabled={uploadingPaymentImage}
                                 onClick={() => handleUploadPaymentMethodImage(editingPaymentMethod.id)}
-                                className="w-full py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
+                                className="w-full py-2 bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-amber-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
                               >
                                 <Upload className="w-3.5 h-3.5" />
                                 <span>{uploadingPaymentImage ? 'Subiendo imagen...' : '⬆️ Subir y Guardar Imagen / QR'}</span>
@@ -5529,7 +5529,7 @@ const handleSendReply = async (requestId: string) => {
                           {/* Campo editable Precio Suscripción Mensual (solo para métodos diferentes a Bolivia) */}
                           {editingPaymentMethod.id !== 'qr_bolivia' && editingPaymentMethod.category !== 'national' ? (
                             <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/30 space-y-1.5 shadow-sm">
-                              <label className="block text-amber-300 font-bold text-[11px] flex items-center justify-between">
+                              <label className="flex items-center justify-between">
                                 <span className="flex items-center gap-1.5">
                                   <span>💎</span>
                                   <span>Precio Suscripción Mensual</span>
@@ -5604,7 +5604,7 @@ const handleSendReply = async (requestId: string) => {
                             type="button"
                             disabled={loading || publishingPaymentsToChannel}
                             onClick={() => handleSavePaymentMethod(undefined, true)}
-                            className="flex-1 sm:flex-initial px-5 py-2.5 bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-pink-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
+                            className="flex-1 sm:flex-initial px-5 py-2.5 bg-linear-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white font-black rounded-xl text-xs cursor-pointer transition-all shadow-md shadow-pink-500/20 disabled:opacity-60 flex items-center justify-center gap-1.5"
                             title="Guarda los cambios y publica el menú interactivo en el canal oficial"
                           >
                             <Send className="w-3.5 h-3.5" />
@@ -5933,7 +5933,7 @@ const handleSendReply = async (requestId: string) => {
                   <button
                     type="submit"
                     disabled={savingPoll}
-                    className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                    className="py-2.5 px-5 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     {savingPoll ? 'Creando Encuesta...' : '🚀 Lanzar Encuesta'}
@@ -6073,7 +6073,7 @@ const handleSendReply = async (requestId: string) => {
                     </div>
                   )}
                   {selectedAuditedMedia && (
-                    <div className="fixed inset-0 z-[145] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedAuditedMedia(null)}>
+                    <div className="fixed inset-0 z-145 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setSelectedAuditedMedia(null)}>
                       <div className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl border border-zinc-700 bg-zinc-950 p-4 space-y-3 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between gap-3">
                           <h4 className="text-sm font-bold text-white">Ficha de auditoría del medio</h4>
@@ -6116,7 +6116,7 @@ const handleSendReply = async (requestId: string) => {
                             <span className="shrink-0 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-400 text-[10px] font-mono font-bold mt-0.5">
                               {log.action}
                             </span>
-                            <span className="text-zinc-300 text-xs break-words">{log.details}</span>
+                            <span className="text-zinc-300 text-xs wrap-break-word">{log.details}</span>
                           </div>
                           <span className="shrink-0 text-zinc-500 text-[10px] font-mono">
                             {new Date(log.timestamp).toLocaleTimeString('es-BO')}
@@ -6136,7 +6136,7 @@ const handleSendReply = async (requestId: string) => {
                       <div className="max-h-48 overflow-y-auto divide-y divide-zinc-900">
                         {syncErrors.map(err => (
                           <div key={err.id} className="p-3 flex items-start justify-between gap-4">
-                            <span className="text-rose-300 text-xs break-words">{err.error_message}</span>
+                            <span className="text-rose-300 text-xs wrap-break-word">{err.error_message}</span>
                             <span className="shrink-0 text-zinc-500 text-[10px] font-mono">
                               {new Date(err.timestamp).toLocaleTimeString('es-BO')}
                             </span>
@@ -6167,7 +6167,7 @@ const handleSendReply = async (requestId: string) => {
 
       {/* Modal de Instrucciones de Instalación iOS Safari */}
       {showIosInstallGuide && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+        <div className="fixed inset-0 z-130 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
           <div className="w-full max-w-sm rounded-3xl border border-zinc-700 bg-zinc-900 p-5 text-center shadow-2xl space-y-4">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center">
               <Smartphone className="w-6 h-6" />

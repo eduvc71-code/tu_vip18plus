@@ -113,14 +113,14 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
           </div>
         ) : (
           /* Fondo de Respaldo Sofisticado si aún no se ha subido archivo */
-          <div className="absolute inset-0 z-0 bg-gradient-to-br from-amber-950/40 via-zinc-950 to-black">
+          <div className="absolute inset-0 z-0 bg-linear-to-br from-amber-950/40 via-zinc-950 to-black">
             <div className="absolute -top-24 -left-24 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl animate-pulse" />
             <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl" />
           </div>
         )}
 
         {/* Viñeta Oscura y Dorada para máxima legibilidad de textos */}
-        <div className="absolute inset-0 z-0 bg-gradient-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/40 pointer-events-none" />
+        <div className="absolute inset-0 z-0 bg-linear-to-t from-zinc-950 via-zinc-950/60 to-zinc-950/40 pointer-events-none" />
 
         {/* Cabecera Superior del Splash */}
         <header className="relative z-10 flex items-center justify-between w-full pt-safe">
@@ -175,7 +175,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
             {!isPreview && (
               <div className="w-full bg-zinc-900/80 rounded-full h-1.5 overflow-hidden border border-zinc-800">
                 <div
-                  className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 h-full transition-all duration-75 ease-linear rounded-full shadow-sm shadow-amber-400/50"
+                  className="bg-linear-to-r from-amber-500 via-amber-400 to-amber-600 h-full transition-all duration-75 ease-linear rounded-full shadow-sm shadow-amber-400/50"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -200,7 +200,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({
                 e.stopPropagation();
                 triggerFinish();
               }}
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+              className="w-full py-3.5 px-6 rounded-2xl bg-linear-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-xl shadow-amber-500/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
             >
               <span>{isPreview ? 'Entendido (Cerrar)' : 'Entrar al Espacio Exclusivo'}</span>
               <ArrowRight className="w-4 h-4 text-zinc-950" />

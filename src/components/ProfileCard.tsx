@@ -331,7 +331,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                 type="button"
                 onClick={() => onRequestAvailability(profile)}
                 id={`btn-request-${profile.id}`}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-sm font-black uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                className="w-full py-3.5 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-sm font-black uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
               >
                 <Send className="h-4 w-4 shrink-0" />
                 <span>Adquirir Contenido</span>

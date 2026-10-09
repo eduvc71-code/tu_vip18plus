@@ -71,7 +71,7 @@ export const AgeModal: React.FC<AgeModalProps> = ({ isOpen: controlledIsOpen, on
           <button
             onClick={handleAccept}
             id="btn-accept-age"
-            className="flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 active:scale-95"
+            className="flex-1 py-3 px-4 rounded-xl font-bold text-xs tracking-wide transition-all flex items-center justify-center gap-1.5 cursor-pointer bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 active:scale-95"
           >
             <CheckCircle2 className="w-4 h-4" />
             Ver lo Exclusivo 🔥

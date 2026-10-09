@@ -3106,7 +3106,7 @@ export async function showPaymentMethodDetail(
 
   const caption = `✨ *${method.title}* ✨\n\n` +
     `${method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'}\n\n` +
-    `💵 *Tarifa Oficial:* ${officialFeeText}\n\n` +
+    `💵 *Tarifa Oficial:* {formData.rate_bs}\n\n` +
     `📲 *Envía tu comprobante a:* [@${adminUsername}](${adminContactUrl})\n\n` +
     `_Una vez recibido y verificado tu comprobante, la Administradora te enviará el acceso privado a nuestro contenido VIP._`;
 

@@ -323,7 +323,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       
       {/* [FIX] Barra Superior Flotante con botones TRANSLÚCIDOS y padding-top 60px */}
       <div 
-        className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 pb-2.5 bg-gradient-to-b from-black/70 via-black/30 to-transparent pointer-events-auto"
+        className="absolute top-0 inset-x-0 z-30 flex items-center justify-between px-3 pb-2.5 bg-linear-to-b from-black/70 via-black/30 to-transparent pointer-events-auto"
         style={{
           paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 60px)'
         }}
@@ -512,7 +512,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
       </div>
 
       {/* Barra Inferior Flotante: Acciones y Sonido */}
-      <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-5 flex flex-col items-center justify-center bg-gradient-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
+      <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-5 flex flex-col items-center justify-center bg-linear-to-t from-black/90 via-black/50 to-transparent pointer-events-none">
         <div className="pointer-events-auto flex flex-col items-center gap-2">
           <div className="flex items-center gap-2">
             {currentStars && currentStars > 0 ? (
@@ -525,7 +525,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                     handlePayWithStars();
                   }}
                   disabled={payingStars}
-                  className="px-6 py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm tracking-wide shadow-xl shadow-amber-500/25 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 transition-all"
+                  className="px-6 py-2.5 rounded-full bg-linear-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-zinc-950 font-black text-xs sm:text-sm tracking-wide shadow-xl shadow-amber-500/25 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-95 transition-all"
                 >
                   <Sparkles className="w-4 h-4 text-zinc-950" />
                   <span>{payingStars ? 'Procesando...' : `Desbloquear (${currentStars} ⭐)`}</span>

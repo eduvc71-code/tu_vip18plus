@@ -415,7 +415,7 @@ export default function App() {
           </button>
           <a
             href={`https://t.me/${botUsername}`}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+            className="w-full py-3 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
           >
             <Send className="w-4 h-4" />
             <span>Volver al Bot de Telegram</span>
@@ -434,7 +434,7 @@ export default function App() {
 
   if (isAdminView) {
     return (
-      <div className="fixed inset-0 w-full h-[100dvh] max-h-[100dvh] bg-zinc-950 text-zinc-100 font-sans p-0 m-0 flex flex-col overflow-hidden">
+      <div className="fixed inset-0 w-full h-dvh max-h-dvh bg-zinc-950 text-zinc-100 font-sans p-0 m-0 flex flex-col overflow-hidden">
         <AdminPanel
           isOpen={true}
           onClose={() => {
@@ -530,7 +530,7 @@ export default function App() {
 
         {/* Pinned Announcement Banner from Admin */}
         {pinnedActive && pinnedText && (
-          <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-sm flex items-center gap-3 shadow-lg shadow-amber-500/5">
+          <div className="mb-6 p-4 rounded-2xl bg-linear-to-r from-amber-500/20 via-amber-500/10 to-amber-500/20 border border-amber-500/40 text-amber-200 text-sm flex items-center gap-3 shadow-lg shadow-amber-500/5">
             <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
             <div className="flex-1 font-medium">
               <strong className="text-amber-400 uppercase tracking-wide mr-2">[Anuncio Fijado]</strong>
@@ -554,7 +554,7 @@ export default function App() {
                     key={btn.id}
                     type="button"
                     onClick={() => setRequestProfile(profiles[0] || null)}
-                    className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                    className="px-4 py-2.5 rounded-2xl bg-linear-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                     <span>{btn.label}</span>
@@ -569,7 +569,7 @@ export default function App() {
                   href={resolvedHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                  className="px-4 py-2.5 rounded-2xl bg-linear-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                   <span>{btn.label}</span>

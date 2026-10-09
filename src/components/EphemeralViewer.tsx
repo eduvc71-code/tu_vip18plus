@@ -86,7 +86,7 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
   // If already expired/seen, show discreet expired banner
   if (hasExpired) {
     return (
-      <div className="relative w-full h-full min-h-[280px] sm:min-h-[380px] bg-zinc-950 flex flex-col items-center justify-center p-6 text-center select-none">
+      <div className="relative w-full h-full min-h-70 sm:min-h-95 bg-zinc-950 flex flex-col items-center justify-center p-6 text-center select-none">
         <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3 shadow-lg shadow-rose-500/10">
           <Flame className="w-7 h-7 text-rose-500" />
         </div>
@@ -103,7 +103,7 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
           <button
             type="button"
             onClick={onRequestVip}
-            className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs tracking-wide shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer"
+            className="py-2.5 px-5 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-bold text-xs tracking-wide shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer"
           >
             <Lock className="w-3.5 h-3.5" />
             Adquirir Acceso VIP Ilimitado
@@ -116,7 +116,7 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
   // If ephemeral and NOT yet revealed by client
   if (!revealed) {
     return (
-      <div className="relative w-full h-full min-h-[280px] sm:min-h-[380px] bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none">
+      <div className="relative w-full h-full min-h-70 sm:min-h-95 bg-zinc-950 flex flex-col items-center justify-center overflow-hidden select-none">
         {/* Blurred backdrop image */}
         <div className="absolute inset-0 filter blur-xl scale-110 opacity-30 pointer-events-none">
           <ProtectedMedia
@@ -130,11 +130,11 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
         </div>
 
         <div className="relative z-10 flex flex-col items-center p-6 text-center max-w-sm">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-500/20 via-rose-500/20 to-zinc-900 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-4 shadow-xl animate-pulse">
+          <div className="w-16 h-16 rounded-2xl bg-linear-to-br from-amber-500/20 via-rose-500/20 to-zinc-900 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-4 shadow-xl animate-pulse">
             <Flame className="w-8 h-8 text-amber-400" />
           </div>
 
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-gradient-to-r from-amber-500/20 to-rose-500/20 border border-amber-500/40 text-amber-300 mb-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-widest bg-linear-to-r from-amber-500/20 to-rose-500/20 border border-amber-500/40 text-amber-300 mb-2">
             <Sparkles className="w-3 h-3 text-amber-400" />
             Foto Sugestiva VIP
           </span>
@@ -150,7 +150,7 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
           <button
             type="button"
             onClick={() => setRevealed(true)}
-            className="py-3 px-6 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs uppercase tracking-wider shadow-xl shadow-amber-500/25 transition-all transform active:scale-95 flex items-center gap-2 cursor-pointer"
+            className="py-3 px-6 rounded-xl bg-linear-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs uppercase tracking-wider shadow-xl shadow-amber-500/25 transition-all transform active:scale-95 flex items-center gap-2 cursor-pointer"
           >
             <Eye className="w-4 h-4" />
             Toca para Ver ({durationSeconds}s)
@@ -191,7 +191,7 @@ export const EphemeralViewer: React.FC<EphemeralViewerProps> = ({
         {/* Dynamic Progress Bar */}
         <div className="w-32 h-1.5 bg-zinc-800/80 rounded-full overflow-hidden mt-1 border border-zinc-700/50">
           <div
-            className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-1000 ease-linear"
+            className="h-full bg-linear-to-r from-amber-500 to-rose-500 transition-all duration-1000 ease-linear"
             style={{ width: `${progressPercent}%` }}
           />
         </div>

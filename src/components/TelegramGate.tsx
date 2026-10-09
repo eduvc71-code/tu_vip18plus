@@ -28,7 +28,7 @@ export const TelegramGate: React.FC<TelegramGateProps> = ({ botUsername, onConti
           {onContinue && (
             <button
               onClick={onContinue}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 px-4 text-xs font-extrabold uppercase tracking-wider text-zinc-950 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
             >
               <span>Continuar al Canal VIP Free</span>
             </button>

@@ -389,14 +389,14 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
         <div className={`p-3 rounded-xl flex items-center gap-3 ${
           message.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
         }`}>
-          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+          {message.type === 'success' ? <CheckCircle2 className="w-5 h-5 shrink-0" /> : <AlertCircle className="w-5 h-5 shrink-0" />}
           <p>{message.text}</p>
         </div>
       )}
 
       {error && (
         <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+          <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold text-red-400">Error de conexión a B2</p>
             <p className="text-red-300/80 mt-1">{error}</p>

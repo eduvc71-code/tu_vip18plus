@@ -229,7 +229,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                   <button
                     type="button"
                     onClick={() => goToDetail(ephemeralMethod)}
-                    className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer active:scale-98"
+                    className="w-full py-2 px-3 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-amber-500/20 cursor-pointer active:scale-98"
                   >
                     <span>Continuar a Detalle de Pago ➔</span>
                   </button>
@@ -245,7 +245,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
             <div className="flex flex-col items-center text-center space-y-3 animate-in fade-in zoom-in-95 duration-200">
               
               {/* Contenedor Compacto de País y Transferencia Internacional */}
-              <div className="w-full rounded-xl bg-gradient-to-r from-amber-500/10 via-zinc-950 to-amber-500/10 px-3 py-2 border border-amber-500/20 flex items-center justify-between gap-2 text-left">
+              <div className="w-full rounded-xl bg-linear-to-r from-amber-500/10 via-zinc-950 to-amber-500/10 px-3 py-2 border border-amber-500/20 flex items-center justify-between gap-2 text-left">
                 <h3 className="text-xs sm:text-sm font-extrabold text-white tracking-wide truncate">
                   {selectedMethod.title}
                 </h3>
@@ -255,7 +255,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
               </div>
 
               {/* Tarifa Oficial Suscripción Mensual */}
-              <div className="w-full rounded-xl bg-gradient-to-r from-amber-500/15 via-zinc-950 to-amber-500/15 px-3.5 py-2.5 border border-amber-500/30 flex items-center justify-between text-left shadow-sm">
+              <div className="w-full rounded-xl bg-linear-to-r from-amber-500/15 via-zinc-950 to-amber-500/15 px-3.5 py-2.5 border border-amber-500/30 flex items-center justify-between text-left shadow-sm">
                 <span className="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
                   <span>💎</span>
                   <span>Tarifa Suscripción Mensual:</span>
@@ -269,11 +269,11 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
 
               {/* QR or Instructions Image */}
               {selectedMethod.image_url ? (
-                <div className="relative group max-w-[260px] sm:max-w-[290px] rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-950 p-2 shadow-lg shadow-black/50">
+                <div className="relative group max-w-65 sm:max-w-72.5 rounded-2xl overflow-hidden border border-zinc-700 bg-zinc-950 p-2 shadow-lg shadow-black/50">
                   <img
                     src={selectedMethod.image_url}
                     alt={selectedMethod.title}
-                    className="w-full h-auto max-h-[290px] object-contain rounded-xl"
+                    className="w-full h-auto max-h-72.5 object-contain rounded-xl"
                   />
                   <div className="absolute inset-x-0 bottom-2 text-center pointer-events-none">
                     <span className="bg-black/80 backdrop-blur-sm text-[9px] font-medium text-zinc-300 px-2.5 py-0.5 rounded-full border border-zinc-700">
@@ -348,7 +348,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                   href={adminTelegramUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full min-h-11 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-98"
+                  className="w-full min-h-11 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 transition-all cursor-pointer active:scale-98"
                 >
                   <Send className="h-3.5 w-3.5" />
                   <span>📲 Enviar Comprobante a @{cleanAdminUsername}</span>
@@ -370,7 +370,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
             /* FULL PAYMENT METHODS LIST GENERATED FROM LIVE DATA                       */
             /* ========================================================================= */
             <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-pink-500/15 via-zinc-950/60 to-zinc-950/90 p-3.5 text-center space-y-1 shadow-inner">
+              <div className="rounded-2xl border border-pink-500/25 bg-linear-to-b from-pink-500/15 via-zinc-950/60 to-zinc-950/90 p-3.5 text-center space-y-1 shadow-inner">
                 <div className="text-sm sm:text-base font-black tracking-wide text-pink-300">
                   PAYMENTS BOARD
                 </div>
@@ -406,7 +406,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
                         key={method.id}
                         type="button"
                         onClick={() => handleCountryClick(method)}
-                        className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
+                        className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-linear-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
                       >
                         <div className="flex items-center gap-2.5">
                           <span className="text-xl">{method.category === 'national' ? '🇧🇴' : '🌍'}</span>

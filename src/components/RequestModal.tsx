@@ -143,7 +143,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md overflow-y-auto">
-      <div className="relative w-full max-w-md bg-zinc-900 border border-amber-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-zinc-100 my-auto min-h-[300px] flex flex-col">
+      <div className="relative w-full max-w-md bg-zinc-900 border border-amber-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl text-zinc-100 my-auto min-h-75 flex flex-col">
         
         <button
           onClick={onClose}
@@ -189,7 +189,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="w-full py-4 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full py-4 px-4 rounded-xl bg-linear-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black text-sm tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {submitting ? 'Enviando Mensaje...' : 'Sí, Enviar Mensaje Privado'}
               </button>
@@ -292,7 +292,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, 
               <button
                 type="submit"
                 disabled={submitting || !country || (country === 'Otro' && !customCountry)}
-                className="w-full py-4 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-white font-black text-sm tracking-wider uppercase transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
+                className="w-full py-4 px-4 rounded-xl bg-linear-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-white font-black text-sm tracking-wider uppercase transition-all shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 cursor-pointer"
               >
                 <Send className="w-5 h-5" />
                 {submitting ? 'Notificando...' : 'Información Suscripción VIP'}

@@ -75,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({ botUsername, modelName, onRefres
               target="_blank"
               rel="noopener noreferrer"
               title={`Telegram VIP @${safeBot}`}
-              className="flex h-7.5 sm:h-8 items-center gap-1 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 px-2 text-xs font-bold text-white shadow-md shadow-blue-500/10 transition-colors hover:from-sky-500 hover:to-blue-500 cursor-pointer"
+              className="flex h-7.5 sm:h-8 items-center gap-1 rounded-xl bg-linear-to-r from-sky-600 to-blue-600 px-2 text-xs font-bold text-white shadow-md shadow-blue-500/10 transition-colors hover:from-sky-500 hover:to-blue-500 cursor-pointer"
             >
               <Send className="h-3 w-3 shrink-0" />
               <span className="hidden sm:inline">Bot</span>
