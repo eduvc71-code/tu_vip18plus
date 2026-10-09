@@ -1910,3 +1910,23 @@ export async function getAllSubscribers(): Promise<any[]> {
   });
 }
 
+// Elimina un suscriptor concreto. Al quedar fuera de la BD, el bot
+// le volverá a enviar la bienvenida completa cuando interactúe de nuevo.
+export async function deleteSubscriber(telegramUserId: string): Promise<boolean> {
+  const database = await getDb();
+  const before = database.getRowsModified();
+  database.run('DELETE FROM subscribers WHERE telegram_user_id = ?', [String(telegramUserId)]);
+  saveDb();
+  return database.getRowsModified() !== before;
+}
+
+// VACÍA por completo la tabla de suscriptores (todos quedan fuera del registro).
+export async function clearAllSubscribers(): Promise<number> {
+  const database = await getDb();
+  const countRes = database.exec('SELECT COUNT(*) FROM subscribers');
+  const count = countRes.length > 0 && countRes[0].values.length > 0 ? Number(countRes[0].values[0][0]) || 0 : 0;
+  database.run('DELETE FROM subscribers');
+  saveDb();
+  return count;
+}
+

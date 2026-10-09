@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { B2Manager } from './B2Manager';
+import { B2Manager, SubscribersManager } from './B2Manager';
 import { Cloud } from 'lucide-react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
@@ -57,7 +57,7 @@ interface AdminPanelProps {
   channelId: string;
 }
 
-type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'telegram' | 'audit' | 'b2';
+type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'telegram' | 'subscribers' | 'audit' | 'b2';
 
 export function getPaymentMethodFlag(method: PaymentMethod | string): string {
   const title = typeof method === 'string' ? method : (method.title || '');
@@ -2270,11 +2270,12 @@ const handleSendReply = async (requestId: string) => {
     { id: 'buttons', icon: <Sparkles className="w-4 h-4" />, label: 'Botones', badge: customButtons.length },
     { id: 'polls', icon: <BarChart2 className="w-4 h-4" />, label: 'Encuestas', badge: dynamicPolls.length },
     { id: 'telegram', icon: <QrCode className="w-4 h-4" />, label: 'Telegram' },
+    { id: 'subscribers', icon: <Users className="w-4 h-4" />, label: 'Suscriptores' },
     { id: 'audit', icon: <Activity className="w-4 h-4" />, label: 'Auditoría' },
       { id: 'b2', icon: <Cloud className="w-4 h-4" />, label: 'Bodega B2' }
   ];
 
-  const tabs = allTabs.filter(t => (t.id === 'audit' || t.id === 'b2') ? isMasterAdmin : true);
+  const tabs = allTabs.filter(t => (t.id === 'audit' || t.id === 'b2' || t.id === 'subscribers') ? isMasterAdmin : true);
 
   return (
     <div className="admin-panel-viewport fixed inset-0 z-50 flex flex-col bg-zinc-950 text-zinc-100 w-full h-[100dvh] max-h-[100dvh] overflow-hidden sm:items-stretch">
@@ -6011,6 +6012,11 @@ const handleSendReply = async (requestId: string) => {
             {/* TAB: BODEGA B2 */}
             {(activeTab === 'b2' && isMasterAdmin) && (
               <B2Manager token={token} />
+            )}
+
+            {/* TAB: GESTOR DE BD DE SUSCRIPTORES (solo admin maestro) */}
+            {(activeTab === 'subscribers' && isMasterAdmin) && (
+              <SubscribersManager token={token} />
             )}
   
             {/* TAB: AUDIT LOGS */}
