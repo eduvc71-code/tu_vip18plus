@@ -50,15 +50,24 @@ class SqlJsCompatibleDatabase {
     }
   }
 
+  // Contador de filas afectadas por la última escritura (equivalente a
+  // database.getRowsModified() de sql.js). better-sqlite3 devuelve este dato
+  // desde stmt.run(), que aquí se registra en lastChanges al ejecutar run().
+  lastChanges = 0;
+
+  getRowsModified(): number {
+    return this.lastChanges;
+  }
+
   run(sql: string, params?: any[]) {
     if (params && params.length > 0) {
-      this.db.prepare(sql).run(...params);
+      this.lastChanges = this.db.prepare(sql).run(...params).changes;
     } else {
       if (sql.includes(';') && sql.trim().split(';').length > 2) {
          this.db.exec(sql);
       } else {
          try {
-           this.db.prepare(sql).run();
+           this.lastChanges = this.db.prepare(sql).run().changes;
          } catch(e) {
            this.db.exec(sql);
          }
