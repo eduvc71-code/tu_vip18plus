@@ -121,7 +121,28 @@ export function isAdminUser(telegramUserId: string | number): boolean {
 
 export function isPublicTelegramCallbackData(data: string): boolean {
   if (!data) return false;
-  return /^(client_|vip_|pay_method_)/.test(data);
+  // [FIX] "direct_" se excluye porque sus botones (Métodos de Pago / Suscripción)
+  // solo tienen handler en el chat privado del bot.
+  return /^(client_|vip_(?!lead_)|pay_method_)/.test(data);
+}
+
+// [FIX] Los leads ("Solicitar Información") requieren contexto de sesión y chat privado,
+// por lo que NO deben tratarse como callbacks públicos del canal.
+export function isLeadCallbackData(data: string): boolean {
+  return String(data || '').startsWith('vip_lead_');
+}
+
+// [FIX] Prefijos/valores de callback que SÍ tienen handler en el chat privado.
+const PRIVATE_CALLBACK_PREFIXES = [
+  'client_', 'pay_method_', 'direct_',
+  'vip_country_', 'vip_plan_', 'vip_other', 'vip_autoplan_', 'vip_lead_'
+];
+
+export function hasPrivateHandlerForCallback(data: string): boolean {
+  const value = String(data || '');
+  if (!value) return false;
+  if (value.startsWith('admin_') || value.startsWith('btn_')) return true;
+  return PRIVATE_CALLBACK_PREFIXES.some(prefix => value.startsWith(prefix));
 }
 
 export function parseTelegramBotoneraCallbackData(data: string): {
@@ -3212,11 +3233,17 @@ async function handleCallbackQuery(cb: any) {
   });
 
   const callbackChatType = cb.message?.chat?.type;
-  if (callbackChatType && callbackChatType !== 'private' && isPublicTelegramCallbackData(data)) {
+  if (callbackChatType && callbackChatType !== 'private' && isPublicTelegramCallbackData(data) && !isLeadCallbackData(data)) {
     const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
     const parsedPublic = parseTelegramBotoneraCallbackData(data);
     const safeCountry = String(parsedPublic?.countryId || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 50);
-    const startParam = safeCountry ? `vipc_${safeCountry}` : 'pagos';
+    // [FIX] Preservar el contexto del botón tocado para que al abrir el privado
+    // el cliente caiga en la misma pantalla (no se "limpie" ni vuelva a /start).
+    let startParam = safeCountry ? `vipc_${safeCountry}` : 'pagos';
+    if (data === 'direct_show_payments') startParam = 'pagos';
+    else if (data.startsWith('pay_method_')) startParam = `pagos_${data.slice('pay_method_'.length)}`.slice(0, 64);
+    else if (data === 'vip_autoplan_mes' || data === 'vip_autoplan_seis' || data === 'vip_autoplan_permanente') startParam = 'vipauto';
+    else if (/^client_cmd_(canal|precios|info|ayuda|menu)$/.test(data)) startParam = 'menu';
     const deepLink = `https://t.me/${botUser}?start=${startParam}`;
     const redirectRes = botUser
       ? await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, url: deepLink })
@@ -3232,14 +3259,26 @@ async function handleCallbackQuery(cb: any) {
     return;
   }
 
+  // [FIX] El chat privado es la única superficie donde existen los handlers de
+  // estos botones. Si un callback "público" llega al privado (ej. botonera fijada
+  // o mensaje reenviado desde el canal), antes el flujo caía en el guard de admin
+  // ("Acceso solo para administradoras"), borraba el menú y parecía un /start.
+  // Aquí se responde con una invitación clara a retomar el flujo correcto.
+  if (callbackChatType === 'private' && isPublicTelegramCallbackData(data) && !hasPrivateHandlerForCallback(data)) {
+    await callTelegramApi('answerCallbackQuery', {
+      callback_query_id: cb.id,
+      text: 'Este botón pertenece al menú del Canal. Toca cualquier botón del menú inferior del bot para continuar 💖',
+      show_alert: true
+    });
+    return;
+  }
+
   // 1. Client Callbacks
   if (data.startsWith('client_')) {
     await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
     if (data === 'client_cmd_pagos') {
       await sendClientPagos(chatId);
-    } else if (data === 'client_cmd_canal' || data === 'client_cmd_precios' || data === 'client_cmd_info' || data === 'client_cmd_ayuda') {
-      await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
-    } else if (data === 'client_cmd_menu') {
+    } else if (/^client_cmd_(canal|precios|info|ayuda|menu)$/.test(data)) {
       await sendClientWelcome(chatId, cb.from?.first_name || 'Invitado/a');
     }
     return;
