@@ -39,7 +39,18 @@ export default function App() {
   const [welcomeMediaUrl, setWelcomeMediaUrl] = useState('');
   const [welcomeMediaType, setWelcomeMediaType] = useState<'photo' | 'video'>('photo');
   const [splashDescription, setSplashDescription] = useState('');
-  const [showSplash, setShowSplash] = useState(true);
+  // [FIX BUCLE] El splash solo se muestra UNA vez por dispositivo/sesión.
+  // Sin este flag, al cerrar la Mini App y reabrirla (o cada refresco del SSE)
+  // volvía a mostrarse "primero el último post publicado" creando un bucle.
+  // Flujo correcto: SPLASH (1ª vez) -> PANTALLA DE FOTOS/VIDEOS -> ADQUIRIR CONTENIDO.
+  const [showSplash, setShowSplash] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return !localStorage.getItem('danii_vip_splash_seen');
+    } catch {
+      return true;
+    }
+  });
   const [isAgeVerified, setIsAgeVerified] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -491,6 +502,9 @@ export default function App() {
           splashDescription={splashDescription}
           onFinish={() => {
             setShowSplash(false);
+            // [FIX BUCLE] Marcar que el splash ya fue visto: al reabrir la Mini App
+            // debe ir DIRECTO a la pantalla de fotos/videos, no volver al splash.
+            try { localStorage.setItem('danii_vip_splash_seen', '1'); } catch {}
             try {
               // Notify server that this user saw the welcome splash (useful to send welcome post only once)
               void fetch('/api/telegram/welcome-seen', {
