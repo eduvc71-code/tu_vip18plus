@@ -25,7 +25,7 @@ Luego crea el Pull Request en GitHub:
 - **base:** `master`
 - **compare:** `qwen-code-0e6aaa2f-feb0-4ccf-b5ba-1af7f98a71a3`
 - URL directa:
-  `https://github.com/eduvc71-code/<tu-repo>/compare/master...qwen-code-0e6aaa2f-feb0-4ccf-b5ba-1af7f98a71a3`
+  `https://github.com/eduvc71-code/tu_vip18plus/compare/master...qwen-code-0e6aaa2f-feb0-4ccf-b5ba-1af7f98a71a3`
 - Título sugerido: `fix: métodos de pago por país y bucle de splash en Mini App`
 
 ## Opción B — Importar el bundle
@@ -35,7 +35,7 @@ Si quieres reconstruir las ramas a partir de este workspace sin copiar archivos:
 ```bash
 git clone danii-vip-fixes.bundle mi-repo
 cd mi-repo
-git remote add origin https://github.com/<usuario>/<repo>.git
+git remote add origin https://github.com/eduvc71-code/tu_vip18plus.git
 git push origin master
 git push origin qwen-code-0e6aaa2f-feb0-4ccf-b5ba-1af7f98a71a3
 ```
