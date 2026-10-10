@@ -3134,9 +3134,16 @@ export async function showPaymentMethodDetail(
 
   const officialFeeText = getOfficialFeeText(method, resolvedProfileRateBs);
 
+  // [FIX] La línea "Tarifa Oficial" usaba un placeholder sin resolver ({formData.rate_bs}),
+  // lo que hacía que Telegram rechazara el mensaje (error de parseo Markdown) y el bot
+  // terminara borrando el mensaje anterior sin mostrar la información del país seleccionado.
+  // Ahora se usa el precio oficial ya calculado según el país/método.
+  const descriptionBlock = method.description
+    ? `${method.description}\n\n`
+    : '';
   const caption = `✨ *${method.title}* ✨\n\n` +
-    `${method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'}\n\n` +
-    `💵 *Tarifa Oficial:* {formData.rate_bs}\n\n` +
+    `${descriptionBlock}` +
+    `💵 *Tarifa Oficial:* ${officialFeeText}\n\n` +
     `📲 *Envía tu comprobante a:* [@${adminUsername}](${adminContactUrl})\n\n` +
     `_Una vez recibido y verificado tu comprobante, la Administradora te enviará el acceso privado a nuestro contenido VIP._`;
 
@@ -3150,11 +3157,17 @@ export async function showPaymentMethodDetail(
   ];
 
   const prevMid = Number(options?.sourceMessageId);
+  // [FIX] El mensaje anterior del menú SOLO se borra si el nuevo mensaje con la
+  // información del país se envió correctamente. Antes, si Telegram rechazaba el
+  // detalle (caption vacío o inválido), el bot respondía al botón, borraba el menú
+  // y no mostraba ninguna información al cliente.
   const deletePrev = async () => {
     if (Number.isFinite(prevMid) && prevMid > 0) {
       try { await callTelegramApi('deleteMessage', { chat_id: chatId, message_id: prevMid }); } catch {}
     }
   };
+
+  let detailSent = false;
 
   if (method.image_url) {
     const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(method.image_url);
@@ -3168,9 +3181,11 @@ export async function showPaymentMethodDetail(
       reply_markup: { inline_keyboard: inlineKeyboard }
     });
     if (res && res.ok) {
+      detailSent = true;
       await deletePrev();
       return res;
     }
+    console.error('[PaymentDetail] No se pudo enviar la imagen del método:', res?.description);
   }
 
   const fallbackRes = await sendMessage(chatId, caption, {
@@ -3178,7 +3193,29 @@ export async function showPaymentMethodDetail(
       inline_keyboard: inlineKeyboard
     }
   });
-  await deletePrev();
+  if (fallbackRes && fallbackRes.ok) {
+    detailSent = true;
+    await deletePrev();
+  } else {
+    console.error('[PaymentDetail] No se pudo enviar el detalle del método de pago:', fallbackRes?.description);
+  }
+
+  // Último recurso: si ni siquiera se pudo enviar el texto (p. ej. error de
+  // Markdown en la descripción configurada), se muestra una versión plana sin
+  // formato para que el cliente SIEMPRE vea la información del país seleccionado.
+  if (!detailSent) {
+    const plainCaption = caption.replace(/[*_`\[\]]/g, '');
+    const plainRes = await sendMessage(chatId, plainCaption, {
+      parse_mode: '',
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+    if (plainRes && plainRes.ok) {
+      await deletePrev();
+      return plainRes;
+    }
+    console.error('[PaymentDetail] También falló el envío en texto plano:', plainRes?.description);
+  }
+
   return fallbackRes;
 }
 
