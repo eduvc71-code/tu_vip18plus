@@ -3102,7 +3102,16 @@ export async function showPaymentMethodDetail(
   const adminUsername = getAdminContactUsername();
   const adminContactUrl = `https://t.me/${adminUsername}`;
   const { baseUrl } = getBotConfig();
-  const officialFeeText = getOfficialFeeText(method, options?.profileRateBs);
+
+  // Si no se pasó una tarifa explícita y el método es de Bolivia (QR Bs.),
+  // obtener la tarifa oficial desde la Base de Datos (profiles.rate_bs).
+  let resolvedProfileRateBs = options?.profileRateBs;
+  const looksBoliviaMethod = method.id === 'qr_bolivia' || /bolivia/i.test(method.title) || method.category === 'national';
+  if (resolvedProfileRateBs === undefined && looksBoliviaMethod) {
+    resolvedProfileRateBs = (await getBoliviaOfficialRateFromServer()) ?? undefined;
+  }
+
+  const officialFeeText = getOfficialFeeText(method, resolvedProfileRateBs);
 
   const caption = `✨ *${method.title}* ✨\n\n` +
     `${method.description || 'Consulta los datos y coordenadas de pago con la Administradora.'}\n\n` +
