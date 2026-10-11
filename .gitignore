@@ -12,3 +12,6 @@ dist/
 
 # Local data (SQLite)
 data/
+
+# Uploads & Cache
+public/uploads/
