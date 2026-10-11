@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Profile } from '../types';
-import { X, Send, ShieldCheck, CheckCircle2, ChevronRight, Globe2 } from 'lucide-react';
+import { X, Send, CheckCircle2, ChevronRight, Globe2 } from 'lucide-react';
 
 export interface TelegramUserContext {
   id: string;
@@ -24,7 +24,7 @@ type PlanType = 'mensual' | 'semestral' | 'permanente' | null;
 
 
 
-export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName, tgUserContext, onOpenPaymentMethods, onClose, paymentMethods = [] }) => {
+export const RequestModal: React.FC<RequestModalProps> = ({ profile, modelName: _modelName, tgUserContext, onOpenPaymentMethods, onClose, paymentMethods = [] }) => {
   const dynamicCountries = React.useMemo(() => {
     const list = paymentMethods.filter(p => p.category === "international" || p.category === "national").map(p => p.title.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "").trim()).filter(t => t.length > 0);
     return list.length > 0 ? Array.from(new Set(list)) : ['Bolivia', 'Argentina', 'Chile', 'Colombia', 'Ecuador', 'España', 'Estados Unidos', 'México', 'Paraguay', 'Perú', 'Uruguay', 'Venezuela'];

@@ -89,5 +89,5 @@ test('payment keyboard is built from active methods and keeps real callback rout
   const keyboard = await buildPaymentMethodsKeyboard(typedMethods);
   assert.deepEqual(keyboard[0], [{ text: '🇧🇴 QR Bolivia', callback_data: 'pay_method_qr_bolivia' }]);
   assert.deepEqual(keyboard[1], [{ text: 'Mi Wallet', callback_data: 'pay_method_wallet' }]);
-  assert.deepEqual(keyboard.at(-1), [{ text: '🔙 Volver al Menú', callback_data: 'client_cmd_menu' }]);
+  assert.equal(keyboard.length, 2);
 });

@@ -9,7 +9,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { TelegramGate } from './components/TelegramGate';
 import { PaymentMethodsModal } from './components/PaymentMethodsModal';
 import { SplashScreen } from './components/SplashScreen';
-import { Heart, Send, Sparkles, UserCheck, X, ExternalLink, BarChart2, CheckCircle2, CreditCard } from 'lucide-react';
+import { Heart, Send, Sparkles, X, ExternalLink, BarChart2, CheckCircle2 } from 'lucide-react';
 import { useAutoOfflineCache } from './hooks/useAutoOfflineCache';
 
 export default function App() {
@@ -567,7 +567,7 @@ export default function App() {
                   <button
                     key={btn.id}
                     type="button"
-                    onClick={() => setRequestProfile(profiles[0] || null)}
+                    onClick={() => setShowPaymentModal(true)}
                     className="px-4 py-2.5 rounded-2xl bg-linear-to-r from-amber-500/20 via-zinc-900 to-amber-500/10 hover:from-amber-500/30 hover:to-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 font-bold text-xs shadow-lg shadow-amber-500/5 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -626,7 +626,7 @@ export default function App() {
                       setSelectedMediaUrl(mediaUrl);
                       setSelectedProfile(prof);
                     }}
-                    onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
+                    onRequestAvailability={() => setShowPaymentModal(true)}
                     onOpenPaymentMethods={() => setShowPaymentModal(true)}
                   />
                 ))}
@@ -759,7 +759,7 @@ export default function App() {
             } catch {}
           }}
           onOpenPaymentMethods={() => setShowPaymentModal(true)}
-          onRequestAvailability={(prof: Profile) => setRequestProfile(prof)}
+          onRequestAvailability={() => setShowPaymentModal(true)}
         />
       )}
 

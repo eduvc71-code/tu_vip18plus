@@ -114,13 +114,7 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     .filter((method) => method.is_active)
     .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
 
-  const featuredMethods = activeMethods.filter((method) =>
-    method.id === 'qr_bolivia' ||
-    method.category === 'national' ||
-    method.category === 'international'
-  );
-
-  const serviceMethods = activeMethods.filter((method) => method.category === 'service');
+  const featuredMethods = [...activeMethods];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
@@ -397,78 +391,34 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
 
               {featuredMethods.length > 0 && (
                 <div className="space-y-1.5">
-                  <div className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 px-1">
-                    Destacados
-                  </div>
-                  <div className="space-y-1.5">
-                    {featuredMethods.map((method) => (
-                      <button
-                        key={method.id}
-                        type="button"
-                        onClick={() => handleCountryClick(method)}
-                        className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-linear-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl">{method.category === 'national' ? '🇧🇴' : '🌍'}</span>
-                          <div className="flex flex-col">
-                            <span className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
-                              {method.title}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-amber-400">
-                                {method.id === 'qr_bolivia' || method.category === 'national'
-                                  ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs} / mes` : 'Consultar con Administradora')
-                                  : (method.price ? `${method.price} / mes` : 'Consultar con Administradora')}
-                              </span>
-                              <span className="text-[9px] font-semibold text-emerald-400">
-                                • {method.category === 'service' ? 'Digital' : method.category === 'national' ? 'Nacional' : 'Internacional'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-[11px] font-bold text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
-                          Ver detalle ➔
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
-                <div className="text-[9px] font-extrabold uppercase tracking-widest text-zinc-500 px-1">
-                  Catálogo completo
-                </div>
-                <div className="space-y-1.5">
-                  {activeMethods.map((method) => (
+                  {featuredMethods.map((method) => (
                     <button
                       key={method.id}
                       type="button"
                       onClick={() => handleCountryClick(method)}
-                      className="w-full min-h-10 rounded-xl border border-zinc-700/80 bg-zinc-950/80 hover:bg-zinc-800/90 hover:border-amber-500/40 px-3 py-1.5 text-left flex items-center justify-between transition-all group cursor-pointer active:scale-98"
+                      className="w-full min-h-11 rounded-xl border border-emerald-500/40 bg-linear-to-r from-emerald-950/50 via-zinc-900 to-zinc-900 hover:border-emerald-400 hover:from-emerald-950/80 px-3.5 py-2 text-left flex items-center justify-between transition-all group shadow-md shadow-emerald-950/20 cursor-pointer active:scale-98"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-xs text-zinc-200 group-hover:text-amber-300">
-                          {method.title}
-                        </span>
-                        <span className="text-[9px] uppercase tracking-wider text-zinc-500">
-                          {method.category}
-                        </span>
-                        {method.price && (
-                          <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            {method.id === 'qr_bolivia' || method.category === 'national'
-                              ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs}` : 'Consultar')
-                              : method.price}
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex flex-col">
+                          <span className="font-extrabold text-xs text-white group-hover:text-emerald-300 transition-colors">
+                            {method.title}
                           </span>
-                        )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-amber-400">
+                              {method.id === 'qr_bolivia' || method.category === 'national'
+                                ? (boliviaRateBs && Number(boliviaRateBs) > 0 ? `Bs. ${boliviaRateBs} / mes` : 'Consultar con Administradora')
+                                : (method.price ? `${method.price} / mes` : 'Consultar con Administradora')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <span className="text-[10px] text-zinc-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all">
-                        Detalles ➔
+                      <span className="text-[11px] font-bold text-zinc-400 group-hover:text-white group-hover:translate-x-0.5 transition-all">
+                        Ver detalle ➔
                       </span>
                     </button>
                   ))}
                 </div>
-              </div>
+              )}
 
               <div className="pt-1">
                 <button
@@ -486,3 +436,6 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     </div>
   );
 };
+
+
+

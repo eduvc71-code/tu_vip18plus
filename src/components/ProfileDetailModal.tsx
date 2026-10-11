@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Profile } from '../types';
-import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, MessageSquareText, Lock, Volume2, VolumeX, AlertTriangle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, X, ChevronLeft, ChevronRight, Sparkles, CreditCard, Lock, Volume2, VolumeX, AlertTriangle, RefreshCw } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 
 interface ProfileDetailModalProps {
@@ -18,7 +18,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   profile,
   initialMediaUrl,
   botUsername: _botUsername,
-  modelName,
+  modelName: _modelName,
   modelVipLink: _modelVipLink,
   onClose,
   onOpenPaymentMethods,
@@ -77,8 +77,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
   // Ciclo de 10 segundos en fotos: desaparecer y aparecer los indicadores de deslizamiento
   useEffect(() => {
-    const currentUrl = media[activePhotoIdx] || '';
-    const isCurrentVideo = isVideoUrl(currentUrl);
     userInteractedWithSlideRef.current = false;
     soundToggledVideoRef.current = false;
     if (hideIndicatorsTimerRef.current) {

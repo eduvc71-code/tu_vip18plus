@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Profile } from '../types';
-import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, Lock, ZoomIn, Play } from 'lucide-react';
+import { Send, ShieldCheck, Link, Images, Video, ChevronLeft, ChevronRight, ZoomIn, Play } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 import { EphemeralViewer } from './EphemeralViewer';
 
@@ -21,7 +21,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
   modelVipLink,
   onSelectProfile,
   onSelectMedia,
-  onRequestAvailability,
+  onRequestAvailability: _onRequestAvailability,
   onOpenPaymentMethods
 }) => {
   const [showEnlargeIcon, setShowEnlargeIcon] = useState(true);
@@ -154,7 +154,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
                   durationSeconds={currentImageDuration}
                   isSeen={seenEphemeralUrls.has(selectedImage)}
                   onExpired={() => handleMediaExpired(selectedImage)}
-                  onRequestVip={() => onRequestAvailability(profile)}
+                  onRequestVip={() => onOpenPaymentMethods?.()}
                 />
               )}
 
@@ -329,7 +329,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
             <div className="pt-2 flex">
               <button
                 type="button"
-                onClick={() => onRequestAvailability(profile)}
+                onClick={() => onOpenPaymentMethods?.()}
                 id={`btn-request-${profile.id}`}
                 className="w-full py-3.5 px-4 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 text-sm font-black uppercase tracking-wide flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
               >

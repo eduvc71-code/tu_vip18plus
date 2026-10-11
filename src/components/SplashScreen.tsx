@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, ArrowRight, Volume2, VolumeX } from 'lucide-react';
+import { ArrowRight, Volume2, VolumeX } from 'lucide-react';
 import { isVideoUrl } from './ProtectedMedia';
 
 interface SplashScreenProps {
@@ -14,7 +14,7 @@ interface SplashScreenProps {
 export const SplashScreen: React.FC<SplashScreenProps> = ({
   mediaUrl,
   mediaType,
-  modelName,
+  modelName: _modelName,
   splashDescription,
   onFinish,
   isPreview = false

@@ -31,7 +31,6 @@ import {
   getAllTelegramBotoneras,
   getAllPolls,
   registerSubscriber,
-  getAllPaymentMethods,
   getPublicPaymentMethods,
   getPaymentMethodById
 } from './db.js';
@@ -405,7 +404,7 @@ export async function getBotCommandText(commandName: string, fallback: string, e
   return fallback;
 }
 
-export async function getAdminReplyKeyboard(adminLink: string, baseUrl: string) {
+export async function getAdminReplyKeyboard(_adminLink: string, baseUrl: string) {
   const btnCanal = await getBotCommandText('canal', '📢 Canal VIP', '📢');
   const btnListar = await getBotCommandText('listar', '📋 Listar Contenido', '📋');
   const btnNuevo = await getBotCommandText('nuevo', '➕ Nuevo Perfil', '➕');
@@ -2137,9 +2136,6 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 
     await addAuditLog('UPLOAD_MEDIA_TELEGRAM', userId, `Foto/video agregada al perfil ${targetProfile.name}: ${fileName} (${sizeFormatted})`, targetProfile.id);
 
-    const adminToken = generateAdminMagicToken(String(userId));
-    const adminLink = buildAdminWebLink(baseUrl, adminToken);
-
     const reply = `✅ *¡Contenido Agregado con Éxito al Canal VIP Free!* 📸\n\n` +
       `👤 *Perfil*: *${targetProfile.name}*\n` +
       `📁 *Archivo*: \`${fileName}\` (${sizeFormatted})\n` +
@@ -2161,14 +2157,7 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 }
 
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
-  const { baseUrl, brandName, channelId } = getBotConfig();
-  const cleanChannelId = channelId ? channelId.replace(/^-100/, '') : '';
-  const storedChannelUsername = getSystemSetting('channel_username');
-  const channelUrl = storedChannelUsername 
-    ? `https://t.me/${storedChannelUsername.replace(/^@/, '')}`
-    : cleanChannelId ? `https://t.me/c/${cleanChannelId}/1` : '';
-
-  const btnCanal = await getBotCommandText('canal', '📢 Entrar al Canal Free Oficial', '📢');
+  const { baseUrl, brandName } = getBotConfig();
 
   const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
     `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
@@ -2177,7 +2166,6 @@ export async function sendClientWelcome(chatId: string | number, firstName: stri
     `Te ofrezco una gran variedad de videos y fotos que solo puedes ver en mi canal privado VIP. Solo allí podrás ver lo que no muestro en ningún otro lado. 🍬\n\n` +
     `👉 *Para no perderte de nada, pulsa "Ver lo Exclusivo", para más info de mi Contenido VIP, pulsa "Suscripción Automática" :*`;
 
-  const botUser = String(getBotConfig().username || '').replace(/^@/, '').trim();
   const inlineKeyboard: any[][] = [];
   
   inlineKeyboard.push([
@@ -4021,7 +4009,7 @@ export async function sendPaidMediaToChannel(params: {
   channelId?: string;
   profileId?: string;
 }): Promise<{ ok: boolean; messageId?: number; error?: string }> {
-  const { channelId, username, baseUrl } = getBotConfig();
+  const { channelId, username } = getBotConfig();
   const targetChannel = params.channelId || channelId;
   if (!targetChannel) {
     return { ok: false, error: 'No se ha configurado un ID o @canal en el sistema.' };
