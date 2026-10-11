@@ -244,16 +244,14 @@ export default function App() {
             const tgApp = (window as any).Telegram?.WebApp;
             const urlParams = new URLSearchParams(window.location.search);
             const sp = String(tgApp?.initDataUnsafe?.start_param || urlParams.get('tgWebAppStartParam') || urlParams.get('startapp') || '').trim();
-            if (sp === 'pagos' || sp === 'métodos') {
-              setShowPaymentModal(true);
-            } else if (sp.startsWith('ver_')) {
-              const targetId = sp.replace('ver_', '').trim();
-              const found = data.find((p: any) => String(p.id) === targetId);
-              if (found) {
-                setSelectedMediaUrl(undefined);
-                setSelectedProfile(found);
-              }
-            }
+            // Handle deep link actions
+if (sp === 'pagos' || sp === 'métodos') {
+  setShowPaymentModal(true);
+} else if (sp.startsWith('ver_')) {
+  // Auto‑open of individual profile disabled per user request.
+  // Previously this would open the profile modal based on the ID in the deep link.
+  // Keeping the main gallery view ensures consistent navigation after the splash.
+}
           } catch {}
           setDeepLinkProcessed(true);
         }

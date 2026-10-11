@@ -114,40 +114,62 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
     .filter((method) => method.is_active)
     .sort((a, b) => (a.priority_order ?? 0) - (b.priority_order ?? 0));
 
-  const featuredMethods = [...activeMethods];
+  const featuredMethods = activeMethods;
+
+  const isTgMiniApp = Boolean(
+    typeof window !== 'undefined' &&
+    ((window as any).Telegram?.WebApp?.initData || (window as any).TelegramWebviewProxy)
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 ${isTgMiniApp ? 'pt-14 sm:pt-16' : ''}`}
+      style={{
+        paddingTop: isTgMiniApp
+          ? 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 12px) + 48px)'
+          : undefined
+      }}
+    >
       <div 
         className="relative flex flex-col w-full max-w-lg max-h-[92vh] rounded-3xl border border-zinc-700/80 bg-zinc-900 shadow-2xl shadow-black/80 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Header Bar */}
-        <div className="flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-5 py-3 bg-zinc-950/80">
-          <div className="flex items-center gap-2">
-            {selectedMethod && (
+        <div className="relative flex items-center justify-between border-b border-zinc-800/80 px-4 sm:px-5 py-3 bg-zinc-950/80 min-h-12">
+          <div className="flex items-center gap-2 z-10 min-w-8">
+            {selectedMethod ? (
               <button
                 type="button"
                 onClick={() => setSelectedMethodId(null)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                title="Volver al menú"
+                className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                title="Volver a la lista"
               >
-                <ArrowLeft className="h-4 w-4" />
+                <ArrowLeft className="h-4 w-4 text-amber-400" />
+                <span className="hidden sm:inline">Volver</span>
               </button>
+            ) : (
+              <div className="w-4 h-4" />
             )}
-            <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs sm:text-sm uppercase tracking-wider">
+          </div>
+
+          {/* Centered Title to avoid overlap with native buttons */}
+          <div className="absolute inset-x-0 flex items-center justify-center pointer-events-none px-12">
+            <div className="flex items-center gap-1.5 text-amber-400 font-black text-xs sm:text-sm uppercase tracking-wider truncate">
               <span>💳</span>
               <span>{selectedMethod ? 'Detalle de Pago' : 'Métodos de Pago'}</span>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleCloseAll}
-            className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-            aria-label="Cerrar ventana"
-          >
-            <X className="h-4 w-4" />
-          </button>
+
+          <div className="z-10">
+            <button
+              type="button"
+              onClick={handleCloseAll}
+              className="p-1.5 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+              aria-label="Cerrar ventana"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Modal Content */}
@@ -364,19 +386,6 @@ export const PaymentMethodsModal: React.FC<PaymentMethodsModalProps> = ({
             /* FULL PAYMENT METHODS LIST GENERATED FROM LIVE DATA                       */
             /* ========================================================================= */
             <div className="space-y-3.5 animate-in fade-in duration-200">
-              <div className="rounded-2xl border border-pink-500/25 bg-linear-to-b from-pink-500/15 via-zinc-950/60 to-zinc-950/90 p-3.5 text-center space-y-1 shadow-inner">
-                <div className="text-sm sm:text-base font-black tracking-wide text-pink-300">
-                  PAYMENTS BOARD
-                </div>
-                <div className="text-xs font-extrabold text-white tracking-wide">
-                  TODOS LOS MÉTODOS DE PAGO EN SERVIDOR
-                </div>
-                <div className="pt-1.5 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 text-[10px] font-bold text-zinc-300">
-                  <span className="flex items-center gap-1">📦 {activeMethods.length} activos</span>
-                  <span className="flex items-center gap-1">🔄 Datos desde B2/DB</span>
-                </div>
-              </div>
-
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-center text-[10px] text-zinc-400">
                 <span>Comprobantes y atención privada con la Admin:{' '}</span>
                 <a
