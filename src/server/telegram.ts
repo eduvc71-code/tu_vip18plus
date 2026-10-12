@@ -2159,12 +2159,12 @@ async function handleProfileMediaUploadFromTelegram(chatId: string | number, use
 export async function sendClientWelcome(chatId: string | number, firstName: string = 'Invitado/a') {
   const { baseUrl, brandName } = getBotConfig();
 
-  const text = `💎 *${brandName || 'IAM DANII'} • CANAL VIP FREE* 💎\n\n` +
-    `¡Hola, *${firstName}*! Te damos la bienvenida a nuestro espacio oficial.\n\n` +
-    `🩷 Veo que te ganó la curiosidad y quieres descubrir más de mí. 😋\n\n` +
-    `¿Te gustaría descubrir mi lado más exclusivo? 🙈 Estoy en el mundo +18 hace 3 años y déjame decirte que lo que tengo para ti es totalmente rico y único.\n\n` +
-    `Te ofrezco una gran variedad de videos y fotos que solo puedes ver en mi canal privado VIP. Solo allí podrás ver lo que no muestro en ningún otro lado. 🍬\n\n` +
-    `👉 *Para no perderte de nada, pulsa "Ver lo Exclusivo", para más info de mi Contenido VIP, pulsa "Suscripción Automática" :*`;
+  const text = `IAM DANII CONTENIDO VIP 🧸\n\n` +
+    `Hola! Es un placer tenerte por acá 🩷\n\n` +
+    `Veo que te ganó la curiosidad y quieres descubrir más de mí.😋 😋\n\n` +
+    `Estás dispuesto a conocer mi lado más exclusivo? 🙈\n\n` + 
+    `Dejame decirte que lo que tengo para tí es totalmente único! En mi canal VIP podrás ver lo que no muestro en ningún otro lado.🍬 \n\n` +
+    `➡️ Elige tu método de pago en las siguientes opciones que te dejo abajo 👇🏼`;
 
   const inlineKeyboard: any[][] = [];
   
