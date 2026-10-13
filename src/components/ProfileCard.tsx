@@ -133,7 +133,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
             <div
               onClick={() => onSelectMedia ? onSelectMedia(profile, selectedImage) : onSelectProfile(profile)}
-              className="relative block aspect-[16/10] sm:aspect-[16/9] max-h-[250px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
+              className="relative block aspect-16/10 sm:aspect-video max-h-62.5 w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
               title="Toca para ampliar"
             >
               {images.length === 0 ? (
@@ -228,7 +228,7 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
 
               <div
                 onClick={() => onSelectMedia ? onSelectMedia(profile, selectedVideo) : onSelectProfile(profile)}
-                className="relative block aspect-[16/9] max-h-[220px] w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
+                className="relative block aspect-video max-h-55 w-full overflow-hidden rounded-2xl bg-black text-left cursor-pointer group"
                 title="Toca para ampliar video"
               >
                 {/* [MODIFICADO] Video: sin autoplay, con preload metadata para mostrar
@@ -305,14 +305,6 @@ export const ProfileCard: React.FC<ProfileCardProps> = ({
         {/* Columna de Información y Botones de Acción */}
         <div className="flex flex-col justify-between p-4 sm:p-5">
           <div className="space-y-3">
-
-            {/* Descripción del Perfil (excluye textos de bienvenida heredados) */}
-            {profile.description &&
-             !/holis|bienvenida|opciones que te salen abajo/i.test(profile.description) && (
-              <p className="text-xs text-zinc-300 leading-relaxed font-normal whitespace-pre-line">
-                {profile.description}
-              </p>
-            )}
 
             {modelVipLink && (
               <a

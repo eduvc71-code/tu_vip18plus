@@ -44,13 +44,11 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
   };
 
   const [activePhotoIdx, setActivePhotoIdx] = useState<number>(computeInitialIdx);
-  const [showCaption, setShowCaption] = useState(true);
   const [payingStars, setPayingStars] = useState(false);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [hasMediaError, setHasMediaError] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showSlideIndicators, setShowSlideIndicators] = useState(true);
-  const captionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const userInteractedWithSlideRef = useRef<boolean>(false);
   const hideIndicatorsTimerRef = useRef<NodeJS.Timeout | null>(null);
   const soundToggledVideoRef = useRef<boolean>(false);
@@ -141,22 +139,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     };
   }, [profile, onClose]);
 
-  // Temporizador mágico de 5 segundos para la descripción
-  const resetCaptionTimer = () => {
-    setShowCaption(true);
-    if (captionTimerRef.current) clearTimeout(captionTimerRef.current);
-    captionTimerRef.current = setTimeout(() => {
-      setShowCaption(false);
-    }, 5000);
-  };
-
-  useEffect(() => {
-    resetCaptionTimer();
-    return () => {
-      if (captionTimerRef.current) clearTimeout(captionTimerRef.current);
-    };
-  }, [activePhotoIdx, profile]);
-
   if (!profile || media.length === 0) return null;
 
   const currentMediaUrl = media[activePhotoIdx] || media[0] || '';
@@ -191,21 +173,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
     return false;
   };
 
-  const getDescriptionForUrl = (url: string): string => {
-    if (!profile?.media_descriptions || !url) return profile?.description || '';
-    if (profile.media_descriptions[url]) return profile.media_descriptions[url];
-    const cleanUrl = url.replace(/^https?:\/\/[^/]+/, '');
-    for (const [key, val] of Object.entries(profile.media_descriptions)) {
-      const cleanKey = key.replace(/^https?:\/\/[^/]+/, '');
-      if (cleanKey === cleanUrl || url.endsWith(cleanKey) || key.endsWith(cleanUrl)) {
-        return val;
-      }
-    }
-    return profile?.description || '';
-  };
-
-  const rawItemDescription = getDescriptionForUrl(currentMediaUrl);
-  const currentItemDescription = /holis|bienvenida|opciones que te salen abajo/i.test(rawItemDescription) ? '' : rawItemDescription.trim();
   const isVideo = isVideoUrl(currentMediaUrl);
 
   const isCurrentMediaLocked = Boolean(
@@ -255,16 +222,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
         // Si el cliente no toca ninguno de los botones de avance o retroceso, vuelve a desaparecer
         setShowSlideIndicators(false);
       }
-    }
-  };
-
-  const toggleCaption = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (showCaption) {
-      setShowCaption(false);
-      if (captionTimerRef.current) clearTimeout(captionTimerRef.current);
-    } else {
-      resetCaptionTimer();
     }
   };
 
@@ -362,7 +319,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
 
       {/* [FIX] Zona Multimedia con padding-top y padding-bottom para no solaparse con las barras */}
       <div
-        onClick={!isCurrentMediaLocked ? toggleCaption : undefined}
         className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden bg-black cursor-pointer"
         style={{
           paddingTop: 'calc(max(var(--tg-content-safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px), env(safe-area-inset-top, 0px), 8px) + 90px)',
@@ -408,7 +364,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 loop
                 muted
                 playsInline
-                className={`w-full h-full object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none`}
+                className={`w-full h-full object-contain mx-auto filter blur-md scale-105 opacity-95 brightness-95 contrast-105 select-none`}
                 style={{ maxHeight: MEDIA_MAX_HEIGHT }}
               />
             ) : (
@@ -416,7 +372,7 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
                 src={currentMediaUrl}
                 alt="Vista previa exclusiva"
                 draggable={false}
-                className={`w-full h-full object-contain mx-auto filter blur-[12px] scale-105 opacity-95 brightness-95 contrast-105 select-none`}
+                className={`w-full h-full object-contain mx-auto filter blur-md scale-105 opacity-95 brightness-95 contrast-105 select-none`}
                 style={{ maxHeight: MEDIA_MAX_HEIGHT }}
               />
             )}
@@ -493,20 +449,6 @@ export const ProfileDetailModal: React.FC<ProfileDetailModalProps> = ({
           </>
         )}
 
-        {/* Descripción Flotante Mágica */}
-        {!isCurrentMediaLocked && currentItemDescription && (
-          <div
-            className={`absolute bottom-20 left-3 right-3 z-20 transition-all duration-700 ease-in-out pointer-events-none ${
-              showCaption
-                ? 'opacity-100 translate-y-0 filter-none'
-                : 'opacity-0 translate-y-3 filter blur-md'
-            }`}
-          >
-            <div className="bg-black/80 backdrop-blur-md border border-zinc-800/80 text-zinc-200 text-xs px-3.5 py-2 rounded-2xl shadow-xl leading-relaxed whitespace-pre-line max-h-20 overflow-y-auto mx-auto max-w-lg">
-              <p className="font-medium text-zinc-100">{currentItemDescription}</p>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Barra Inferior Flotante: Acciones y Sonido */}
