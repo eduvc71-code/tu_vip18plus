@@ -1014,6 +1014,7 @@ router.post('/admin/profiles/:id/photos', requireAdminAuth, upload.array('photos
 
     const updated = await saveProfile({
       id: profileId,
+      ...(comment ? { description: String(comment).trim() } : {}),
       photos: updatedPhotos,
       media_descriptions: mediaDescriptions,
       ephemeral_config: ephemeralConfig,

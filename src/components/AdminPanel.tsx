@@ -1168,8 +1168,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleSendDraftToBot = async (profileId: string) => {
+    if (selectedPhotoFiles && selectedPhotoFiles.length > 0) {
+      if (!uploadComment.trim()) {
+        setMessage({ type: 'error', text: 'Escribe la descripción obligatoria del contenido antes de enviarlo al bot.' });
+        return;
+      }
+      if (watermarkEnabled && watermarkText.trim() === '') {
+        setMessage({ type: 'error', text: 'Ingresa el texto de la marca de agua o desactívala.' });
+        return;
+      }
+      for (let i = 0; i < selectedPhotoFiles.length; i++) {
+        if (selectedPhotoFiles[i].size > 20 * 1024 * 1024) {
+          setMessage({ type: 'error', text: 'Uno de los archivos pesa más de 20 MB. Telegram solo permite descargar hasta 20 MB a través de bots.' });
+          return;
+        }
+      }
+    }
+
     setSendingDraftToBot(true);
     try {
+      if (selectedPhotoFiles && selectedPhotoFiles.length > 0) {
+        const body = new FormData();
+        for (let i = 0; i < selectedPhotoFiles.length; i++) {
+          const originalFile = selectedPhotoFiles[i];
+          if (watermarkEnabled && watermarkText.trim() !== '') {
+            const stampedFile = await addWatermarkToImage(originalFile, watermarkText.trim());
+            body.append('photos', stampedFile);
+          } else {
+            body.append('photos', originalFile);
+          }
+        }
+        body.append('description', uploadComment.trim());
+        if (uploadSugestiva) {
+          body.append('is_ephemeral', 'true');
+          body.append('ephemeral_duration', String(uploadDuration || 10));
+        }
+
+        const resUpload = await fetch(`/api/admin/profiles/${profileId}/photos`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body
+        });
+        const uploadData = await resUpload.json();
+        if (!resUpload.ok || !uploadData.success) {
+          setMessage({ type: 'error', text: uploadData.error || 'Error al guardar el contenido antes de enviar al bot.' });
+          return;
+        }
+        if (uploadData.profile) {
+          setEditingProfile(uploadData.profile);
+        }
+      }
+
       const res = await fetch(`/api/admin/profiles/${profileId}/send-draft`, {
         method: 'POST',
         headers: {
@@ -1183,6 +1232,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           type: 'success',
           text: '📱 ¡Borrador enviado a tu chat privado con el Bot! Ábrelo en Telegram para editar la descripción con tus emojis Premium.'
         });
+        setSelectedPhotoFiles(null);
+        setFreePreviewUrl(null);
+        setFreePreviewType(null);
+        setUploadComment('');
+        setUploadSugestiva(false);
+        fetchData();
       } else {
         setMessage({
           type: 'error',
@@ -2885,19 +2940,30 @@ const handleSendReply = async (requestId: string) => {
                             </div>
                             
                             {editingProfile && selectedPhotoFiles && selectedPhotoFiles.length > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => handleUploadPhotos(editingProfile.id)}
-                                disabled={uploadingPhotos || !uploadComment.trim() || !watermarkEnabled || watermarkText.trim() === ''}
-                                className={`w-full py-3.5 px-5 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 disabled:opacity-60 transition-all ${
-                                  'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                                }`}
-                              >
-                                <HardDrive className="w-4 h-4" />
-                                {uploadingPhotos
-                                  ? 'Subiendo a Telegram...'
-                                  : '🚀 Publicar en Canal Free'}
-                              </button>
+                              <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleUploadPhotos(editingProfile.id)}
+                                  disabled={uploadingPhotos || sendingDraftToBot || !uploadComment.trim() || !watermarkEnabled || watermarkText.trim() === ''}
+                                  className="flex-1 py-3.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20 disabled:opacity-60 transition-all"
+                                >
+                                  <HardDrive className="w-4 h-4" />
+                                  {uploadingPhotos
+                                    ? 'Subiendo a Telegram...'
+                                    : '🚀 Publicar en Canal Free'}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendDraftToBot(editingProfile.id)}
+                                  disabled={uploadingPhotos || sendingDraftToBot || !uploadComment.trim() || !watermarkEnabled || watermarkText.trim() === ''}
+                                  className="flex-1 py-3.5 px-4 rounded-xl font-extrabold text-xs cursor-pointer shrink-0 shadow-lg flex items-center justify-center gap-2 bg-linear-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/20 disabled:opacity-60 transition-all"
+                                  title="Guarda el contenido y lo envía a tu chat privado con el bot para editar la descripción con emojis Premium antes de publicarlo"
+                                >
+                                  <Smile className="w-4 h-4 text-pink-200" />
+                                  {sendingDraftToBot ? 'Enviando al Bot...' : '📝 Enviar a Borrador (Chat Bot Emojis)'}
+                                </button>
+                              </div>
                             )}
                           </div>
                         )}
@@ -3394,6 +3460,21 @@ const handleSendReply = async (requestId: string) => {
                         )}
                       </div>
 
+                      {editingProfile && photos.length > 0 && (!selectedPhotoFiles || selectedPhotoFiles.length === 0) && (
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            disabled={sendingDraftToBot}
+                            onClick={() => handleSendDraftToBot(editingProfile.id)}
+                            className="w-full sm:w-auto py-2.5 px-4 rounded-xl bg-linear-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-pink-600/20 disabled:opacity-50"
+                            title="Enviar el contenido cargado a tu chat privado con el bot para editar la descripción con emojis Premium"
+                          >
+                            <Smile className="w-4 h-4 text-pink-200" />
+                            {sendingDraftToBot ? 'Enviando al Bot...' : '📝 Enviar Contenido a Borrador (Chat Bot Emojis)'}
+                          </button>
+                        </div>
+                      )}
+
                       <div className="flex gap-3">
                         <button
                           type="button"
@@ -3668,19 +3749,6 @@ const handleSendReply = async (requestId: string) => {
                         >
                           <ChevronLeft className="w-4 h-4" /> Volver a Cargar (Paso 2)
                         </button>
-
-                        {editingProfile && (
-                          <button
-                            type="button"
-                            disabled={sendingDraftToBot}
-                            onClick={() => handleSendDraftToBot(editingProfile.id)}
-                            className="flex-1 py-3 px-4 rounded-xl bg-linear-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-pink-600/20 disabled:opacity-50"
-                            title="Envía el contenido a tu chat privado con el bot para agregarle emojis Premium antes de publicarlo"
-                          >
-                            <Smile className="w-4 h-4 text-pink-200" />
-                            {sendingDraftToBot ? 'Enviando al Bot...' : '📝 Enviar a Borrador (Chat Bot Emojis)'}
-                          </button>
-                        )}
 
                         <button
                           type="button"
