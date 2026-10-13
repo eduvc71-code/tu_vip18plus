@@ -74,9 +74,25 @@ import {
   getTelegramFilePath,
   uploadBufferToTelegram,
   showPaymentMethodDetail,
+  sendDraftToAdmin,
   callTelegramApi, buildChannelPostMarkup } from './telegram.js';
+import { emojiPackRouter } from './routes/emojiPackRoutes.js';
+import { emojiPreviewRouter } from './routes/emojiPreviewRoute.js';
 
 export const router = express.Router();
+
+function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1];
+    const verified = verifyAdminToken(token);
+    if (verified.valid) {
+      (req as any).adminUserId = verified.userId;
+      return next();
+    }
+  }
+  res.status(401).json({ error: 'Acceso administrativo no autorizado. Solicita un enlace nuevo con /admin en el bot.' });
+}
 
 // SSE (Server-Sent Events) event emitter setup for live real-time sync
 const sseClients = new Set<Response>();
@@ -117,18 +133,9 @@ const upload = multer({
   }
 });
 
-function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
-    const verified = verifyAdminToken(token);
-    if (verified.valid) {
-      (req as any).adminUserId = verified.userId;
-      return next();
-    }
-  }
-  res.status(401).json({ error: 'Acceso administrativo no autorizado. Solicita un enlace nuevo con /admin en el bot.' });
-}
+// Custom Telegram emoji packs & preview routes
+router.use('/emoji', emojiPreviewRouter);
+router.use('/admin/emoji-pack', requireAdminAuth, emojiPackRouter);
 
 // PUBLIC ENDPOINTS
 
@@ -915,6 +922,30 @@ router.post('/admin/profiles/:id/publish', requireAdminAuth, async (req: Request
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: 'Error al sincronizar canal', details: err?.message });
+  }
+});
+
+// POST Send Profile Draft to Telegram Bot Chat for Emoji Editing
+router.post('/admin/profiles/:id/send-draft', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const profileId = req.params.id;
+    const adminId = (req as any).adminUserId;
+    const { adminIds } = getBotConfig();
+    const targetChatId = (adminId && !isNaN(Number(adminId))) ? adminId : (adminIds[0] || null);
+
+    if (!targetChatId) {
+      res.status(400).json({ error: 'No se detectó un Telegram ID de Administradora para enviar el borrador. Abre el chat privado del bot e ingresa tu PIN.' });
+      return;
+    }
+
+    const result = await sendDraftToAdmin(profileId, targetChatId);
+    if (result.ok) {
+      res.json({ success: true, message: 'Borrador enviado a tu chat privado con el Bot. Ábrelo en Telegram para editar la descripción con tus emojis Premium.', messageId: result.messageId });
+    } else {
+      res.status(500).json({ error: result.error || 'Error al enviar borrador al Bot' });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al procesar envío de borrador', details: err?.message });
   }
 });
 

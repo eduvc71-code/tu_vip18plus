@@ -30,6 +30,7 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tailwindcss": "^4.1.14",
+    "telegram": "^2.26.22",
     "typescript": "~5.8.2",
     "vite": "^6.2.3"
   },

@@ -513,9 +513,18 @@ function initTables(database: any): void {
       updated_at TEXT NOT NULL
     );
   `);
-  try {
-    database.run("ALTER TABLE payment_methods ADD COLUMN price TEXT");
-  } catch {}
+
+  database.run(`
+    CREATE TABLE IF NOT EXISTS emoji_pack_stickers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      short_name TEXT NOT NULL,
+      custom_emoji_id TEXT NOT NULL,
+      emoji TEXT NOT NULL,
+      added_at DATETIME DEFAULT (datetime('now'))
+    );
+  `);
+  database.run(`CREATE INDEX IF NOT EXISTS idx_emoji_pack_short_name ON emoji_pack_stickers(short_name);`);
+  database.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_emoji_unique ON emoji_pack_stickers(custom_emoji_id);`);
 }
 
 function seedInitialData(database: any): void {

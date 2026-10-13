@@ -300,11 +300,66 @@ export async function callTelegramApi(method: string, body: any): Promise<any> {
   }
 }
 
+const TG_EMOJI_REGEX = /<tg-emoji\s+id="(\d+)"\s*>(.*?)<\/tg-emoji>/gi;
+
+export function escapeHtml(str: string): string {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+export function sanitizeForTelegram(input: string): string {
+  if (!input) return '';
+  // Escapa todo el HTML primero para evitar inyecciones maliciosas
+  const escaped = escapeHtml(input);
+  // Re-habilita exclusivamente los tags <tg-emoji id="...">fallback</tg-emoji> autorizados
+  return escaped.replace(/&lt;tg-emoji\s+id=&quot;(\d+)&quot;&gt;(.*?)&lt;\/tg-emoji&gt;/gi, (_m, id, fallback) => {
+    return `<tg-emoji id="${id}">${fallback}</tg-emoji>`;
+  });
+}
+
+/**
+ * Convierte un mensaje de Telegram (con texto o caption y sus entities) a formato HTML con <tg-emoji>
+ * extrayendo los custom_emoji nativos introducidos desde el teclado de Telegram.
+ */
+export function convertTelegramEntitiesToHtml(text: string, entities?: Array<{ type: string; offset: number; length: number; custom_emoji_id?: string }>): string {
+  if (!text) return '';
+  if (!entities || entities.length === 0) return text;
+
+  // Ordenar entities descendente por offset para insertar tags de atrás hacia adelante
+  const sorted = [...entities].sort((a, b) => b.offset - a.offset);
+  let result = text;
+
+  for (const ent of sorted) {
+    if (ent.type === 'custom_emoji' && ent.custom_emoji_id) {
+      const start = ent.offset;
+      const end = ent.offset + ent.length;
+      const fallback = text.slice(start, end);
+      const tag = `<tg-emoji id="${ent.custom_emoji_id}">${fallback}</tg-emoji>`;
+      result = result.slice(0, start) + tag + result.slice(end);
+    }
+  }
+
+  return result;
+}
+
 export async function sendMessage(chatId: string | number, text: string, options: any = {}) {
+  const hasCustomEmoji = /<tg-emoji/i.test(text);
+  const defaultParseMode = hasCustomEmoji ? 'HTML' : 'Markdown';
+  const finalParseMode = options.parse_mode !== undefined ? options.parse_mode : defaultParseMode;
+  
+  let finalText = text;
+  if (finalParseMode === 'HTML') {
+    finalText = sanitizeForTelegram(text);
+  }
+
   return await callTelegramApi('sendMessage', {
     chat_id: chatId,
-    text,
-    parse_mode: 'Markdown',
+    text: finalText,
+    parse_mode: finalParseMode,
     ...options
   });
 }
@@ -619,18 +674,22 @@ export async function syncProfileToChannel(profileId: string, performer: string 
 
   const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
 
+  const hasCustomEmoji = /<tg-emoji/i.test(caption);
+  const postParseMode = hasCustomEmoji ? 'HTML' : 'Markdown';
+  const finalCaption = hasCustomEmoji ? sanitizeForTelegram(caption) : caption;
+
   if (profile.telegram_message_id) {
     const editMethod = primaryPhoto ? 'editMessageCaption' : 'editMessageText';
     const editPayload: any = {
       chat_id: channelId,
       message_id: profile.telegram_message_id,
-      parse_mode: 'Markdown',
+      parse_mode: postParseMode,
       reply_markup: replyMarkup
     };
     if (primaryPhoto) {
-      editPayload.caption = caption;
+      editPayload.caption = finalCaption;
     } else {
-      editPayload.text = caption;
+      editPayload.text = finalCaption;
     }
 
     const editRes = await callTelegramApi(editMethod, editPayload);
@@ -656,15 +715,15 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     sendRes = await callTelegramApi(method, {
       chat_id: channelId,
       [field]: mediaTarget,
-      caption,
-      parse_mode: 'Markdown',
+      caption: finalCaption,
+      parse_mode: postParseMode,
       reply_markup: replyMarkup
     });
   } else {
     sendRes = await callTelegramApi('sendMessage', {
       chat_id: channelId,
-      text: caption,
-      parse_mode: 'Markdown',
+      text: finalCaption,
+      parse_mode: postParseMode,
       reply_markup: replyMarkup
     });
   }
@@ -733,6 +792,63 @@ export async function sendPhotoToUser(chatId: string | number, photoUrl: string,
     caption: caption || '',
     parse_mode: 'Markdown'
   });
+}
+
+/**
+ * Envía la foto/video con el borrador al chat privado de la administradora para previsualización y edición con emojis.
+ */
+export async function sendDraftToAdmin(profileId: string, adminChatId: string | number): Promise<{ ok: boolean; messageId?: number; error?: string }> {
+  const profile = await getProfileById(profileId);
+  if (!profile) {
+    return { ok: false, error: 'Perfil no encontrado' };
+  }
+
+  const freePhotos = (profile.photos || []).filter(u => !(profile.media_stars?.[u] && profile.media_stars[u] > 0));
+  const primaryPhoto = freePhotos.length > 0 ? freePhotos[0] : (profile.photos?.[0] || null);
+  const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || '';
+  
+  const draftNotice =
+    `📝 *BORRADOR DE PUBLICACIÓN*\n\n` +
+    (activeDesc ? `${activeDesc}\n\n` : `_(Sin descripción aún)_\n\n`) +
+    `👇 *Opciones de Edición:* Puedes editar la descripción directamente con emojis Premium respondiendo a este mensaje o usando el botón:`;
+
+  const inlineKeyboard = [
+    [
+      { text: '✏️ Editar Descripción con Emojis', callback_data: `edit_draft_desc_${profile.id}` }
+    ],
+    [
+      { text: '🚀 Publicar al Canal y Mini App', callback_data: `publish_draft_${profile.id}` }
+    ]
+  ];
+
+  let res: any;
+  if (primaryPhoto) {
+    const isVideo = /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(primaryPhoto) || primaryPhoto.includes('/video');
+    const tgMatch = primaryPhoto.match(/\/telegram-media\/([a-zA-Z0-9_-]+)/);
+    const mediaTarget = profile.telegram_media_file_ids?.[primaryPhoto] || (tgMatch ? tgMatch[1] : primaryPhoto);
+    const method = isVideo ? 'sendVideo' : 'sendPhoto';
+    const field = isVideo ? 'video' : 'photo';
+
+    res = await callTelegramApi(method, {
+      chat_id: adminChatId,
+      [field]: mediaTarget,
+      caption: draftNotice,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+  } else {
+    res = await callTelegramApi('sendMessage', {
+      chat_id: adminChatId,
+      text: draftNotice,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: inlineKeyboard }
+    });
+  }
+
+  if (res && res.ok && res.result) {
+    return { ok: true, messageId: res.result.message_id };
+  }
+  return { ok: false, error: res?.description || 'Error al enviar borrador al bot' };
 }
 
 export function generateAdminMagicToken(telegramUserId: string | number): string {
@@ -1945,6 +2061,67 @@ ${state.draft_data.description}
             [
               { text: '➕ Añadir otra foto', callback_data: 'add_more_photos' },
               { text: '❌ Cancelar', callback_data: 'cancel_wizard' }
+            ]
+          ]
+        }
+      });
+      break;
+    }
+
+    case 'EDIT_DRAFT_DESC': {
+      const profileId = state.active_profile_id;
+      if (!profileId) {
+        await clearConversationState(userId);
+        await sendMessage(chatId, '⚠️ Sesión de edición expirada.');
+        return;
+      }
+
+      // Convertir el texto capturando cualquier custom_emoji que la admin haya insertado con su teclado de Telegram
+      const entities = message.entities || message.caption_entities;
+      const rawText = message.text || message.caption || '';
+      const richText = convertTelegramEntitiesToHtml(rawText, entities);
+
+      if (!richText.trim()) {
+        await sendMessage(chatId, '⚠️ Por favor envía un texto válido con tus emojis.');
+        return;
+      }
+
+      const currentProfile = await getProfileById(profileId);
+      if (!currentProfile) {
+        await clearConversationState(userId);
+        await sendMessage(chatId, '❌ Perfil no encontrado.');
+        return;
+      }
+
+      const freePhotos = (currentProfile.photos || []).filter(u => !(currentProfile.media_stars?.[u] && currentProfile.media_stars[u] > 0));
+      const primaryPhoto = freePhotos.length > 0 ? freePhotos[0] : (currentProfile.photos?.[0] || null);
+
+      const mediaDescriptions = { ...(currentProfile.media_descriptions || {}) };
+      if (primaryPhoto) {
+        mediaDescriptions[primaryPhoto] = richText;
+      }
+
+      await saveProfile({
+        id: profileId,
+        description: richText,
+        media_descriptions: mediaDescriptions
+      });
+
+      await clearConversationState(userId);
+      await addAuditLog('EDIT_DRAFT_DESC', userId, `Descripción con emojis actualizada para ${currentProfile.name}`, profileId);
+
+      const confirmMsg =
+        `✅ *¡Descripción guardada con emojis!* 🌸✨\n\n` +
+        `📝 *Texto actualizado:*\n${richText}\n\n` +
+        `👇 ¿Todo listo? Toca el botón para publicar ahora mismo:`;
+
+      await sendMessage(chatId, confirmMsg, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✏️ Volver a Editar', callback_data: `edit_draft_desc_${profileId}` },
+              { text: '🚀 Publicar al Canal y Mini App', callback_data: `publish_draft_${profileId}` }
             ]
           ]
         }
@@ -3617,6 +3794,60 @@ async function handleCallbackQuery(cb: any) {
     await updateCustomerRequestStatus(requestId, 'completado');
     await addAuditLog('COMPLETE_PRIVATE_REQUEST', userIdStr, `Solicitud ${requestId} atendida privadamente`, requestId);
     await sendMessage(chatId, '✅ Solicitud marcada como *ATENDIDA*. El bot ya no enviará una respuesta automática.');
+    return;
+  }
+
+  if (data.startsWith('edit_draft_desc_')) {
+    const profileId = data.replace('edit_draft_desc_', '');
+    await setConversationState(userIdStr, 'EDIT_DRAFT_DESC', {}, profileId);
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id });
+    await sendMessage(
+      chatId,
+      `✍️ *Escribe la nueva descripción en este chat usando tus emojis Premium de Telegram:*\n\n` +
+      `Puedes usar cualquier emoji animado o pack de tu teclado. Al enviar el mensaje, el bot lo capturará con sus emojis intactos.\n\n` +
+      `_Envía /cancelar si deseas cancelar la edición._`
+    );
+    return;
+  }
+
+  if (data.startsWith('publish_draft_')) {
+    const profileId = data.replace('publish_draft_', '');
+    await callTelegramApi('answerCallbackQuery', { callback_query_id: cb.id, text: 'Publicando al Canal y Mini App...' });
+
+    const profile = await getProfileById(profileId);
+    if (!profile) {
+      await sendMessage(chatId, '❌ Perfil no encontrado.');
+      return;
+    }
+
+    // Asegurarse de que el perfil y todas sus fotos estén en estado publicado (disponible / 1)
+    const currentStatus: Record<string, 1 | 2> = { ...(profile.media_status || {}) };
+    (profile.photos || []).forEach(u => {
+      currentStatus[u] = 1;
+    });
+
+    await saveProfile({
+      id: profileId,
+      status: 'disponible',
+      media_status: currentStatus
+    });
+
+    const syncRes = await syncProfileToChannel(profileId, `Admin Telegram (${userIdStr})`);
+    await addAuditLog('PUBLISH_DRAFT_BOT', userIdStr, `Borrador ${profile.name} publicado en Canal y Mini App`, profileId);
+
+    // Emitir broadcast para que la Mini App se actualice en tiempo real
+    try {
+      const { broadcastEvent } = await import('./routes.js');
+      broadcastEvent('PROFILE_UPDATED', { id: profileId });
+    } catch {}
+
+    await sendMessage(
+      chatId,
+      `🎉 *¡Publicado con éxito!* 🚀\n\n` +
+      `• *Perfil / Contenido*: ${profile.name}\n` +
+      `• *Mini App*: Ya está visible para todos los clientes en la galería privada.\n` +
+      `• *Canal VIP*: ${syncRes.message}`
+    );
     return;
   }
 

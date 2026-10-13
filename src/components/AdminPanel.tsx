@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { B2Manager, SubscribersManager } from './B2Manager';
-import { Cloud } from 'lucide-react';
+import { EmojiPackManager } from './EmojiPackManager';
+import { Cloud, Smile } from 'lucide-react';
 import { Profile, CustomerRequest, AuditLog, SyncErrorLog, CustomButton, DynamicPoll, PaymentMethod, BotMediaItem, BotMediaCategory, AuditedB2Media, AuditedGalleryMedia } from '../types';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { isVideoUrl } from './ProtectedMedia';
@@ -57,7 +58,7 @@ interface AdminPanelProps {
   channelId: string;
 }
 
-type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'telegram' | 'subscribers' | 'audit' | 'b2';
+type AdminTab = 'profiles' | 'requests' | 'payments' | 'buttons' | 'polls' | 'emojis' | 'telegram' | 'subscribers' | 'audit' | 'b2';
 
 export function getPaymentMethodFlag(method: PaymentMethod | string): string {
   const title = typeof method === 'string' ? method : (method.title || '');
@@ -596,6 +597,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
 
   const [publishing, setPublishing] = useState(false);
+  const [sendingDraftToBot, setSendingDraftToBot] = useState(false);
   const [tempDescText, setTempDescText] = useState<string>('');
 
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
@@ -1162,6 +1164,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessage({ type: 'error', text: 'Error de red al subir imágenes a Telegram' });
     } finally {
       setUploadingPhotos(false);
+    }
+  };
+
+  const handleSendDraftToBot = async (profileId: string) => {
+    setSendingDraftToBot(true);
+    try {
+      const res = await fetch(`/api/admin/profiles/${profileId}/send-draft`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMessage({
+          type: 'success',
+          text: '📱 ¡Borrador enviado a tu chat privado con el Bot! Ábrelo en Telegram para editar la descripción con tus emojis Premium.'
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: data.error || 'Error al enviar el borrador al Bot'
+        });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de conexión con el servidor al enviar el borrador al Bot.' });
+    } finally {
+      setSendingDraftToBot(false);
     }
   };
 
@@ -2269,6 +2300,7 @@ const handleSendReply = async (requestId: string) => {
     { id: 'payments', icon: <CreditCard className="w-4 h-4" />, label: 'Métodos de Pago', badge: paymentMethods.length },
     { id: 'buttons', icon: <Sparkles className="w-4 h-4" />, label: 'Botones', badge: customButtons.length },
     { id: 'polls', icon: <BarChart2 className="w-4 h-4" />, label: 'Encuestas', badge: dynamicPolls.length },
+    { id: 'emojis', icon: <Smile className="w-4 h-4" />, label: 'Emojis VIP' },
     { id: 'telegram', icon: <QrCode className="w-4 h-4" />, label: 'Telegram' },
     { id: 'subscribers', icon: <Users className="w-4 h-4" />, label: 'Suscriptores' },
     { id: 'audit', icon: <Activity className="w-4 h-4" />, label: 'Auditoría' },
@@ -3628,14 +3660,27 @@ const handleSendReply = async (requestId: string) => {
                       </div>
 
                       {/* Footer Navegación */}
-                      <div className="flex gap-3">
+                      <div className="flex flex-col sm:flex-row gap-2.5">
                         <button
                           type="button"
                           onClick={() => setProfileStep(2)}
                           className="py-3 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          <ChevronLeft className="w-4 h-4" /> Volver a Cargar Contenido (Paso 2)
+                          <ChevronLeft className="w-4 h-4" /> Volver a Cargar (Paso 2)
                         </button>
+
+                        {editingProfile && (
+                          <button
+                            type="button"
+                            disabled={sendingDraftToBot}
+                            onClick={() => handleSendDraftToBot(editingProfile.id)}
+                            className="flex-1 py-3 px-4 rounded-xl bg-linear-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white font-extrabold text-xs transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-pink-600/20 disabled:opacity-50"
+                            title="Envía el contenido a tu chat privado con el bot para agregarle emojis Premium antes de publicarlo"
+                          >
+                            <Smile className="w-4 h-4 text-pink-200" />
+                            {sendingDraftToBot ? 'Enviando al Bot...' : '📝 Enviar a Borrador (Chat Bot Emojis)'}
+                          </button>
+                        )}
 
                         <button
                           type="button"
@@ -3644,9 +3689,9 @@ const handleSendReply = async (requestId: string) => {
                             await handleSaveProfile(e);
                             setMessage({ type: 'success', text: 'Borrador guardado exitosamente.' });
                           }}
-                          className="flex-1 py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          className="py-3 px-4 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-700 text-zinc-300 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          <HardDrive className="w-4 h-4 text-zinc-400" /> Guardar como Borrador
+                          <HardDrive className="w-4 h-4 text-zinc-400" /> Guardar Borrador
                         </button>
                       </div>
                     </div>
@@ -6009,6 +6054,16 @@ const handleSendReply = async (requestId: string) => {
             )}
 
             
+            {/* TAB: EMOJIS VIP TELEGRAM */}
+            {activeTab === 'emojis' && (
+              <EmojiPackManager
+                token={token}
+                onSelectEmojiTag={(tag) => {
+                  setMessage({ type: 'success', text: `¡Etiqueta ${tag} copiada al portapapeles!` });
+                }}
+              />
+            )}
+
             {/* TAB: BODEGA B2 */}
             {(activeTab === 'b2' && isMasterAdmin) && (
               <B2Manager token={token} />

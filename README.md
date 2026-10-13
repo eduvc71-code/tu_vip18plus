@@ -32,3 +32,22 @@ El proyecto incluye el archivo `render.yaml` listo para producción:
 - `/qr <id_cliente>` - Envía el código QR de pago directamente al cliente para la suscripción.
 - `/nuevo` - Crea o modifica el perfil desde Telegram.
 - `/id` - Consulta tu ID numérico de Telegram.
+
+---
+
+## 🎨 Importar Packs de Emojis Premium (MTProto)
+
+El sistema soporta importar paquetes de emojis personalizados de Telegram para usarlos en el Panel de Administración y publicarlos en canales con formato enriquecido nativo:
+
+1. **Variables de Entorno requeridas (`.env`):**
+   ```env
+   TG_API_ID=tu_api_id
+   TG_API_HASH=tu_api_hash
+   TELEGRAM_BOT_TOKEN=tu_bot_token
+   ```
+2. **Características clave:**
+   - **Cero almacenamiento local de archivos:** Los archivos multimedia (.tgs, .webm, .png) no se guardan en el servidor local. Se consumen directamente desde las redes CDN de Telegram.
+   - **Identificadores de 64 bits precisos:** `custom_emoji_id` se almacena estrictamente como `TEXT` en la base de datos para prevenir pérdida de precisión en JavaScript y SQLite.
+   - **Previsualización en navegador:** La ruta `/emoji/preview/:customId` permite previsualizar los emojis tanto en imagen como en video dentro de la Mini App.
+   - **Sanitización estricta para Telegram:** Al publicar mensajes en el canal con `parse_mode: 'HTML'`, el sanitizador protege el texto mientras preserva intactas las etiquetas `<tg-emoji id="...">fallback</tg-emoji>`.
+
