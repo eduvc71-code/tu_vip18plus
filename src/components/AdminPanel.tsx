@@ -669,6 +669,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [channelVerified, setChannelVerified] = useState<boolean | null>(null);
   const [channelTitle, setChannelTitle] = useState<string>('');
   const [verifyingChannel, setVerifyingChannel] = useState(false);
+  const [envChannelId, setEnvChannelId] = useState<string>('');
   const [enlargedMediaUrl, setEnlargedMediaUrl] = useState<string | null>(null);
   const [showProfileGallery, setShowProfileGallery] = useState(false);
 
@@ -878,6 +879,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         if (data.channel_id) setChannelIdInput(data.channel_id);
         setChannelVerified(data.verified);
         setChannelTitle(data.title || '');
+        if (data.env_channel_id) setEnvChannelId(data.env_channel_id);
       }
     } catch {
       // ignore
@@ -5018,22 +5020,33 @@ const handleSendReply = async (requestId: string) => {
                     <label className="block text-zinc-300 font-semibold text-xs">
                       ID Numérico (-100...) o @Usuario de tu Canal
                     </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={channelIdInput}
-                        onChange={(e) => setChannelIdInput(e.target.value)}
-                        placeholder="Ej: @MiCanalVIP o -1001234567890"
-                        className="flex-1 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
-                      />
+                    <input
+                      type="text"
+                      value={channelIdInput}
+                      onChange={(e) => setChannelIdInput(e.target.value)}
+                      placeholder="Ej: @vip_iam_danii o -1004356066811"
+                      className="w-full px-3.5 py-2.5 bg-zinc-900 border border-zinc-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                    />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                       <button
                         type="submit"
-                        disabled={verifyingChannel || loading}
-                        className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-all cursor-pointer shrink-0 disabled:opacity-60 flex items-center gap-1.5"
+                        disabled={verifyingChannel || loading || !channelIdInput.trim()}
+                        className="py-2.5 px-5 rounded-xl bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 font-extrabold text-xs transition-all cursor-pointer shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {verifyingChannel ? 'Verificando...' : 'Vincular y Probar Canal'}
+                        <CheckCircle2 className="w-4 h-4" />
+                        {verifyingChannel ? 'Verificando y Vinculando Canal...' : 'Vincular y Probar Canal'}
                       </button>
+
+                      {envChannelId && envChannelId !== channelIdInput && (
+                        <button
+                          type="button"
+                          onClick={() => setChannelIdInput(envChannelId)}
+                          className="py-2 px-3 rounded-xl bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          title="Cargar valor configurado en el archivo .env"
+                        >
+                          Usar .env ({envChannelId})
+                        </button>
+                      )}
                     </div>
                   </form>
 

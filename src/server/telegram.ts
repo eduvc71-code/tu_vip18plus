@@ -578,8 +578,15 @@ export async function verifyChannel(targetChannelId: string): Promise<{
   }
 
   let formattedChatId = targetChannelId.trim();
+  // Limpiar links t.me o https://t.me/
+  formattedChatId = formattedChatId.replace(/^https?:\/\/t\.me\//i, '').replace(/^t\.me\//i, '').trim();
+
+  // Si son números solos, anteponer -100
   if (!formattedChatId.startsWith('@') && !formattedChatId.startsWith('-') && /^\d+$/.test(formattedChatId)) {
     formattedChatId = `-100${formattedChatId}`;
+  } else if (!formattedChatId.startsWith('@') && !formattedChatId.startsWith('-') && /^[a-zA-Z0-9_]{3,}$/.test(formattedChatId)) {
+    // Si es un username de canal sin '@', anteponer '@'
+    formattedChatId = `@${formattedChatId}`;
   }
 
   const chatRes = await callTelegramApi('getChat', { chat_id: formattedChatId });
@@ -600,7 +607,7 @@ export async function verifyChannel(targetChannelId: string): Promise<{
   if (meRes.ok && meRes.result?.id) {
     const botId = meRes.result.id;
     const memberRes = await callTelegramApi('getChatMember', {
-      chat_id: formattedChatId,
+      chat_id: chat.id || formattedChatId,
       user_id: botId
     });
 
@@ -625,6 +632,14 @@ export async function verifyChannel(targetChannelId: string): Promise<{
           error: 'El bot es Administrador pero tiene desactivado el permiso para "Publicar mensajes" (Post messages).'
         };
       }
+    } else {
+      return {
+        ok: false,
+        title: chat.title,
+        username: chat.username,
+        id: chat.id,
+        error: `El bot @${botUsername} no es miembro ni administrador del canal "${chat.title || formattedChatId}". Agrégalo como Administrador en Telegram con permiso para publicar mensajes.`
+      };
     }
   }
 

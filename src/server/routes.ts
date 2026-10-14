@@ -1904,9 +1904,13 @@ router.get('/admin/settings/channel', requireAdminAuth, async (_req: Request, re
   try {
     const { channelId, username } = getBotConfig();
     const storedTitle = getSystemSetting('channel_title') || '';
+    const envChannel = (process.env.CHANNEL_ID || '').trim();
+    const storedChannel = (getSystemSetting('channel_id') || '').trim();
     const verify = await verifyChannel(channelId);
     res.json({
       channel_id: channelId,
+      stored_channel_id: storedChannel,
+      env_channel_id: envChannel,
       verified: verify.ok,
       title: verify.title || storedTitle,
       username: verify.username,
