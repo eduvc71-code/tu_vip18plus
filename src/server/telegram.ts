@@ -735,8 +735,12 @@ export async function syncProfileToChannel(profileId: string, performer: string 
     return { success: true, message: 'Publicado exitosamente en el canal', telegramMessageId: newMsgId };
   } else {
     let errorMsg = sendRes.description || 'Error al publicar en canal Telegram';
-    if (errorMsg.toLowerCase().includes('chat not found')) {
+    if (errorMsg.toLowerCase().includes('bot is not a member of the channel chat') || errorMsg.toLowerCase().includes('not a member')) {
+      errorMsg = `El bot @${username} no es Administrador del canal (${channelId}). Abre los ajustes de tu canal en Telegram, añade a @${username} como Administrador y activa el permiso "Publicar mensajes".`;
+    } else if (errorMsg.toLowerCase().includes('chat not found')) {
       errorMsg = `Canal (${channelId}) no encontrado por Telegram. Abre tu canal, añade a @${username} como Administrador con permisos de publicación, o vincula tu canal en la pestaña 'Telegram' del Panel Web.`;
+    } else if (errorMsg.toLowerCase().includes('not enough rights') || errorMsg.toLowerCase().includes('need administrator rights')) {
+      errorMsg = `El bot @${username} está en el canal pero le falta el permiso de Administrador para "Publicar mensajes". Edita los permisos del bot en tu canal.`;
     }
     await addSyncError(profileId, 'SEND_PHOTO_CHANNEL', errorMsg);
     return { success: false, message: `Error en Telegram: ${errorMsg}` };
@@ -3841,13 +3845,37 @@ async function handleCallbackQuery(cb: any) {
       broadcastEvent('PROFILE_UPDATED', { id: profileId });
     } catch {}
 
-    await sendMessage(
-      chatId,
-      `🎉 *¡Publicado con éxito!* 🚀\n\n` +
-      `• *Perfil / Contenido*: ${profile.name}\n` +
-      `• *Mini App*: Ya está visible para todos los clientes en la galería privada.\n` +
-      `• *Canal VIP*: ${syncRes.message}`
-    );
+    if (syncRes.success) {
+      await sendMessage(
+        chatId,
+        `🎉 *¡Publicado con éxito!* 🚀\n\n` +
+        `• *Perfil / Contenido*: ${profile.name}\n` +
+        `• *Mini App*: Ya está visible para todos los clientes en la galería privada.\n` +
+        `• *Canal VIP*: ${syncRes.message}`
+      );
+    } else {
+      const { channelId, username } = getBotConfig();
+      await sendMessage(
+        chatId,
+        `⚠️ *Publicado en la Mini App, pero falló el envío al Canal de Telegram*\n\n` +
+        `• *Mini App*: ✅ Ya está visible para los clientes.\n` +
+        `• *Canal*: ❌ ${syncRes.message}\n\n` +
+        `👉 *Pasos para solucionarlo:*\n` +
+        `1. Abre Telegram y ve a tu canal *${channelId}*.\n` +
+        `2. Pulsa en la info del canal > *Administradores* > *Añadir administrador*.\n` +
+        `3. Busca a *@${username}* y dale permisos de *Publicar mensajes*.\n` +
+        `4. Cuando lo añadas, pulsa el botón abajo para completar la publicación en el canal:`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '🔄 Reintentar Publicar al Canal', callback_data: `publish_draft_${profileId}` }
+              ]
+            ]
+          }
+        }
+      );
+    }
     return;
   }
 
