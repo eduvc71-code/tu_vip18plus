@@ -54,6 +54,12 @@ export function getBotConfig() {
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || require('crypto').createHash('sha256').update(token).digest('hex').substring(0, 32);
   const storedChannel = getSystemSetting('channel_id');
   let channelId = (storedChannel || process.env.CHANNEL_ID || '-1004356066811').trim();
+  if (channelId === '-1003382234675' || /iamdani07/i.test(channelId)) {
+    channelId = (process.env.CHANNEL_ID || '-1004356066811').trim();
+  }
+  if (channelId === '@vip_iam_danii' || /vip_iam_danii/i.test(channelId)) {
+    channelId = '-1004356066811';
+  }
   if (!channelId.startsWith('@') && !channelId.startsWith('-') && /^\d+$/.test(channelId)) {
     channelId = `-100${channelId}`;
   }

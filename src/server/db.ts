@@ -197,6 +197,9 @@ function ensureDefaultSettings(database: any): void {
   }
   // Solo corregir valores heredados/incorrectos; preservar lo que la admin configure en el panel.
   database.run(`UPDATE system_settings SET value = ? WHERE key = 'admin_contact_username' AND (value = 'IAM_Danii_VIP_bot' OR value LIKE '%flavia%' OR value LIKE '%ruti%')`, [defaultAdminUsername]);
+  database.run(`UPDATE system_settings SET value = '-1004356066811' WHERE key = 'channel_id' AND (value = '-1003382234675' OR value LIKE '%iamdani07%')`);
+  database.run(`UPDATE system_settings SET value = 'IAM DANII VIP' WHERE key = 'channel_title' AND value LIKE '%DANI CANAL FREE%'`);
+  database.run(`UPDATE system_settings SET value = 'vip_iam_danii' WHERE key = 'channel_username' AND value LIKE '%iamdani07%'`);
   database.run(`UPDATE profiles SET description = '' WHERE description LIKE '%Holis%' OR description LIKE '%bienvenida%' OR description LIKE '%opciones que te salen abajo%'`);
   database.run(`INSERT OR IGNORE INTO system_settings (key, value) VALUES ('telegram_app_short_name', 'canalVipFreeIamDanii')`);
   database.run(`UPDATE system_settings SET value = 'canalVipFreeIamDanii' WHERE key = 'telegram_app_short_name'`);
