@@ -24,7 +24,7 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '60mb' }));
 
 
-  // Ensure data/uploads exists (important for persistent volumes like Fly.io where public/uploads is a symlink to data/uploads)
+  // Ensure data/uploads exists
   const dataUploadsPath = path.join(process.cwd(), 'data', 'uploads');
   if (!fs.existsSync(dataUploadsPath)) {
     fs.mkdirSync(dataUploadsPath, { recursive: true });

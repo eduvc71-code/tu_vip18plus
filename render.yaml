@@ -24,3 +24,13 @@ services:
         sync: false
       - key: ADMIN_TELEGRAM_IDS
         sync: false
+      - key: B2_BUCKET_NAME
+        sync: false
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APPLICATION_KEY
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
