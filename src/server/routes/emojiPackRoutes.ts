@@ -44,18 +44,31 @@ emojiPackRouter.post('/import', async (req: Request, res: Response) => {
           );
           results.push({ shortName, count: inserted });
         } else {
-          results.push({ shortName, count: 0, error: 'No se encontraron stickers o el pack está vacío' });
+          results.push({ shortName, count: 0, error: 'No se encontraron emojis válidos en Telegram para este pack' });
         }
       } catch (err: any) {
         console.error(`Error importing pack ${shortName}:`, err);
-        results.push({ shortName, count: 0, error: err?.message || 'Error desconocido al invocar Telegram' });
+        results.push({ shortName, count: 0, error: err?.message || 'Error al conectar con Telegram' });
       }
+    }
+
+    const totalImported = results.reduce((acc, cur) => acc + (cur.count || 0), 0);
+    if (totalImported === 0) {
+      const firstError = results.find(r => r.error)?.error || 'No se pudo importar ningún emoji. Verifica que el nombre o enlace sea válido.';
+      res.status(400).json({
+        success: false,
+        error: firstError,
+        results,
+        totalImported: 0
+      });
+      return;
     }
 
     res.json({
       success: true,
       message: 'Proceso de importación finalizado',
-      results
+      results,
+      totalImported
     });
   } catch (err: any) {
     console.error('Error general en /admin/emoji-pack/import:', err);

@@ -119,12 +119,13 @@ export const EmojiPackManager: React.FC<EmojiPackManagerProps> = ({ token, onSel
         body: JSON.stringify({ urls })
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        const totalImported = (data.results || []).reduce((acc: number, cur: any) => acc + (cur.count || 0), 0);
+      const totalImported = data.totalImported ?? (data.results || []).reduce((acc: number, cur: any) => acc + (cur.count || 0), 0);
+      if (res.ok && data.success && totalImported > 0) {
         showNotification('success', `¡Importación completada! Se procesaron ${data.results?.length || 0} packs (${totalImported} emojis en total).`);
         fetchPacks();
       } else {
-        showNotification('error', data.error || 'Error al importar los packs de emojis.');
+        const errorMsg = data.error || data.results?.find((r: any) => r.error)?.error || 'No se importó ningún emoji. Verifica el enlace o nombre del pack.';
+        showNotification('error', errorMsg);
       }
     } catch {
       showNotification('error', 'Error de conexión con el servidor al importar.');

@@ -1,6 +1,8 @@
 import { TelegramClient } from 'telegram';
 import { StringSession } from 'telegram/sessions';
 import { Api } from 'telegram';
+import { callTelegramApi } from './telegram.js';
+
 const apiId = Number(process.env.TG_API_ID);
 const apiHash = process.env.TG_API_HASH || '';
 const botToken = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
@@ -31,40 +33,70 @@ async function ensureClient() {
 /**
  * Obtiene los stickers de emoji de un pack a partir de su shortName.
  * Devuelve un arreglo de objetos con customEmojiId (como string) y emoji fallback.
+ * 
+ * Estrategia ultra-robusta:
+ * 1) Usa primero la Bot API oficial (getStickerSet). No requiere TG_API_ID ni TG_API_HASH y responde al instante.
+ * 2) Si falla o no devuelve datos, recurre a MTProto GramJS (si las credenciales existen).
  */
 export async function getEmojiStickers(shortName: string): Promise<Array<{ customEmojiId: string; emoji: string }>> {
-  const c = await ensureClient();
+  // 1. Intentar primero por la API oficial de Telegram Bots (getStickerSet)
   try {
-    const result: any = await c.invoke(
-      new Api.messages.GetStickerSet({
-        stickerset: new Api.InputStickerSetShortName({
-          shortName: shortName,
-        }),
-        hash: 0 as any,
-      })
-    );
-    const stickers: Array<{ customEmojiId: string; emoji: string }> = [];
-    if (result && result.documents) {
-      for (const doc of result.documents) {
-        const attr = doc.attributes?.find((a: any) => a instanceof Api.DocumentAttributeCustomEmoji || (a && a.className === 'DocumentAttributeCustomEmoji'));
-        let customId = (attr && (attr as any).alt) ? (doc as any).id?.toString() : (doc as any).id?.toString();
-        let fallback = '✨';
-        if (attr && (attr as any).alt) {
-          fallback = (attr as any).alt;
-        } else if (doc.mimeType?.includes('video')) {
-          fallback = '📹';
-        } else if (doc.mimeType?.includes('image')) {
-          fallback = '🖼️';
-        }
+    const botRes = await callTelegramApi('getStickerSet', { name: shortName });
+    if (botRes && botRes.ok && Array.isArray(botRes.result?.stickers) && botRes.result.stickers.length > 0) {
+      const stickers: Array<{ customEmojiId: string; emoji: string }> = [];
+      for (const stk of botRes.result.stickers) {
+        const customId = stk.custom_emoji_id ? String(stk.custom_emoji_id) : (stk.type === 'custom_emoji' ? String(stk.file_unique_id) : null);
         if (customId) {
-          stickers.push({ customEmojiId: customId, emoji: fallback });
+          stickers.push({
+            customEmojiId: customId,
+            emoji: stk.emoji || '✨'
+          });
         }
       }
+      if (stickers.length > 0) {
+        return stickers;
+      }
     }
-    return stickers;
-  } catch (err) {
-    console.error('Error fetching emoji stickers for', shortName, err);
-    return [];
+  } catch (botErr) {
+    console.warn(`[getEmojiStickers] Bot API falló para el pack ${shortName}:`, botErr);
   }
+
+  // 2. Si no funcionó o no trajo custom emojis, intentar con MTProto GramJS (si están configurados apiId y apiHash)
+  if (apiId && apiHash) {
+    try {
+      const c = await ensureClient();
+      const result: any = await c.invoke(
+        new Api.messages.GetStickerSet({
+          stickerset: new Api.InputStickerSetShortName({
+            shortName: shortName,
+          }),
+          hash: 0 as any,
+        })
+      );
+      const stickers: Array<{ customEmojiId: string; emoji: string }> = [];
+      if (result && result.documents) {
+        for (const doc of result.documents) {
+          const attr = doc.attributes?.find((a: any) => a instanceof Api.DocumentAttributeCustomEmoji || (a && a.className === 'DocumentAttributeCustomEmoji'));
+          const customId = doc.id ? doc.id.toString() : null;
+          let fallback = '✨';
+          if (attr && (attr as any).alt) {
+            fallback = (attr as any).alt;
+          } else if (doc.mimeType?.includes('video')) {
+            fallback = '📹';
+          } else if (doc.mimeType?.includes('image')) {
+            fallback = '🖼️';
+          }
+          if (customId) {
+            stickers.push({ customEmojiId: customId, emoji: fallback });
+          }
+        }
+      }
+      return stickers;
+    } catch (err) {
+      console.error('Error fetching emoji stickers via MTProto for', shortName, err);
+    }
+  }
+
+  return [];
 }
 
