@@ -76,6 +76,7 @@ import {
   uploadBufferToTelegram,
   showPaymentMethodDetail,
   sendDraftToAdmin,
+  checkAdminTelegramPremium,
   callTelegramApi, buildChannelPostMarkup } from './telegram.js';
 import { emojiPackRouter } from './routes/emojiPackRoutes.js';
 import { emojiPreviewRouter } from './routes/emojiPreviewRoute.js';
@@ -776,6 +777,29 @@ router.post('/admin/auth/login', (req: Request, res: Response) => {
     res.json({ valid: true, token, userId: effectiveUserId });
   } else {
     res.status(401).json({ valid: false, error: 'PIN o Telegram ID no coincide con las credenciales de Administradora.' });
+  }
+});
+
+// GET Telegram Premium status for Admin
+router.get('/admin/premium-status', requireAdminAuth, async (_req: Request, res: Response) => {
+  try {
+    const isPremium = getSystemSetting('admin_is_premium') === 'true';
+    const checkedAt = getSystemSetting('admin_premium_checked_at') || '';
+    const adminUserId = getSystemSetting('admin_premium_user_id') || '';
+    res.json({ ok: true, isPremium, checkedAt, adminUserId });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al consultar estado Premium', details: err?.message });
+  }
+});
+
+// POST Sync Telegram Premium status live from Telegram
+router.post('/admin/premium-sync', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const adminId = req.body?.adminId || (req as any).adminUserId;
+    const result = await checkAdminTelegramPremium(adminId);
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al sincronizar estado Premium', details: err?.message });
   }
 });
 

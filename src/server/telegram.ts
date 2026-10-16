@@ -1494,6 +1494,12 @@ export async function processTelegramUpdate(update: any) {
       return;
     }
     if (isAdminUser(fromId)) {
+      if (message.from) {
+        const isPrem = Boolean(message.from.is_premium);
+        saveSystemSetting('admin_is_premium', isPrem ? 'true' : 'false');
+        saveSystemSetting('admin_premium_checked_at', new Date().toISOString());
+        saveSystemSetting('admin_premium_user_id', String(fromId));
+      }
       const { baseUrl } = getBotConfig();
       const adminToken = generateAdminMagicToken(String(fromId));
       const adminLink = buildAdminWebLink(baseUrl, adminToken);
@@ -1529,6 +1535,12 @@ export async function processTelegramUpdate(update: any) {
       return;
     }
     if (isAdminUser(fromId)) {
+      if (message.from) {
+        const isPrem = Boolean(message.from.is_premium);
+        saveSystemSetting('admin_is_premium', isPrem ? 'true' : 'false');
+        saveSystemSetting('admin_premium_checked_at', new Date().toISOString());
+        saveSystemSetting('admin_premium_user_id', String(fromId));
+      }
       await sendAdminWelcome(chatId, message.from?.first_name || 'Administradora');
       return;
     }
@@ -3993,8 +4005,14 @@ async function sendAdminWelcome(chatId: string | number, name: string) {
   const btnListar = await getBotCommandText('listar', '📋 Listar Perfiles', '📋');
   const btnAyuda = await getBotCommandText('ayuda', '📖 Manual / Ayuda Admin', '📖');
 
+  const isPrem = getSystemSetting('admin_is_premium') === 'true';
+  const premiumNotice = isPrem
+    ? '⭐ *Estado:* Telegram Premium Activo (Emojis VIP habilitados en Panel Admin)\n\n'
+    : 'ℹ️ *Estado:* Telegram Premium No Detectado\n\n';
+
   const msg = `👑 *¡Bienvenida, Administradora ${name}!* 👑\n\n` +
     `Sistema de Gestión — *${brandName || 'IAM DANII VIP'} (+18)*.\n\n` +
+    premiumNotice +
     `📸 *Carga Directa de Contenido:*\n` +
     `Como Administradora, puedes enviar o reenviar fotografías y videos directamente a este chat y se agregarán de inmediato a la galería de tu Canal VIP Free.\n\n` +
     `👇 *Botones:*`;
@@ -4360,4 +4378,27 @@ export async function createStarsInvoiceLink(title: string, description: string,
     return res.result;
   }
   return null;
+}
+
+export async function checkAdminTelegramPremium(targetAdminId?: string): Promise<{ isPremium: boolean; checkedAt: string; adminId: string; error?: string }> {
+  const { adminIds } = getBotConfig();
+  const adminId = targetAdminId || getSystemSetting('admin_premium_user_id') || adminIds[0];
+  if (!adminId) {
+    return { isPremium: false, checkedAt: new Date().toISOString(), adminId: '', error: 'No hay Telegram ID de admin configurado' };
+  }
+  try {
+    const chatRes = await callTelegramApi('getChat', { chat_id: adminId });
+    if (chatRes && chatRes.ok && chatRes.result) {
+      const isPrem = Boolean(chatRes.result.is_premium);
+      saveSystemSetting('admin_is_premium', isPrem ? 'true' : 'false');
+      saveSystemSetting('admin_premium_checked_at', new Date().toISOString());
+      saveSystemSetting('admin_premium_user_id', String(adminId));
+      return { isPremium: isPrem, checkedAt: new Date().toISOString(), adminId: String(adminId) };
+    }
+  } catch (err: any) {
+    console.error('[Telegram] Error verificando admin premium con getChat:', err);
+  }
+  const stored = getSystemSetting('admin_is_premium') === 'true';
+  const storedCheckedAt = getSystemSetting('admin_premium_checked_at') || '';
+  return { isPremium: stored, checkedAt: storedCheckedAt, adminId: String(adminId) };
 }

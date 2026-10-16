@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { adminFetch } from '../../client/adminFetch';
 import { isVideoUrl } from '../ProtectedMedia';
 import { TileSkeleton } from './AdminSkeletons';
+import { EmojiPickerPopover } from './EmojiPickerPopover';
 import { Profile, BotMediaItem, BotMediaCategory } from '../../types';
 import {
   X,
@@ -107,15 +108,47 @@ export const AdminProfilesTab: React.FC<AdminProfilesTabProps> = ({
   const [enlargedMediaUrl, setEnlargedMediaUrl] = useState<string | null>(null);
   const [showProfileGallery, setShowProfileGallery] = useState(false);
 
-  useEffect(() => {
-    setShowProfileGallery(false);
-    setPublishedPostUrls([]);
-  }, [editingProfile?.id]);
-
   const [uploadComment, setUploadComment] = useState('');
   const [uploadSugestiva, setUploadSugestiva] = useState(false);
   const [uploadDuration, setUploadDuration] = useState(10);
   const [step2Tab, setStep2Tab] = useState<'free' | 'vip' | 'bot'>('free');
+
+  useEffect(() => {
+    setShowProfileGallery(false);
+    setPublishedPostUrls([]);
+    const initialDesc = editingProfile?.description || formData.description || '';
+    if (initialDesc) {
+      setUploadComment(initialDesc);
+    }
+  }, [editingProfile?.id]);
+
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const value = target.value;
+      const tabSpaces = '    '; // 4 espacios tabulares para separar párrafos / indentar
+      const updated = value.substring(0, start) + tabSpaces + value.substring(end);
+
+      const name = target.getAttribute('name');
+      if (name === 'uploadComment') {
+        setUploadComment(updated);
+      } else if (name === 'formDescription') {
+        setFormData((prev: any) => ({ ...prev, description: updated }));
+      } else if (name === 'tempDescText') {
+        setTempDescText(updated);
+      } else if (name === 'vipCaption') {
+        setVipCaption(updated);
+      } else if (name === 'paidModalCaption') {
+        setPaidModalCaption(updated);
+      }
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + tabSpaces.length;
+      }, 0);
+    }
+  };
 
   const [vipFile, setVipFile] = useState<File | null>(null);
   const [vipStarCount, setVipStarCount] = useState<number | ''>(50);
@@ -138,6 +171,43 @@ export const AdminProfilesTab: React.FC<AdminProfilesTabProps> = ({
   const [profileStep, setProfileStep] = useState<1 | 2 | 3>(1);
   const [editingDescription, setEditingDescription] = useState(false);
   const [savingDescriptionOnly, setSavingDescriptionOnly] = useState(false);
+
+  const formDescTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const uploadCommentTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const insertEmojiIntoDescription = (emojiTag: string, target: 'form' | 'upload') => {
+    if (target === 'form') {
+      const el = formDescTextareaRef.current;
+      if (el) {
+        const start = el.selectionStart ?? 0;
+        const end = el.selectionEnd ?? 0;
+        const current = formData.description || '';
+        const updated = current.substring(0, start) + emojiTag + current.substring(end);
+        setFormData((prev: any) => ({ ...prev, description: updated }));
+        setTimeout(() => {
+          el.focus();
+          el.selectionStart = el.selectionEnd = start + emojiTag.length;
+        }, 0);
+      } else {
+        setFormData((prev: any) => ({ ...prev, description: (prev.description || '') + emojiTag }));
+      }
+    } else if (target === 'upload') {
+      const el = uploadCommentTextareaRef.current;
+      if (el) {
+        const start = el.selectionStart ?? 0;
+        const end = el.selectionEnd ?? 0;
+        const current = uploadComment || '';
+        const updated = current.substring(0, start) + emojiTag + current.substring(end);
+        setUploadComment(updated);
+        setTimeout(() => {
+          el.focus();
+          el.selectionStart = el.selectionEnd = start + emojiTag.length;
+        }, 0);
+      } else {
+        setUploadComment((prev) => prev + emojiTag);
+      }
+    }
+  };
 
   const [previewModeModal, setPreviewModeModal] = useState<null | 'miniapp' | 'telegram'>(null);
   const [previewIncludeDrafts, setPreviewIncludeDrafts] = useState(true);
@@ -172,6 +242,10 @@ export const AdminProfilesTab: React.FC<AdminProfilesTabProps> = ({
             status: data.profile.status || 'borrador',
             priority_order: data.profile.priority_order || 0
           });
+          const savedDesc = data.profile.description || formData.description || '';
+          if (savedDesc) {
+            setUploadComment(savedDesc);
+          }
         }
         fetchData();
         setActiveTab?.('profiles');
@@ -205,6 +279,7 @@ export const AdminProfilesTab: React.FC<AdminProfilesTabProps> = ({
         setMessage({ type: 'success', text: '✅ Mi descripción guardada con éxito.' });
         setEditingProfile(data.profile);
         setEditingDescription(false);
+        setUploadComment(formData.description);
         fetchData();
       } else {
         setMessage({ type: 'error', text: data.error || 'Error al guardar la descripción' });
@@ -805,6 +880,10 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             priority_order: target.priority_order || 0
                           });
                         }
+                        const targetDesc = target?.description || formData.description;
+                        if (targetDesc) {
+                          setUploadComment(targetDesc);
+                        }
                         setProfileStep(2);
                       }}
                       className="px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer transition-all flex items-center gap-1.5 bg-linear-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-zinc-950 shadow-md shadow-amber-500/20 font-sans"
@@ -836,6 +915,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                       if (!editingProfile && !formData.name.trim()) {
                         setMessage({ type: 'error', text: 'Por favor ingresa primero el nombre del perfil.' });
                         return;
+                      }
+                      if (formData.description) {
+                        setUploadComment(formData.description);
                       }
                       setProfileStep(2);
                     }}
@@ -873,6 +955,9 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                   <form onSubmit={async (e) => {
                     e.preventDefault();
                     await handleSaveProfile(e);
+                    if (formData.description) {
+                      setUploadComment(formData.description);
+                    }
                     setProfileStep(2);
                   }} className="space-y-3 text-xs">
                     <div className="p-3.5 sm:p-5 bg-zinc-950/90 border border-zinc-850 rounded-xl sm:rounded-2xl space-y-3 shadow-md">
@@ -920,7 +1005,15 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                             Mi descripción
                           </label>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <EmojiPickerPopover
+                              token={token}
+                              onInsertEmoji={(tag) => {
+                                if (!editingDescription) setEditingDescription(true);
+                                insertEmojiIntoDescription(tag, 'form');
+                              }}
+                              textareaRef={formDescTextareaRef}
+                            />
                             <span className="text-[10px] text-rose-400 font-bold">* Obligatorio</span>
                             <label className="flex items-center gap-2 text-[11px] text-zinc-300">
                               <input
@@ -934,12 +1027,15 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                           </div>
                         </div>
                         <textarea
-                          rows={3}
+                          ref={formDescTextareaRef}
+                          name="formDescription"
+                          rows={4}
                           value={formData.description}
                           placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería de seda... 💫 15 fotos + 2 videos HD. Esta descripción se publica en Telegram y se muestra en la Mini App."
                           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          onKeyDown={handleTabKeyDown}
                           readOnly={!editingDescription}
-                          className={`w-full px-3 py-2.5 ${editingDescription ? 'bg-zinc-900 border-zinc-700' : 'bg-zinc-950 border-zinc-800/40 opacity-80'} rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 resize-none transition-colors text-xs leading-relaxed`}
+                          className={`w-full px-3 py-2.5 ${editingDescription ? 'bg-zinc-900 border-zinc-700' : 'bg-zinc-950 border-zinc-800/40 opacity-80'} rounded-xl text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 resize-y transition-colors text-xs leading-relaxed whitespace-pre-wrap font-sans`}
                         />
                         <div className="flex items-center justify-end gap-2 mt-2">
                           {editingDescription && (
@@ -1136,20 +1232,42 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                               )}
                             </div>
 
-                            {/* Descripción obligatoria de la publicación Free */}
+                            {/* Descripción de la publicación Free replicada de Paso 1 */}
                             <div className="p-3 bg-zinc-900/60 border border-zinc-850 rounded-xl space-y-2.5">
-                              <label className="flex items-center gap-1.5">
-                                <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                                Descripción de la publicación <span className="text-rose-400">(Obligatoria)</span>
-                              </label>
-                              <input
-                                type="text"
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <label className="flex items-center gap-1.5 font-semibold text-zinc-300">
+                                  <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                                  Descripción de la publicación <span className="text-rose-400 font-bold">(Obligatoria)</span>
+                                </label>
+                                <div className="flex items-center gap-2.5">
+                                  <EmojiPickerPopover
+                                    token={token}
+                                    onInsertEmoji={(tag) => insertEmojiIntoDescription(tag, 'upload')}
+                                    textareaRef={uploadCommentTextareaRef}
+                                  />
+                                  {formData.description && formData.description.trim() !== uploadComment.trim() && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setUploadComment(formData.description)}
+                                      className="text-[11px] text-amber-400 hover:text-amber-300 underline font-bold cursor-pointer transition-colors flex items-center gap-1"
+                                      title="Replicar exactamente la descripción guardada en el Paso 1"
+                                    >
+                                      <span>🔄 Replicar descripción del Paso 1</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                              <textarea
+                                ref={uploadCommentTextareaRef}
+                                name="uploadComment"
+                                rows={4}
                                 value={uploadComment}
                                 onChange={(e) => setUploadComment(e.target.value)}
+                                onKeyDown={handleTabKeyDown}
                                 required
                                 aria-required="true"
-                                placeholder="Escribe el texto que acompañará la publicación en Canal Free..."
-                                className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500"
+                                placeholder="Escribe o edita el texto que acompañará la publicación en Canal Free (admite párrafos, saltos de línea y sangrías)..."
+                                className="w-full px-3 py-2.5 bg-zinc-950 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500 resize-y leading-relaxed whitespace-pre-wrap font-sans transition-colors"
                               />
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-zinc-850">
                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -1321,16 +1439,24 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
 
                                 {/* Descripción / Leyenda VIP */}
                                 <div className="space-y-1 mt-2">
-                                  <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
-                                    <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                                    Descripción o Leyenda Exclusiva del Contenido VIP:
-                                  </label>
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[11px] font-semibold text-zinc-300 flex items-center gap-1.5">
+                                      <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                                      Descripción o Leyenda Exclusiva del Contenido VIP:
+                                    </label>
+                                    <EmojiPickerPopover
+                                      token={token}
+                                      onInsertEmoji={(tag) => setVipCaption((prev) => (prev || '') + tag)}
+                                    />
+                                  </div>
                                   <textarea
-                                    rows={2}
+                                    name="vipCaption"
+                                    rows={3}
                                     value={vipCaption}
                                     onChange={(e) => setVipCaption(e.target.value)}
+                                    onKeyDown={handleTabKeyDown}
                                     placeholder="Ej: 💎 Video VIP sin censura en ultra alta definición... Desbloquea ahora con Telegram Stars."
-                                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500 resize-none"
+                                    className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 text-xs focus:outline-none focus:border-amber-500 resize-y leading-relaxed whitespace-pre-wrap font-sans transition-colors"
                                   />
                                 </div>
 
@@ -1390,7 +1516,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                     </div>
                                   </div>
                                   <div className="p-4 space-y-3">
-                                    <p className="text-sm text-zinc-200">{vipCaption || 'Contenido VIP exclusivo.'}</p>
+                                    <p className="text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed">{vipCaption || 'Contenido VIP exclusivo.'}</p>
                                     <button
                                       type="button"
                                       disabled
@@ -2122,7 +2248,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   </div>
 
                                   {formData.description ? (
-                                    <p className="text-[11px] text-zinc-300 bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800/80 whitespace-pre-line leading-relaxed">
+                                    <p className="text-[11px] text-zinc-300 bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800/80 whitespace-pre-wrap leading-relaxed">
                                       {formData.description}
                                     </p>
                                   ) : (
@@ -2214,7 +2340,7 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                   <p className="font-bold text-amber-300">
                                     ✨ {formData.name || 'IAM Danii VIP'} • Contenido Exclusivo ✨
                                   </p>
-                                  <p className="text-zinc-200 text-[11px] whitespace-pre-line leading-relaxed">
+                                  <p className="text-zinc-200 text-[11px] whitespace-pre-wrap leading-relaxed">
                                     {coverMedia && editingProfile?.media_descriptions?.[coverMedia]
                                       ? editingProfile.media_descriptions[coverMedia]
                                       : formData.description || '🔥 Nueva actualización exclusiva disponible. Toca el botón de abajo para entrar al Canal VIP Free.'}
@@ -2472,24 +2598,40 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 </span>
                               </div>
 
-                              <div className="flex flex-col sm:flex-row gap-2">
-                                <input
-                                  type="text"
+                              <div className="space-y-2">
+                                {formData.description && formData.description.trim() !== tempDescText.trim() && (
+                                  <div className="flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setTempDescText(formData.description)}
+                                      className="text-[10px] text-amber-400 hover:text-amber-300 underline font-semibold cursor-pointer transition-colors"
+                                      title="Usar la descripción del perfil"
+                                    >
+                                      🔄 Replicar descripción del perfil
+                                    </button>
+                                  </div>
+                                )}
+                                <textarea
+                                  name="tempDescText"
+                                  rows={3}
                                   value={tempDescText}
                                   onChange={(e) => setTempDescText(e.target.value)}
-                                  placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería negra..."
-                                  className="flex-1 px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors"
+                                  onKeyDown={handleTabKeyDown}
+                                  placeholder="Ej: 🔥 Nueva sesión exclusiva en lencería negra (admite párrafos, saltos de línea y sangrías)..."
+                                  className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs focus:outline-none focus:border-amber-500 transition-colors resize-y leading-relaxed whitespace-pre-wrap font-sans"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={async () => {
-                                    await handleUpdateMediaDescription(enlargedMediaUrl, tempDescText);
-                                  }}
-                                  className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-all cursor-pointer shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center gap-1"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Guardar Descripción
-                                </button>
+                                <div className="flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      await handleUpdateMediaDescription(enlargedMediaUrl, tempDescText);
+                                    }}
+                                    className="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-zinc-950 font-bold text-xs transition-all cursor-pointer shrink-0 shadow-md shadow-amber-500/10 flex items-center justify-center gap-1"
+                                  >
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                    Guardar Descripción
+                                  </button>
+                                </div>
                               </div>
                             </div>
 
@@ -2678,11 +2820,13 @@ const handleUpdateMediaDescription = async (photoUrl: string, descriptionText: s
                                 Descripción o Mensaje del Post (Opcional):
                               </label>
                               <textarea
+                                name="paidModalCaption"
                                 value={paidModalCaption}
                                 onChange={(e) => setPaidModalCaption(e.target.value)}
-                                placeholder="Ej: 🔥 Desbloquea este contenido exclusivo con estrellas..."
+                                onKeyDown={handleTabKeyDown}
+                                placeholder="Ej: 🔥 Desbloquea este contenido exclusivo con estrellas (admite párrafos y saltos de línea)..."
                                 rows={3}
-                                className="w-full p-3 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-amber-500 resize-none"
+                                className="w-full p-3 bg-zinc-950 border border-zinc-700 rounded-xl text-white text-xs placeholder-zinc-500 focus:outline-none focus:border-amber-500 resize-y leading-relaxed whitespace-pre-wrap font-sans transition-colors"
                               />
                             </div>
                           </div>
