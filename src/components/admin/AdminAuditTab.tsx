@@ -6,7 +6,8 @@ import {
   Activity,
   RefreshCw,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 
 interface AdminAuditTabProps {
@@ -34,6 +35,29 @@ export const AdminAuditTab: React.FC<AdminAuditTabProps> = ({
   const [auditB2Error, setAuditB2Error] = useState<string | null>(null);
   const [selectedAuditedMedia, setSelectedAuditedMedia] = useState<AuditedGalleryMedia | null>(null);
   const [auditB2Deleting, setAuditB2Deleting] = useState(false);
+  const [trimmingLogs, setTrimmingLogs] = useState(false);
+
+  const handleTrimLogs = async () => {
+    if (!window.confirm('¿Deseas depurar los registros de auditoría y conservar únicamente los 5 más recientes?\n\nLos registros más antiguos se eliminarán permanentemente.')) return;
+    setTrimmingLogs(true);
+    try {
+      const res = await adminFetch('/api/admin/logs/trim', token, {
+        method: 'POST',
+        json: { keepCount: 5 }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Error al depurar registros de auditoría.');
+      setMessage({
+        type: 'success',
+        text: `Se eliminaron ${data.deleted} registros antiguos. Se conservaron los ${data.remaining} más recientes.`
+      });
+      await fetchData();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'No se pudo depurar la auditoría.' });
+    } finally {
+      setTrimmingLogs(false);
+    }
+  };
 
   const fetchAuditedB2Media = async () => {
     setAuditB2Loading(true);
@@ -194,6 +218,28 @@ export const AdminAuditTab: React.FC<AdminAuditTabProps> = ({
           </div>
         )}
       </section>
+
+      {/* Encabezado y botón para depurar historial conservando los 5 últimos */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-amber-400" />
+          <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+            Registros de Auditoría ({auditLogs.length})
+          </h3>
+        </div>
+        {auditLogs.length > 5 && (
+          <button
+            type="button"
+            onClick={handleTrimLogs}
+            disabled={trimmingLogs}
+            className="px-3 py-1.5 text-xs font-bold rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
+            title="Eliminar logs antiguos y conservar únicamente los 5 más recientes"
+          >
+            {trimmingLogs ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+            {trimmingLogs ? 'Depurando…' : 'Conservar solo los 5 últimos'}
+          </button>
+        )}
+      </div>
 
       {initialLoading ? (
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl divide-y divide-zinc-900" aria-hidden="true">

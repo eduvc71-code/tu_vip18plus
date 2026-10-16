@@ -8,6 +8,7 @@ import {
 } from '@aws-sdk/client-s3';
 import type { Request, Response } from 'express';
 import { Readable } from 'stream';
+import path from 'path';
 
 const requiredVariables = ['B2_BUCKET_NAME', 'B2_ENDPOINT', 'B2_KEY_ID', 'B2_APPLICATION_KEY'] as const;
 
@@ -164,7 +165,9 @@ export async function streamB2Object(req: Request, res: Response) {
 
     res.status(range ? 206 : 200);
     res.setHeader('Content-Type', object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', 'inline');
+    const isBackup = objectKey.startsWith('tu-vip/backups/');
+    const safeFileName = path.basename(objectKey) || 'catalogo.sqlite';
+    res.setHeader('Content-Disposition', isBackup ? `attachment; filename="${safeFileName}"` : 'inline');
     // Cache inteligente de 7 días: ahorra más del 85% de ancho de banda en Backblaze B2
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.setHeader('X-Content-Type-Options', 'nosniff');

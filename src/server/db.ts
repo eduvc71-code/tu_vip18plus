@@ -1300,6 +1300,24 @@ export async function getAuditLogs(): Promise<AuditLog[]> {
   });
 }
 
+export async function trimAuditLogs(keepCount = 5): Promise<{ deleted: number; remaining: number }> {
+  const database = await getDb();
+  const countBeforeRes = database.exec("SELECT COUNT(*) FROM audit_logs");
+  const countBefore = Number(countBeforeRes?.[0]?.values?.[0]?.[0] || 0);
+
+  const limit = Math.max(1, Number(keepCount) || 5);
+  database.run(`
+    DELETE FROM audit_logs WHERE id NOT IN (
+      SELECT id FROM audit_logs ORDER BY timestamp DESC LIMIT ${limit}
+    )
+  `);
+
+  const countAfterRes = database.exec("SELECT COUNT(*) FROM audit_logs");
+  const countAfter = Number(countAfterRes?.[0]?.values?.[0]?.[0] || 0);
+  saveDb();
+  return { deleted: Math.max(0, countBefore - countAfter), remaining: countAfter };
+}
+
 export async function addSyncError(profileId: string, action: string, errorMessage: string): Promise<void> {
   const database = await getDb();
   const id = `err_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;

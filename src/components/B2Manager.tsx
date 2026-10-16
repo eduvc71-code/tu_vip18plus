@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from 'react';
-import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search, SearchCode, ShieldAlert, Users, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Cloud, HardDrive, RefreshCcw, Download, Trash2, CheckCircle2, AlertCircle, FileArchive, Search, SearchCode, ShieldAlert, Users, RefreshCw, Image as ImageIcon, Video as VideoIcon, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 import { B2File } from '../types';
 
 interface B2ManagerProps {
@@ -194,9 +194,17 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
   const [filter, setFilter] = useState('');
 
   
-  const [scanResults, setScanResults] = useState<{ orphans: B2File[], size: number } | null>(null);
+  const [scanResults, setScanResults] = useState<{
+    orphans: B2File[];
+    size: number;
+    imageCount?: number;
+    videoCount?: number;
+    imageSize?: number;
+    videoSize?: number;
+  } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [showOrphanDetails, setShowOrphanDetails] = useState(true);
 
   const handleScanOrphans = async () => {
     setScanning(true);
@@ -207,7 +215,15 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
       });
       const data = await res.json();
       if (data.success) {
-        setScanResults({ orphans: data.orphans, size: data.orphanSize });
+        setScanResults({
+          orphans: data.orphans,
+          size: data.orphanSize,
+          imageCount: data.imageCount,
+          videoCount: data.videoCount,
+          imageSize: data.imageSize,
+          videoSize: data.videoSize
+        });
+        setShowOrphanDetails(true);
       } else {
         throw new Error(data.error);
       }
@@ -244,6 +260,44 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
       setMessage({ type: 'error', text: err.message });
     } finally {
       setCleaning(false);
+    }
+  };
+
+  const handleCleanSingleOrphan = async (key: string) => {
+    if (!window.confirm(`¿Eliminar definitivamente este archivo huérfano de B2?\n\n${key}`)) return;
+    try {
+      const res = await fetch('/api/admin/b2/clean-orphans', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ keys: [key] })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: 'Archivo huérfano eliminado de B2.' });
+        setScanResults(prev => {
+          if (!prev) return null;
+          const updated = prev.orphans.filter(o => o.key !== key);
+          const removed = prev.orphans.find(o => o.key === key);
+          const isImg = removed?.mediaType === 'image' || (removed && /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(removed.key));
+          const isVid = removed?.mediaType === 'video' || (removed && /\.(mp4|webm|mov|m4v|mkv)$/i.test(removed.key));
+          return {
+            ...prev,
+            orphans: updated,
+            size: Math.max(0, prev.size - (removed?.size || 0)),
+            imageCount: isImg ? Math.max(0, (prev.imageCount || 0) - 1) : prev.imageCount,
+            videoCount: isVid ? Math.max(0, (prev.videoCount || 0) - 1) : prev.videoCount,
+            imageSize: isImg ? Math.max(0, (prev.imageSize || 0) - (removed?.size || 0)) : prev.imageSize,
+            videoSize: isVid ? Math.max(0, (prev.videoSize || 0) - (removed?.size || 0)) : prev.videoSize
+          };
+        });
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Error al eliminar archivo' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Error de red al eliminar archivo huérfano.' });
     }
   };
 
@@ -405,7 +459,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
       )}
 
       {/* Lista de Archivos */}
-      <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800 overflow-hidden flex flex-col max-h-[500px]">
+      <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800 overflow-hidden flex flex-col max-h-125">
         <div className="p-3 border-b border-zinc-800 flex items-center gap-2 bg-zinc-900/80">
           <Search className="w-4 h-4 text-zinc-500" />
           <input 
@@ -453,6 +507,7 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
                   </button>
                   <a
                     href={`/api/media?key=${encodeURIComponent(file.key)}`}
+                    download={file.key.split('/').pop() || 'catalogo.sqlite'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-lg transition-colors"
@@ -503,22 +558,107 @@ export const B2Manager: React.FC<B2ManagerProps> = ({ token }) => {
                 ¡Tu nube está totalmente limpia! No hay archivos huérfanos.
               </p>
             ) : (
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div>
-                  <p className="text-amber-400 font-bold flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4" />
-                    {scanResults.orphans.length} archivos huérfanos detectados
-                  </p>
-                  <p className="text-amber-500/70 text-[11px] mt-0.5">Ocupando un total de {formatSize(scanResults.size)} innecesariamente.</p>
+              <div className="space-y-3">
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                  <div className="space-y-1 min-w-0">
+                    <p className="text-amber-400 font-bold flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 shrink-0" />
+                      {scanResults.orphans.length} archivos huérfanos detectados
+                    </p>
+                    <p className="text-amber-500/80 text-xs">
+                      Ocupando un total de <span className="font-bold text-amber-300">{formatSize(scanResults.size)}</span> innecesariamente en B2.
+                    </p>
+                    {/* Desglose visual por tipo de archivo */}
+                    <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/30 font-medium">
+                        <ImageIcon className="w-3 h-3" />
+                        {scanResults.imageCount ?? scanResults.orphans.filter(o => o.mediaType === 'image').length} Fotos/Imágenes ({formatSize(scanResults.imageSize || 0)})
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-pink-500/10 text-pink-400 border border-pink-500/30 font-medium">
+                        <VideoIcon className="w-3 h-3" />
+                        {scanResults.videoCount ?? scanResults.orphans.filter(o => o.mediaType === 'video').length} Videos ({formatSize(scanResults.videoSize || 0)})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full md:w-auto shrink-0 justify-end pt-1 md:pt-0 border-t md:border-t-0 border-amber-500/10">
+                    <button
+                      type="button"
+                      onClick={() => setShowOrphanDetails(!showOrphanDetails)}
+                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      {showOrphanDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      {showOrphanDetails ? 'Ocultar Lista' : `Ver Archivos (${scanResults.orphans.length})`}
+                    </button>
+                    <button
+                      onClick={handleCleanOrphans}
+                      disabled={cleaning}
+                      className="px-3 py-1.5 bg-rose-500 text-white hover:bg-rose-600 rounded-lg font-bold text-xs transition-colors shadow-lg shadow-rose-500/20 shrink-0 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+                    >
+                      {cleaning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      Purgar Todos
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={handleCleanOrphans}
-                  disabled={cleaning}
-                  className="px-3 py-1.5 bg-rose-500 text-white hover:bg-rose-600 rounded-lg font-bold transition-colors shadow-lg shadow-rose-500/20 shrink-0 w-full sm:w-auto flex items-center justify-center gap-2"
-                >
-                  {cleaning ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  Purgar Basura
-                </button>
+
+                {/* Lista detallada de archivos huérfanos con tipo, tamaño y previsualización */}
+                {showOrphanDetails && (
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-zinc-900">
+                    {scanResults.orphans.map((orphan) => {
+                      const isVid = orphan.mediaType === 'video' || /\.(mp4|webm|mov|m4v|mkv)$/i.test(orphan.key);
+                      const isImg = orphan.mediaType === 'image' || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(orphan.key);
+                      return (
+                        <div key={orphan.key} className="p-2.5 flex items-center justify-between gap-3 hover:bg-zinc-900/40 transition-colors text-xs">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            {isVid ? (
+                              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-pink-500/10 text-pink-400 border border-pink-500/30 text-[10px] font-bold">
+                                <VideoIcon className="w-3 h-3" /> VIDEO
+                              </span>
+                            ) : isImg ? (
+                              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 text-[10px] font-bold">
+                                <ImageIcon className="w-3 h-3" /> IMAGEN
+                              </span>
+                            ) : (
+                              <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold">
+                                ARCHIVO
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-zinc-200 font-mono truncate text-[11px]" title={orphan.key}>
+                                {orphan.name || orphan.key.split('/').pop()}
+                              </p>
+                              <p className="text-zinc-500 text-[10px] truncate">
+                                {orphan.key} · <span className="text-zinc-400 font-mono">{formatSize(orphan.size)}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <a
+                              href={`/api/media?key=${encodeURIComponent(orphan.key)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center gap-1 transition-colors text-[11px] font-medium"
+                              title="Abrir y previsualizar archivo"
+                            >
+                              <Eye className="w-3 h-3 text-emerald-400" />
+                              <span>Ver</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleCleanSingleOrphan(orphan.key)}
+                              disabled={cleaning}
+                              className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Eliminar solo este archivo huérfano"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

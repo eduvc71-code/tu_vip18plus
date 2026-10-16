@@ -197,6 +197,7 @@ export interface B2File {
   size: number;
   lastModified: string;
   name: string;
+  mediaType?: 'image' | 'video' | 'other';
 }
 
 export interface AuditedB2Media extends B2File {

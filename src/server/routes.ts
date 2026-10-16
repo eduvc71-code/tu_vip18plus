@@ -28,6 +28,7 @@ import {
   markCustomerRequestScheduled,
   updateCustomerRequestStatus,
   getAuditLogs,
+  trimAuditLogs,
   getSyncErrors,
   addAuditLog,
   getSystemSetting,
@@ -1807,6 +1808,17 @@ router.get('/admin/logs', requireAdminAuth, async (_req: Request, res: Response)
   }
 });
 
+// POST Trim Audit Logs (conservar los últimos N registros, por defecto 5)
+router.post('/admin/logs/trim', requireAdminAuth, async (req: Request, res: Response) => {
+  try {
+    const keepCount = Math.max(1, Math.min(100, Number(req.body?.keepCount) || 5));
+    const result = await trimAuditLogs(keepCount);
+    res.json({ success: true, deleted: result.deleted, remaining: result.remaining });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Error al depurar registros de auditoría', details: err?.message });
+  }
+});
+
 // POST Setup Telegram Webhook Helper
 router.post('/admin/webhook/setup', requireAdminAuth, async (_req: Request, res: Response) => {
   const { token, secret, baseUrl } = getBotConfig();
@@ -2849,18 +2861,44 @@ router.get('/admin/b2/scan-orphans', requireAdminAuth, async (req: Request, res:
         }
     }
     
+    const isVideo = (name: string) => /\.(mp4|webm|mov|m4v|mkv|avi)$/i.test(name);
+    const isImage = (name: string) => /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name);
+
     const orphans = [];
     let orphanSize = 0;
+    let imageCount = 0;
+    let videoCount = 0;
+    let imageSize = 0;
+    let videoSize = 0;
     
     for (const f of b2MediaFiles) {
       // f.key es 'tu-vip/media/xxxxx.jpg'
       if (!dbUrls.has(f.key)) {
-        orphans.push(f);
+        const mediaType = isVideo(f.key) ? 'video' : isImage(f.key) ? 'image' : 'other';
+        if (mediaType === 'image') {
+          imageCount++;
+          imageSize += f.size;
+        } else if (mediaType === 'video') {
+          videoCount++;
+          videoSize += f.size;
+        }
+        orphans.push({
+          ...f,
+          mediaType
+        });
         orphanSize += f.size;
       }
     }
     
-    res.json({ success: true, orphans, orphanSize });
+    res.json({
+      success: true,
+      orphans,
+      orphanSize,
+      imageCount,
+      videoCount,
+      imageSize,
+      videoSize
+    });
   } catch (err: any) {
     res.status(500).json({ error: 'Error escaneando huérfanos', details: err?.message });
   }

@@ -4,7 +4,7 @@ import React from 'react';
  * Renderiza la etiqueta <tg-emoji> de Telegram como string para usar en mensajes y canales.
  */
 export function renderEmojiTag(customId: string, fallback: string): string {
-  return `<tg-emoji id="${customId}">${fallback}</tg-emoji>`;
+  return `<tg-emoji emoji-id="${customId}">${fallback}</tg-emoji>`;
 }
 
 /**

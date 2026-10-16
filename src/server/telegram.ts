@@ -306,7 +306,7 @@ export async function callTelegramApi(method: string, body: any): Promise<any> {
   }
 }
 
-const TG_EMOJI_REGEX = /<tg-emoji\s+id="(\d+)"\s*>(.*?)<\/tg-emoji>/gi;
+const TG_EMOJI_REGEX = /<tg-emoji\s+(?:id|emoji-id)="(\d+)"\s*>(.*?)<\/tg-emoji>/gi;
 
 export function escapeHtml(str: string): string {
   return (str || '')
@@ -321,10 +321,16 @@ export function sanitizeForTelegram(input: string): string {
   if (!input) return '';
   // Escapa todo el HTML primero para evitar inyecciones maliciosas
   const escaped = escapeHtml(input);
-  // Re-habilita exclusivamente los tags <tg-emoji id="...">fallback</tg-emoji> autorizados
-  return escaped.replace(/&lt;tg-emoji\s+id=&quot;(\d+)&quot;&gt;(.*?)&lt;\/tg-emoji&gt;/gi, (_m, id, fallback) => {
-    return `<tg-emoji id="${id}">${fallback}</tg-emoji>`;
-  });
+  // Re-habilita exclusivamente los tags <tg-emoji emoji-id="...">fallback</tg-emoji> autorizados (soportando id o emoji-id)
+  return escaped
+    .replace(/&lt;tg-emoji\s+(?:id|emoji-id)=&quot;(\d+)&quot;&gt;(.*?)&lt;\/tg-emoji&gt;/gi, (_m, id, fallback) => {
+      return `<tg-emoji emoji-id="${id}">${fallback}</tg-emoji>`;
+    })
+    .replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, '<b>$1</b>')
+    .replace(/&lt;i&gt;(.*?)&lt;\/i&gt;/gi, '<i>$1</i>')
+    .replace(/&lt;u&gt;(.*?)&lt;\/u&gt;/gi, '<u>$1</u>')
+    .replace(/&lt;s&gt;(.*?)&lt;\/s&gt;/gi, '<s>$1</s>')
+    .replace(/&lt;code&gt;(.*?)&lt;\/code&gt;/gi, '<code>$1</code>');
 }
 
 /**
@@ -344,7 +350,7 @@ export function convertTelegramEntitiesToHtml(text: string, entities?: Array<{ t
       const start = ent.offset;
       const end = ent.offset + ent.length;
       const fallback = text.slice(start, end);
-      const tag = `<tg-emoji id="${ent.custom_emoji_id}">${fallback}</tg-emoji>`;
+      const tag = `<tg-emoji emoji-id="${ent.custom_emoji_id}">${fallback}</tg-emoji>`;
       result = result.slice(0, start) + tag + result.slice(end);
     }
   }
@@ -691,11 +697,14 @@ export async function syncProfileToChannel(profileId: string, performer: string 
   const primaryPhoto = freePhotos.length > 0 ? freePhotos[0] : null;
   const activeDesc = (primaryPhoto && profile.media_descriptions?.[primaryPhoto]) || profile.description || '';
   const descText = activeDesc.trim() ? `${activeDesc.trim()}\n\n` : '';
-  const caption = `${descText}✨ *¿Quieres ver más?* Toca el botón abajo para abrir la galería completa 👇`;
+  const hasCustomEmoji = /<tg-emoji/i.test(descText);
+  const footer = hasCustomEmoji
+    ? `✨ <b>¿Quieres ver más?</b> Toca el botón abajo para abrir la galería completa 👇`
+    : `✨ *¿Quieres ver más?* Toca el botón abajo para abrir la galería completa 👇`;
+  const caption = `${descText}${footer}`;
 
   const replyMarkup = await buildChannelPostMarkup(profile, baseUrl, username);
 
-  const hasCustomEmoji = /<tg-emoji/i.test(caption);
   const postParseMode = hasCustomEmoji ? 'HTML' : 'Markdown';
   const finalCaption = hasCustomEmoji ? sanitizeForTelegram(caption) : caption;
 
