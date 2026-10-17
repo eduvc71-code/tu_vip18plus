@@ -78,7 +78,7 @@ export function getBotConfig() {
     process.env.RENDER_EXTERNAL_URL ||
     process.env.APP_BASE_URL ||
     process.env.APP_URL ||
-    'https://iam-dani-vip-scz.onrender.com'
+    'https://catalogo-vip-scz.onrender.com'
   ).replace(/\/+$/, '');
   const storedAppShortName = getSystemSetting('telegram_app_short_name');
   const appShortName = (process.env.TELEGRAM_APP_SHORT_NAME || storedAppShortName || 'canalVipFreeIamDanii').trim();
